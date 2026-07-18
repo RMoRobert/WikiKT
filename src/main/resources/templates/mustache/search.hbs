@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#hasQuery}}Search: {{query}} | {{/hasQuery}}Search | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main">
+    <h1>Search</h1>
+
+    {{^hasQuery}}<p class="text-secondary">Type a query in the search box above to find pages. Tip: add <code>#tag</code> to a query to filter by tag (e.g. <code>backup #docs</code>), or search <code>#docs</code> on its own.</p>{{/hasQuery}}
+    {{#tooShort}}<p class="text-secondary">Please enter at least 2 characters.</p>{{/tooShort}}
+
+    {{#hasQuery}}{{^tooShort}}
+    <p class="search-summary">
+        {{resultCount}} result(s) for <strong>“{{query}}”</strong>
+    </p>
+
+    {{#hasFacets}}
+    <div class="search-facets">
+        {{#hasActiveTags}}{{#activeTags}}<a class="badge rounded-pill text-bg-primary text-decoration-none" href="{{url}}" title="Remove this tag filter">#{{name}} <i class="mdi mdi-close" aria-hidden="true"></i></a>{{/activeTags}}{{/hasActiveTags}}
+        {{#hasFacetTags}}<span class="search-facets-label">Filter by tag:</span>{{#facetTags}}<a class="badge rounded-pill text-bg-light border text-decoration-none" href="{{url}}">{{name}} <span class="text-secondary">{{count}}</span></a>{{/facetTags}}{{/hasFacetTags}}
+    </div>
+    {{/hasFacets}}
+
+    {{#hasResults}}
+    <ul class="search-results">
+        {{#results}}
+        <li class="search-result">
+            <a class="search-result-title" href="{{url}}">{{{titleHtml}}}</a>
+            <span class="search-result-path">{{parentLabel}}{{#hasTags}}{{#hasParentLabel}} · {{/hasParentLabel}}{{#tags}}<a class="badge rounded-pill text-bg-light border text-decoration-none" href="{{url}}">{{name}}</a> {{/tags}}{{/hasTags}}</span>
+            {{#hasDescription}}<p class="search-result-desc">{{{descriptionHtml}}}</p>{{/hasDescription}}
+            <p class="search-result-snippet">{{{snippetHtml}}}</p>
+        </li>
+        {{/results}}
+    </ul>
+    {{/hasResults}}
+    {{^hasResults}}<p class="text-secondary">No pages matched your search.</p>{{/hasResults}}
+
+    <p class="search-locale-scope text-secondary">
+        {{#allLocales}}Searched across all locales. <a href="{{currentLocaleUrl}}">Limit to “{{localeScope}}”</a>{{/allLocales}}
+        {{^allLocales}}Searched in current locale (<strong>{{localeScope}}</strong>). <a href="{{allLocalesUrl}}">Search all locales</a>{{/allLocales}}
+    </p>
+    {{/tooShort}}{{/hasQuery}}
+</main>
+</div>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

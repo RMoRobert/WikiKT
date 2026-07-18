@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fragments | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <div class="page-meta"><h1><i class="mdi mdi-puzzle-outline" aria-hidden="true"></i> Fragments</h1><a class="btn btn-primary" href="/a/fragments/new">New fragment</a></div>
+    {{#otherSite}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-information-outline" aria-hidden="true"></i> That fragment belongs to a different site. Showing <strong>{{managedSiteName}}</strong>'s fragments instead.</div>{{/otherSite}}
+    <p class="text-secondary">Reusable content included in pages with <code>&#123;&#123;fragment:key&#125;&#125;</code>. Resolved for the page's locale, falling back to the default locale.</p>
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Key</th><th>Locale</th><th>Title</th><th>Used by</th><th></th></tr></thead>
+        <tbody>
+        {{#fragments}}
+        <tr>
+            <td><code>{{key}}</code></td>
+            <td>{{locale}}</td>
+            <td>{{title}}</td>
+            <td>{{usedBy}} page(s)</td>
+            <td><a class="btn btn-sm btn-primary" href="/a/fragments/{{id}}/edit">Edit</a></td>
+        </tr>
+        {{/fragments}}
+        </tbody>
+    </table>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

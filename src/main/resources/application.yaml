@@ -1,0 +1,85 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - com.wikikt.ApplicationKt.module
+
+wikikt:
+  # development | production. Set via WIKIKT_ENV (or a non-empty value here). Left empty it defaults
+  # to development; in production the app refuses to start with the default admin password, missing
+  # session/MFA keys, or an insecure cookie, instead of only warning. Leave empty so WIKIKT_ENV wins.
+  environment: ""
+  server:
+    # Set true ONLY when the app runs behind a reverse proxy (nginx, Caddy, …) so X-Forwarded-*
+    # headers are honored for the client address (login throttling keys on it). Enabling this while
+    # directly exposed lets clients spoof their address. Override via WIKIKT_TRUST_PROXY.
+    trustProxy: false
+  defaultLocale: en
+  defaultAdmin:
+    username: admin
+    # SECURITY: set via WIKIKT_ADMIN_PASSWORD (or a non-empty value here). Left empty it falls back
+    # to the built-in default ('changeme'), which warns in development and is fatal in production.
+    password: ""
+  session:
+    # Random hex keys for the encrypted+signed session cookie. Leave blank in dev to use the
+    # built-in development keys (a warning is logged). In production set these to random values,
+    # e.g. via WIKIKT_SESSION_ENCRYPTION_KEY (32 hex bytes) / WIKIKT_SESSION_SIGN_KEY.
+    encryptionKey: ""
+    signKey: ""
+    # Set true when served over HTTPS so the cookie is never sent over plain HTTP.
+    secureCookie: false
+    # Session lifetime in seconds; the cookie expires after this and the user must log in again.
+    # Default 604800 (7 days). Bounds how long a stolen or stale cookie stays usable.
+    maxAgeSeconds: 604800
+  ui:
+    # Where front-end assets (Bootstrap) load from: "local" (bundled under static/vendor/, the default,
+    # no external dependency) or "cdn" (jsdelivr). Override via WIKIKT_UI_ASSET_SOURCE.
+    assetSource: local
+  assets:
+    # Directory for uploaded files (relative to the working dir, or absolute). Include it in backups.
+    # Override via WIKIKT_ASSET_STORAGE_DIR.
+    storageDir: ./data/uploads
+    # Per-file upload cap in bytes (default 5 MB) and how many files one upload may contain.
+    maxUploadSizeBytes: 5242880
+    maxFilesPerUpload: 10
+    # Allowed types (comma-separated). Only png/jpeg/gif/webp are supported; others are ignored.
+    allowedMimeTypes: "image/png,image/jpeg,image/gif,image/webp"
+    # When true, a request for a missing (locale, path) falls back to the default-locale asset.
+    localeFallback: true
+    # Default for the per-site "asset history" setting (Admin > Storage). How many prior versions to
+    # keep when an asset's file is replaced (1–50); older ones are pruned. Low because asset revisions
+    # store binary files. The UI setting overrides this per site; page history defaults higher.
+    maxAssetVersions: 3
+  gitSync:
+    # Working clone for git synchronization (Administration > Git Sync); created on first sync.
+    # The sync settings themselves (repo URL, mode, auth) live in the admin console, not here.
+    # Override via WIKIKT_GIT_SYNC_DIR.
+    dir: ./data/git-sync
+  database:
+    # Switch with: type: h2 | postgres  (left empty it defaults to h2, so WIKIKT_DATABASE_TYPE wins)
+    # Or env var: WIKIKT_DATABASE_TYPE=postgres
+    # Or Gradle: ./gradlew run -Pwikikt.db=postgres
+    # Or task:   ./gradlew runPostgres
+    # Container deployments can override the connection entirely via env (these win over the
+    # values below): WIKIKT_DATABASE_R2DBC_URL, WIKIKT_DATABASE_USERNAME, WIKIKT_DATABASE_PASSWORD.
+    type: ""
+    h2:
+      r2dbcUrl: r2dbc:h2:file:///./data/wikikt?DB_CLOSE_DELAY=-1
+      username: sa
+      password: ""
+    postgres:
+      r2dbcUrl: r2dbc:postgresql://localhost:5432/wikikt
+      username: wikikt
+      password: wikikt
+    # Connection pool. Connections are reused instead of opened per transaction, and maxSize caps how
+    # many this app will ever hold — keep it comfortably under the database server's own limit
+    # (PostgreSQL defaults to max_connections: 100). Raise maxSize for a busy site; maxAcquireTime
+    # makes a saturated pool fail fast rather than hang. Any value may be overridden by env:
+    # WIKIKT_DATABASE_POOL_MAX_SIZE, _INITIAL_SIZE, _MAX_IDLE_TIME, _MAX_LIFE_TIME, _MAX_ACQUIRE_TIME.
+    pool:
+      maxSize: 10
+      initialSize: 2
+      maxIdleTimeSeconds: 1800
+      maxLifeTimeSeconds: 3600
+      maxAcquireTimeSeconds: 10

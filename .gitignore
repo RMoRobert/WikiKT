@@ -1,0 +1,29 @@
+# Build output and caches
+build/
+.gradle/
+.kotlin/
+
+# Runtime data: H2 database, uploaded assets, git-sync working clone
+data/
+
+# Secrets (commit .env.example file but not real .env file)
+.env
+.env.*
+!.env.example
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS, misc.
+.DS_Store
+*.log
+nohup.out
+.dockerignore
+.env.example
+.claude/
+CLAUDE.md
+
+# Built/saved docker image
+wikikit-image.tar

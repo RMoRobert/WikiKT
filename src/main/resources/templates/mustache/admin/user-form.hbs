@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isNew}}New User{{/isNew}}{{^isNew}}Edit User{{/isNew}} | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>{{#isNew}}New User{{/isNew}}{{^isNew}}Edit User{{/isNew}}</h1>
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="{{#isNew}}/a/users{{/isNew}}{{^isNew}}/a/users/{{user.id}}{{/isNew}}" class="edit-form">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input class="form-control" type="text" name="username" value="{{user.username}}" maxlength="100" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input class="form-control" type="email" name="email" value="{{user.email}}" maxlength="255">
+        </div>
+        {{^isNew}}
+        <div class="mb-3">
+            <label class="form-label">Display name</label>
+            <input class="form-control" type="text" name="displayName" value="{{user.displayName}}" maxlength="100" placeholder="{{user.username}}">
+            <p class="form-text">Shown instead of the username. Leave blank to fall back to the username. Users normally set their own and can't reuse another's — but you can assign any value here, including a duplicate.</p>
+        </div>
+        {{/isNew}}
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input class="form-control" type="password" name="password" minlength="5" maxlength="72" {{#isNew}}required{{/isNew}} placeholder="{{^isNew}}Leave blank to keep current{{/isNew}}">
+        </div>
+        <fieldset>
+            <legend>Groups</legend>
+            {{#groups}}
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="groupIds" value="{{id}}" {{#selected}}checked{{/selected}}>
+                <label class="form-check-label">{{name}}</label>
+            </div>
+            {{/groups}}
+        </fieldset>
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+    {{^isNew}}
+    <div class="mt-4">
+        <h2 class="h5">Two-factor authentication</h2>
+        {{#mfaReset}}<div class="alert alert-success" role="alert">Two-factor authentication was reset for this user.</div>{{/mfaReset}}
+        {{#mfaEnabled}}
+        <p>This user has two-factor authentication <strong>enabled</strong>.</p>
+        {{#canResetMfa}}
+        <form method="post" action="/a/users/{{user.id}}/reset-mfa" onsubmit="return confirm('Reset two-factor authentication for this user? They will sign in with just their password until they set it up again.');">
+            {{{csrfField}}}
+            <button type="submit" class="btn btn-outline-warning">Reset two-factor authentication</button>
+            <div class="form-text">Use this only to recover a user who has lost both their authenticator and their recovery codes.</div>
+        </form>
+        {{/canResetMfa}}
+        {{^canResetMfa}}
+        <p class="form-text">Only a root administrator can reset two-factor authentication for this account.</p>
+        {{/canResetMfa}}
+        {{/mfaEnabled}}
+        {{^mfaEnabled}}
+        <p class="text-secondary">This user does not have two-factor authentication enabled.</p>
+        {{/mfaEnabled}}
+    </div>
+    <form method="post" action="/a/users/{{user.id}}/delete" class="mt-4" onsubmit="return confirm('Delete this user?');">
+        {{{csrfField}}}
+        <button type="submit" class="btn btn-danger">Delete user</button>
+    </form>
+    {{/isNew}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main">
+    <div style="max-width:28rem;">
+    <h1 class="h3 my-4">Login</h1>
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="/login">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label" for="loginUsername">Username</label>
+            <input class="form-control" type="text" id="loginUsername" name="username" maxlength="100" required autofocus>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="loginPassword">Password</label>
+            <input class="form-control" type="password" id="loginPassword" name="password" minlength="5" maxlength="72" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+    {{#mailEnabled}}
+        <p class="mt-3 small"><a href="/forgot-password">Forgot password?</a></p>
+    {{/mailEnabled}}
+    {{#registrationEnabled}}
+        <p class="small">Don't have an account? <a href="/register">Create one</a>.</p>
+    {{/registrationEnabled}}
+    </div>
+</main>
+</div>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

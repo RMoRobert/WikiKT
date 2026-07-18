@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New API Key | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>New API key</h1>
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="{{baseUrl}}" class="edit-form">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input class="form-control" type="text" name="name" value="{{name}}" maxlength="255" required placeholder="e.g. CI publisher">
+            <div class="form-text">A label to recognize this key later. Not secret.</div>
+        </div>
+        {{#showOwnerPicker}}
+        <div class="mb-3">
+            <label class="form-label">Owner</label>
+            <select class="form-select" name="userId" required>
+                <option value="" disabled {{^users}}selected{{/users}}>Choose a user…</option>
+                {{#users}}
+                <option value="{{id}}" {{#selected}}selected{{/selected}}>{{username}}</option>
+                {{/users}}
+            </select>
+            <div class="form-text">The key acts as this user and inherits their permissions.</div>
+        </div>
+        {{/showOwnerPicker}}
+        <div class="mb-3">
+            <label class="form-label">Expires</label>
+            <select class="form-select" name="expiresIn">
+                {{#expiryOptions}}
+                <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                {{/expiryOptions}}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Create key</button>
+        <a class="btn btn-outline-secondary" href="{{baseUrl}}">Cancel</a>
+    </form>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

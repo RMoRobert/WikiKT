@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revision #{{revisionNumber}}: {{title}} | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    <link rel="stylesheet" href="/static/vendor/highlight/github.min.css">
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main page-view">
+    <div class="page-meta">
+        <h1>Revision #{{revisionNumber}}</h1>
+        <a class="btn btn-outline-secondary btn-sm" href="{{historyUrl}}">Back to history</a>
+    </div>
+    <p class="text-secondary">{{title}} · saved {{createdAt}} by {{author}}</p>
+    {{#canEdit}}
+    <form class="mb-3" method="post" action="{{historyUrl}}" onsubmit="return confirm('Restore this revision? The current version will be saved to history first.');">
+        {{{csrfField}}}
+        <input type="hidden" name="rev" value="{{revisionNumber}}">
+        <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-history" aria-hidden="true"></i> Restore this version</button>
+    </form>
+    {{/canEdit}}
+    <article class="wiki-content">
+        {{{htmlContent}}}
+    </article>
+</main>
+</div>
+{{>partials/footer.hbs}}
+<script src="/static/vendor/highlight/highlight.min.js"></script>
+<script src="/static/vendor/highlight/groovy.min.js"></script>
+<script>if (window.hljs) hljs.highlightAll();</script>
+<script src="/static/code-copy.js"></script>
+{{{bodyHtml}}}</body>
+</html>

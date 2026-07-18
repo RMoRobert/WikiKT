@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Registration</h1>
+    {{#saved}}<div class="alert alert-success" role="alert">Settings saved.</div>{{/saved}}
+    <p class="text-secondary">Control whether visitors can create their own accounts on this site.</p>
+    <form method="post" action="/a/registration" class="edit-form">
+        {{{csrfField}}}
+        {{^mailConfiguredForRegistration}}
+        <div class="alert alert-warning" role="alert">
+            Self-service registration requires email to be configured. Set up
+            SMTP on the <a href="/a/mail">Mail</a> settings page first. Self-registration will not be available, even if enabled below,
+            until this is configured.
+        </div>
+        {{/mailConfiguredForRegistration}}
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="registrationEnabled" value="1" {{#registrationEnabled}}checked{{/registrationEnabled}}>
+            <label class="form-check-label">Allow visitors to create their own accounts</label>
+        </div>
+        <p class="form-text">Off by default (wiki is private and only admins create logins; when on, a “Create an account” link appears on the sign-in page and anyone, except as specified below, can register at <code>/register</code>).</p>
+        <div class="mb-3">
+            <label class="form-label">Allowed email domains <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="registrationAllowedDomains" value="{{registrationAllowedDomainsValue}}" placeholder="e.g. example.com, example.org">
+            <p class="form-text">Restrict sign-ups to these email domains (comma- or space-separated). Leave blank to allow any address.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Default group for new accounts</label>
+            <select class="form-select" name="registrationDefaultGroup">
+                {{#registrationGroupOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/registrationGroupOptions}}
+            </select>
+            <p class="form-text">Group each new account is added to. With “None”, registrants still get read-everywhere access via the built-in “User” group by default, but verify the configuration of the Users group in your environment for exact permissions if using.</p>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="registrationRequireApproval" value="1" {{#registrationRequireApproval}}checked{{/registrationRequireApproval}}>
+            <label class="form-check-label">Require administrator approval of new accounts</label>
+        </div>
+        <p class="form-text">When on, a confirmed account can't sign in until an admin approves it on the <a href="/a/users">Users</a> page, which will appear after user confirms email address. When off, confirming the email activates the account immediately.</p>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

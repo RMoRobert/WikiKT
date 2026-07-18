@@ -1,0 +1,362 @@
+{{>partials/brand-style.hbs}}
+<nav class="navbar navbar-expand-xl wk-navbar fixed-top shadow-sm py-2" data-bs-theme="dark">
+    {{! Fluid, not .container: the brand hugs the viewport's left edge (over the full-bleed sidebar
+        column) and the action icons the right edge. }}
+    <div class="container-fluid">
+        {{! Compact-screen sidebar trigger. Rendered on every page but kept hidden until the script below
+            confirms a #wikiSidebar exists in the DOM (adds .is-active) — so admin/editor pages, which have
+            no wiki sidebar, never show it. Sits at the far left, before the brand. }}
+        <button type="button" class="wk-nav-toggle nav-icon" id="wikiNavToggle" aria-controls="wikiSidebar" aria-expanded="false" aria-label="Menu" title="Menu"><i class="mdi mdi-menu" aria-hidden="true"></i></button>
+        <a class="navbar-brand brand" href="/">{{#siteLogoUrl}}<img class="brand-logo" src="{{siteLogoUrl}}" alt="">{{/siteLogoUrl}}<span class="brand-name">{{siteName}}</span></a>
+
+        <!-- Action icons: always visible, right-aligned. -->
+        <div class="header-actions d-flex align-items-center gap-1 ms-auto ms-xl-0 order-xl-3">
+            <!-- Below xl the search box collapses; this icon reveals it as a full-width row. -->
+            <button class="nav-icon d-xl-none" type="button" data-bs-toggle="collapse" data-bs-target="#wkSearch" aria-controls="wkSearch" aria-expanded="false" aria-label="Toggle search">
+                <i class="mdi mdi-magnify" aria-hidden="true"></i>
+            </button>
+
+            {{! Compact overflow ("More") menu — phones only (below md). Folds the secondary actions
+                (page actions incl. Edit, theme, admin/exit, languages) into one Material-style kebab so
+                the bar stays a single row on narrow screens. The individual icons that follow all carry
+                `d-none d-md-flex`, so exactly one of the two layouts is visible at any width. The account
+                icon and the search toggle stay top-level at every size. }}
+            <div class="dropdown d-flex d-md-none">
+                <button class="nav-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More" title="More">
+                    <i class="mdi mdi-dots-vertical" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end wk-theme-menu"{{#loggedIn}} data-persist="/p/theme" data-csrf="{{csrfToken}}"{{/loggedIn}}>
+                    {{#pageActions}}
+                    <li><h6 class="dropdown-header">Page</h6></li>
+                    {{#canEdit}}<li><a class="dropdown-item" href="{{editUrl}}"><i class="mdi mdi-pencil" aria-hidden="true"></i> Edit</a></li>{{/canEdit}}
+                    {{#canViewHistory}}<li><a class="dropdown-item" href="{{historyUrl}}"><i class="mdi mdi-history" aria-hidden="true"></i> History</a></li>{{/canViewHistory}}
+                    {{#canEdit}}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#convertPageModal"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Convert…</button></li>{{/canEdit}}
+                    {{#canCreate}}<li><a class="dropdown-item" href="{{duplicateUrl}}"><i class="mdi mdi-content-copy" aria-hidden="true"></i> Duplicate</a></li>
+                    <li><a class="dropdown-item" href="/new"><i class="mdi mdi-file-plus-outline" aria-hidden="true"></i> New page</a></li>{{/canCreate}}
+                    {{#canEdit}}<li><button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deletePageModal"><i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> Delete…</button></li>{{/canEdit}}
+                    {{/pageActions}}
+                    {{^pageActions}}{{#canCreate}}<li><a class="dropdown-item" href="/new"><i class="mdi mdi-file-plus-outline" aria-hidden="true"></i> New page</a></li>{{/canCreate}}{{/pageActions}}
+                    {{#showThemePicker}}
+                    {{! Divider above Theme only when a Page group precedes it. Otherwise Theme is the first
+                        group (e.g. a logged-out visitor whose only kebab option is the theme) and a leading
+                        divider would be a stray line at the top of the menu. The two branches are mutually
+                        exclusive, so at most one divider renders. }}
+                    {{#pageActions}}<li><hr class="dropdown-divider"></li>{{/pageActions}}
+                    {{^pageActions}}{{#canCreate}}<li><hr class="dropdown-divider"></li>{{/canCreate}}{{/pageActions}}
+                    <li><h6 class="dropdown-header">Theme</h6></li>
+                    <li><button type="button" class="dropdown-item" data-theme="light"><i class="mdi mdi-white-balance-sunny" aria-hidden="true"></i> Light</button></li>
+                    <li><button type="button" class="dropdown-item" data-theme="dark"><i class="mdi mdi-weather-night" aria-hidden="true"></i> Dark</button></li>
+                    <li><button type="button" class="dropdown-item" data-theme="auto"><i class="mdi mdi-brightness-auto" aria-hidden="true"></i> Auto</button></li>
+                    {{/showThemePicker}}
+                    {{#hasLocaleSwitcher}}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header">Language</h6></li>
+                    {{#localeSwitcher}}<li><a class="dropdown-item{{#current}} active{{/current}}" href="{{url}}">{{label}}{{#current}} <i class="mdi mdi-check" aria-hidden="true"></i>{{/current}}</a></li>{{/localeSwitcher}}
+                    {{/hasLocaleSwitcher}}
+                    {{#loggedIn}}
+                    <li><hr class="dropdown-divider"></li>
+                    {{#adminArea}}<li><a class="dropdown-item" href="/"><i class="mdi mdi-exit-to-app" aria-hidden="true"></i> Exit administration</a></li>{{/adminArea}}
+                    {{^adminArea}}{{#canAdmin}}<li><a class="dropdown-item" href="/a"><i class="mdi mdi-cog" aria-hidden="true"></i> Administration</a></li>{{/canAdmin}}{{/adminArea}}
+                    {{/loggedIn}}
+                </ul>
+            </div>
+
+            {{#hasLocaleSwitcher}}
+            <div class="dropdown d-none d-md-flex">
+                <button class="nav-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Language" title="This page in other languages">
+                    <i class="mdi mdi-web" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><h6 class="dropdown-header">Languages</h6></li>
+                    {{#localeSwitcher}}
+                    <li><a class="dropdown-item{{#current}} active{{/current}}" href="{{url}}">{{label}}{{#current}} <i class="mdi mdi-check" aria-hidden="true"></i>{{/current}}</a></li>
+                    {{/localeSwitcher}}
+                </ul>
+            </div>
+            {{/hasLocaleSwitcher}}
+
+            {{#pageActions}}
+            <div class="dropdown d-none d-md-flex">
+                <button class="nav-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Page actions" title="Page actions">
+                    <i class="mdi mdi-file-document-edit-outline" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    {{#canEdit}}<li><a class="dropdown-item" href="{{editUrl}}"><i class="mdi mdi-pencil" aria-hidden="true"></i> Edit</a></li>{{/canEdit}}
+                    {{#canViewHistory}}<li><a class="dropdown-item" href="{{historyUrl}}"><i class="mdi mdi-history" aria-hidden="true"></i> History</a></li>{{/canViewHistory}}
+                    {{#canEdit}}<li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#convertPageModal"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Convert…</button></li>{{/canEdit}}
+                    {{#canCreate}}<li><a class="dropdown-item" href="{{duplicateUrl}}"><i class="mdi mdi-content-copy" aria-hidden="true"></i> Duplicate</a></li>{{/canCreate}}
+                    {{#canCreate}}<li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="/new"><i class="mdi mdi-file-plus-outline" aria-hidden="true"></i> New page</a></li>{{/canCreate}}
+                    {{#canEdit}}<li><hr class="dropdown-divider"></li>
+                    <li><button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deletePageModal"><i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> Delete…</button></li>{{/canEdit}}
+                </ul>
+            </div>
+            {{/pageActions}}
+            {{^pageActions}}{{#canCreate}}
+            <a class="nav-icon d-none d-md-flex" href="/new" aria-label="New page" title="New page"><i class="mdi mdi-file-plus-outline" aria-hidden="true"></i></a>
+            {{/canCreate}}{{/pageActions}}
+
+            {{#showThemePicker}}
+            <div class="dropdown d-none d-md-flex">
+                <button class="nav-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Color theme" title="Color theme">
+                    <i class="mdi mdi-theme-light-dark" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end wk-theme-menu"{{#loggedIn}} data-persist="/p/theme" data-csrf="{{csrfToken}}"{{/loggedIn}}>
+                    <li><h6 class="dropdown-header">Theme</h6></li>
+                    <li><button type="button" class="dropdown-item" data-theme="light"><i class="mdi mdi-white-balance-sunny" aria-hidden="true"></i> Light</button></li>
+                    <li><button type="button" class="dropdown-item" data-theme="dark"><i class="mdi mdi-weather-night" aria-hidden="true"></i> Dark</button></li>
+                    <li><button type="button" class="dropdown-item" data-theme="auto"><i class="mdi mdi-brightness-auto" aria-hidden="true"></i> Auto</button></li>
+                </ul>
+            </div>
+            {{/showThemePicker}}
+
+            {{#loggedIn}}
+            {{#adminArea}}
+            <a class="nav-icon nav-icon-label d-none d-md-flex" href="/" aria-label="Return to site" title="Exit Administration Area"><i class="mdi mdi-exit-to-app" aria-hidden="true"></i> Back to Site</a>
+            {{/adminArea}}
+            {{^adminArea}}
+            {{#canAdmin}}<a class="nav-icon d-none d-md-flex" href="/a" aria-label="Administration" title="Administration"><i class="mdi mdi-cog" aria-hidden="true"></i></a>{{/canAdmin}}
+            {{/adminArea}}
+            <div class="vr my-2 mx-1 text-white d-none d-md-block"></div>
+            <div class="dropdown">
+                <button class="nav-icon dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account" title="{{username}}">
+                    <i class="mdi mdi-account-circle" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end account-dropdown">
+                    <li class="account-id">
+                        {{#displayName}}<div class="account-name">{{displayName}}</div><div class="account-sub">{{username}}</div>{{/displayName}}
+                        {{^displayName}}<div class="account-name">{{username}}</div>{{/displayName}}
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="/p/settings"><i class="mdi mdi-account-cog-outline" aria-hidden="true"></i> Profile</a></li>
+                    <li><form method="post" action="/logout" class="m-0">{{{csrfField}}}<button type="submit" class="dropdown-item"><i class="mdi mdi-logout" aria-hidden="true"></i> Log Out</button></form></li>
+                </ul>
+            </div>
+            {{/loggedIn}}
+            {{^loggedIn}}
+            <a class="nav-icon" href="/login" aria-label="Login" title="Login"><i class="mdi mdi-login" aria-hidden="true"></i></a>
+            {{/loggedIn}}
+        </div>
+
+        <!-- Search: centered inline box at xl; below xl a full-width row revealed by the search icon. -->
+        <div class="collapse navbar-collapse order-xl-2" id="wkSearch">
+            <form class="header-search mx-xl-auto my-2 my-xl-0" action="/s" method="get" role="search" autocomplete="off" data-bs-theme="light">
+                <input type="hidden" name="locale" value="{{searchLocale}}">
+                <div class="header-search-box">
+                    <i class="mdi mdi-magnify" aria-hidden="true"></i>
+                    <input type="search" name="q" id="siteSearch" value="{{searchQ}}" placeholder="Search…" aria-label="Search pages">
+                </div>
+                <ul id="siteSearchResults" class="search-dropdown" hidden></ul>
+            </form>
+        </div>
+    </div>
+</nav>
+<script>
+// The navbar is position: fixed (so the macOS/iOS overscroll rubber-band can't drag it — see site.css),
+// which takes it out of flow. site.css reserves --wikikt-header-h of body padding for it, correct for the
+// default single row. On narrow screens the search box expands into a second row (taller bar), so keep the
+// body's top padding pinned to the bar's real height. Mirrors the editor bar's --wk-editor-bar-h measuring.
+(function () {
+  var nav = document.querySelector('.wk-navbar');
+  if (!nav) return;
+  function sync() { document.body.style.paddingTop = nav.offsetHeight + 'px'; }
+  sync();
+  if (window.ResizeObserver) new ResizeObserver(sync).observe(nav);
+  else window.addEventListener('resize', sync);
+})();
+// Sidebar hamburger: reveal + wire it only when this page actually has a wiki sidebar (#wikiSidebar
+// is parsed further down, so defer to DOMContentLoaded). On desktop CSS keeps it hidden; on compact
+// screens .is-active + the media query show it, and a click opens the sidebar as a pop-over floating
+// over the content (.is-open). Being a pop-over it also closes on an outside click or Escape.
+(function () {
+  function wire() {
+    var btn = document.getElementById('wikiNavToggle');
+    var sidebar = document.getElementById('wikiSidebar');
+    if (!btn || !sidebar) return;   // no wiki sidebar here (admin/editor) — leave the button hidden
+    btn.classList.add('is-active');
+    function setOpen(open) {
+      sidebar.classList.toggle('is-open', open);
+      btn.setAttribute('aria-expanded', String(open));
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();   // don't let the document handler below immediately re-close it
+      setOpen(!sidebar.classList.contains('is-open'));
+    });
+    document.addEventListener('click', function (e) {
+      if (sidebar.classList.contains('is-open') && !sidebar.contains(e.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && sidebar.classList.contains('is-open')) setOpen(false);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+})();
+// Theme switch: apply the chosen mode (wkApplyTheme is defined in head-styles.hbs, pre-paint) and mark
+// the active option. A logged-in user's pick is saved to their account (data-persist) so it follows them
+// across devices; a guest's pick is remembered per-browser (localStorage).
+(function () {
+  // There can be more than one theme menu now: the standalone theme dropdown (≥md) and the compact
+  // "More" kebab (<md) both carry .wk-theme-menu. Wire every [data-theme] button and mark the active
+  // option across all of them so whichever is visible at the current width stays in sync.
+  var menus = document.querySelectorAll('.wk-theme-menu');
+  if (!menus.length) return;
+  function mark() {
+    var m = window.__wkThemeMode || 'light';
+    menus.forEach(function (menu) {
+      menu.querySelectorAll('[data-theme]').forEach(function (b) { b.classList.toggle('active', b.dataset.theme === m); });
+    });
+  }
+  menus.forEach(function (menu) {
+    var persist = menu.getAttribute('data-persist');   // account endpoint when logged in, else null
+    var csrf = menu.getAttribute('data-csrf') || '';
+    menu.querySelectorAll('[data-theme]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var m = b.dataset.theme;
+        if (window.wkApplyTheme) window.wkApplyTheme(m);
+        if (persist) {
+          try {
+            fetch(persist, { method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: '_csrf=' + encodeURIComponent(csrf) + '&theme=' + encodeURIComponent(m) });
+          } catch (e) {}
+        } else {
+          try { localStorage.setItem('wk-theme', m); } catch (e) {}
+        }
+        mark();
+      });
+    });
+  });
+  mark();
+})();
+(function () {
+  var input = document.getElementById('siteSearch');
+  var box = document.getElementById('siteSearchResults');
+  var form = input && input.closest('form');
+  if (!input || !box || !form) return;
+  var locale = (form.querySelector('input[name="locale"]') || {}).value || '';
+  var timer = null, items = [], active = -1;
+  var suppressDismiss = false;  // an aux-click on a result is blurring us; keep the popup open through it
+  var refocusing = false;       // we're restoring focus after such a click — don't re-run the search
+  var MIN = 2;
+  var inflight = null;   // the AbortController of the request in flight, so a newer keystroke can cancel it
+  var cache = {};        // query string -> results, for this page view only
+
+  function hide() { box.hidden = true; box.innerHTML = ''; items = []; active = -1; }
+  function dismiss() { hide(); input.value = ''; }
+  function go(url) { window.location.href = url; }
+
+  // Each row is a real <a href>. A *plain* left-click navigates in this tab (on mousedown, so a slow
+  // release or the blur-dismiss can't drop the row first). Middle-click, right-click, and
+  // Cmd/Ctrl/Shift/Alt+click fall through to the browser — new tab / new window / context menu. Those
+  // keep you on this page, so we hold the popup open (and its query) instead of dismissing on the blur
+  // they cause, letting you open several results in a row. The flag is scoped to that one blur.
+  function bindRowNav(li, url) {
+    li.addEventListener('mousedown', function (e) {
+      if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        go(url);
+        return;
+      }
+      suppressDismiss = true;
+      setTimeout(function () { suppressDismiss = false; }, 0);
+    });
+  }
+
+  // A single non-interactive row (min-length hint or "no results"). Not added to items[], so it is
+  // not keyboard-selectable and Enter still submits the form to the full search page.
+  function showMessage(text) {
+    box.innerHTML = ''; items = []; active = -1;
+    var li = document.createElement('li');
+    li.className = 'search-dropdown-msg';
+    li.textContent = text;
+    box.appendChild(li);
+    box.hidden = false;
+  }
+
+  function render(results, q) {
+    box.innerHTML = '';
+    items = [];
+    if (!results.length) { showMessage('No results found'); return; }
+    results.forEach(function (r) {
+      var li = document.createElement('li');
+      li.className = 'search-dropdown-item';
+      var a = document.createElement('a');
+      a.href = r.url;
+      var t = document.createElement('span'); t.className = 'sd-title'; t.textContent = r.title;
+      // Prefer the page's short description; fall back to the content snippet.
+      var s = document.createElement('span'); s.className = 'sd-snippet'; s.textContent = r.description || r.snippet;
+      a.appendChild(t); a.appendChild(s);
+      if (r.parentLabel) {
+        var p = document.createElement('span'); p.className = 'sd-path'; p.textContent = r.parentLabel;
+        a.appendChild(p);
+      }
+      li.appendChild(a);
+      bindRowNav(li, r.url);
+      box.appendChild(li);
+      items.push(r.url);
+    });
+    var foot = document.createElement('li');
+    foot.className = 'search-dropdown-all';
+    var fa = document.createElement('a');
+    fa.href = '/s?q=' + encodeURIComponent(q) + '&locale=' + encodeURIComponent(locale);
+    fa.textContent = 'See all results →';
+    foot.appendChild(fa);
+    bindRowNav(foot, fa.href);
+    box.appendChild(foot);
+    items.push(fa.href);
+    active = -1;
+    box.hidden = false;
+  }
+
+  function query() {
+    var q = input.value.trim();
+    if (!q.length) { hide(); return; }
+    if (q.length < MIN) { showMessage('Please type at least ' + MIN + ' characters to start search'); return; }
+
+    // Backspacing or retyping a query we already ran: render it without touching the server.
+    if (cache[q]) { render(cache[q], q); return; }
+
+    // Abandon the request still in flight for an earlier keystroke. Without this it keeps running
+    // server-side, burning a pooled DB connection on a result nobody will ever look at.
+    if (inflight) inflight.abort();
+    var ctl = new AbortController();
+    inflight = ctl;
+    fetch('/u/v1/search?q=' + encodeURIComponent(q) + '&locale=' + encodeURIComponent(locale) + '&limit=7',
+      { credentials: 'same-origin', signal: ctl.signal })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (results) {
+        cache[q] = results;
+        if (input.value.trim() === q) render(results, q);
+      })
+      .catch(function (e) { if (e.name !== 'AbortError') hide(); });   // an abort isn't a failure
+  }
+
+  input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(query, 300); });
+  // Re-run on focus so the menu returns after Escape (or if the field is focused with text already) —
+  // but not when we're only restoring focus after an aux-click, where the menu is already up and
+  // re-rendering would rebuild the rows mid-click.
+  input.addEventListener('focus', function () {
+    if (refocusing) { refocusing = false; return; }
+    query();
+  });
+  // Clicking away clears the box AND the text, so there's never orphaned text with no menu. An
+  // aux-click on a result blurs us too, but there we keep the popup up and just restore focus (so the
+  // normal click-away dismissal still works) rather than closing and clearing the query.
+  input.addEventListener('blur', function () {
+    if (suppressDismiss) { refocusing = true; setTimeout(function () { input.focus(); }, 0); return; }
+    setTimeout(dismiss, 150);
+  });
+  input.addEventListener('keydown', function (e) {
+    // Escape dismisses whenever the menu is open (including a message-only row).
+    if (e.key === 'Escape') { if (!box.hidden) { e.preventDefault(); dismiss(); } return; }
+    if (box.hidden || !items.length) return;
+    var lis = box.children;
+    if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % items.length; }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + items.length) % items.length; }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); go(items[active]); } return; }
+    else return;
+    for (var i = 0; i < lis.length; i++) lis[i].classList.toggle('active', i === active);
+  });
+})();
+</script>

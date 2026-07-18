@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rendering | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Rendering</h1>
+    <p class="text-secondary">When saving a page, user-entered Markdown or HTML is passed through a processing step
+        to generate the actual, served HTML, in order to strip potentially undesired content and reformat content
+        into a format suitable for actual display.
+        This process is called "rendering," and these options control how this process takes place. Changes apply to future edits (existing content is not modified).
+        Run a full re-render below if any immediate changes are desired.</p>
+    {{#saved}}<div class="alert alert-success" role="alert">Settings saved.</div>{{/saved}}
+    {{#rerendered}}<div class="alert alert-success" role="alert">Re-rendered {{rerenderedCount}} page(s).</div>{{/rerendered}}
+    <form method="post" action="/a/settings/rendering" class="edit-form">
+        {{{csrfField}}}
+
+        <h2>HTML</h2>
+        <p class="form-text">All page HTML, whether written directly or produced from Markdown, is passed through a sanitizer that strips potentially unsafe content. The options below allow expanding this allowlist.</p>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="renderAllowIframes" value="1" id="renderAllowIframes" {{#renderAllowIframes}}checked{{/renderAllowIframes}}>
+            <label class="form-check-label" for="renderAllowIframes">Allow <code>&lt;iframe&gt;</code> embeds</label>
+        </div>
+        <p class="form-text mb-3">Even when allowed, iframes are restricted to <code>https://</code> URLs and have sandbox applied.</p>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="renderAllowStyle" value="1" id="renderAllowStyle" {{#renderAllowStyle}}checked{{/renderAllowStyle}}>
+            <label class="form-check-label" for="renderAllowStyle">Allow inline <code>style</code> attributes on elements</label>
+        </div>
+
+        <h2>Markdown</h2>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="renderAutolink" value="1" id="renderAutolink" {{#renderAutolink}}checked{{/renderAutolink}}>
+            <label class="form-check-label" for="renderAutolink">Automatically convert plain URL text to hyperlinks</label>
+        </div>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="renderLineBreaks" value="1" id="renderLineBreaks" {{#renderLineBreaks}}checked{{/renderLineBreaks}}>
+            <label class="form-check-label" for="renderLineBreaks">Convert newlines to line breaks</label>
+        </div>
+        <p class="form-text mb-3">Render a single newline as a <code>&lt;br&gt;</code> line break instead of joining to same paragraph.</p>
+
+        <h2>Links</h2>
+        <div class="mb-2">
+            <label class="form-label" for="renderExternalLinkIcon">External-link icon</label>
+            <select class="form-select" name="renderExternalLinkIcon" id="renderExternalLinkIcon">
+                {{#renderExternalLinkModes}}
+                <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
+                {{/renderExternalLinkModes}}
+            </select>
+        </div>
+        <p class="form-text mb-3">Append an <i class="mdi mdi-open-in-new" aria-hidden="true"></i> icon to links that leave the site (only absolute links are considered; relative links, anchors, and <code>mailto:</code>, etc. are not marked).</p>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+
+    <h2>Render cache</h2>
+    <p class="text-secondary">Each page's rendered HTML is cached so views don't re-render every request. Saving the options above already invalidates the cache, so pages pick up the change on their next view. Use this to re-render every page right now instead &mdash; e.g. after a bulk import, or to pay the cost upfront rather than spreading it across the next visitors.</p>
+    <form method="post" action="/a/settings/rendering/rerender" class="edit-form">
+        {{{csrfField}}}
+        <button type="submit" class="btn btn-secondary"><i class="mdi mdi-refresh" aria-hidden="true"></i> Re-render all pages</button>
+    </form>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

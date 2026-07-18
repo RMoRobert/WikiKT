@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit: {{title}} | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css" integrity="sha384-uqD/OYCNfagd1EgXMgl5QedTD5K+B3e9b8GYo/41t7+Serf7CBxvl+tU1gHd+qd1" crossorigin="anonymous">
+    {{>partials/head-styles.hbs}}
+    {{>partials/brand-style.hbs}}
+</head>
+<body>
+<form method="post" action="{{saveUrl}}" class="editor" data-plain-editor="{{plainEditor}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}">
+    {{{csrfField}}}
+    <header class="editor-bar">
+        <a class="brand" href="/">{{#siteLogoUrl}}<img class="brand-logo" src="{{siteLogoUrl}}" alt="">{{/siteLogoUrl}}<span class="brand-name">{{siteName}}</span></a>
+        <input type="text" name="title" id="titleBar" class="editor-title" value="{{title}}" placeholder="Page title" aria-label="Page title" required autocomplete="off">
+        <div class="editor-bar-actions">
+            {{! Labels are in spans so compact screens can collapse the buttons to icon+tooltip. }}
+            <button type="submit" class="bar-btn success" title="Save"><i class="mdi mdi-check" aria-hidden="true"></i><span class="bar-btn-label"> Save</span></button>
+            <button type="button" id="pageInfoToggle" class="bar-btn outline" data-bs-toggle="modal" data-bs-target="#pageInfo" title="Page Info"><i class="mdi mdi-information-outline" aria-hidden="true"></i><span class="bar-btn-label"> Page Info</span></button>
+            <a class="bar-btn" href="{{viewUrl}}" title="Close"><i class="mdi mdi-close" aria-hidden="true"></i><span class="bar-btn-label"> Close</span></a>
+            {{#loggedIn}}
+            <a class="bar-btn icon-only" href="/a" title="Administration"><i class="mdi mdi-cog-outline" aria-hidden="true"></i></a>
+            <details class="dropdown account-menu">
+                <summary aria-label="Account" title="{{username}}"><i class="mdi mdi-account-circle-outline" aria-hidden="true"></i></summary>
+                <ul>
+                    <li><small class="text-secondary">{{username}}</small></li>
+                    {{! The logout form lives OUTSIDE the editor form (see after </form> below): a <form>
+                        nested in a form is invalid HTML and its </form> closes the editor form early,
+                        cutting the Page Info modal and the content textarea out of the submit. }}
+                    <li><button type="submit" form="logoutForm" class="wk-linklike">Logout</button></li>
+                </ul>
+            </details>
+            {{/loggedIn}}
+            {{^loggedIn}}<a class="bar-btn" href="/login">Login</a>{{/loggedIn}}
+        </div>
+    </header>
+
+    {{#error}}<div class="alert alert-danger editor-error" role="alert">{{error}}</div>{{/error}}
+
+    <div class="modal fade" id="pageInfo" tabindex="-1" aria-labelledby="pageInfoTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="pageInfoTitle"><i class="mdi mdi-information-outline" aria-hidden="true"></i> Page Info</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" id="pi-tab-general" data-bs-toggle="tab" data-bs-target="#pi-general" type="button" role="tab" aria-controls="pi-general" aria-selected="true">General</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="pi-tab-schedule" data-bs-toggle="tab" data-bs-target="#pi-schedule" type="button" role="tab" aria-controls="pi-schedule" aria-selected="false">Schedule</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="pi-tab-linked" data-bs-toggle="tab" data-bs-target="#pi-linked" type="button" role="tab" aria-controls="pi-linked" aria-selected="false">Linked From</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="pi-tab-metadata" data-bs-toggle="tab" data-bs-target="#pi-metadata" type="button" role="tab" aria-controls="pi-metadata" aria-selected="false">Metadata</button></li>
+            {{#canManageCode}}<li class="nav-item" role="presentation"><button class="nav-link" id="pi-tab-code" data-bs-toggle="tab" data-bs-target="#pi-code" type="button" role="tab" aria-controls="pi-code" aria-selected="false">Custom Code</button></li>{{/canManageCode}}
+            {{#infoboxTabs}}<li class="nav-item" role="presentation"><button class="nav-link" id="pi-tab-infobox-{{tabId}}" data-bs-toggle="tab" data-bs-target="#pi-infobox-{{tabId}}" type="button" role="tab" aria-controls="pi-infobox-{{tabId}}" aria-selected="false">{{tabLabel}}{{#unfilled}} <i class="mdi mdi-alert-circle text-warning" aria-hidden="true"></i>{{/unfilled}}</button></li>{{/infoboxTabs}}
+        </ul>
+        <div class="tab-content pt-3">
+        <div class="tab-pane fade show active" id="pi-general" role="tabpanel" aria-labelledby="pi-tab-general">
+        {{! Prominent (but non-blocking) nudge on the first tab so editors notice a page that should carry
+            an infobox without having to open the Infobox tab. Purely a suggestion — saving is never
+            blocked and leaving it blank simply hides the card. The name is set off with a colon rather
+            than run into "a/an <name> infobox", which reads awkwardly and can wrap oddly for longer names. }}
+        {{#infoboxMissing}}
+        <div class="alert alert-warning d-flex align-items-start gap-2 py-2" role="alert">
+            <i class="mdi mdi-card-text-outline" aria-hidden="true"></i>
+            <div>This page is specified for but missing {{infoboxMissingNoun}}: <strong>{{infoboxMissingNames}}</strong>. <a href="#" class="alert-link" onclick="document.getElementById('{{infoboxFirstTabButtonId}}').click();return false;">Fill {{infoboxMissingPronoun}} in</a>.</div>
+        </div>
+        {{/infoboxMissing}}
+        {{! Muted, non-blocking note when the page has stored infobox data that no longer maps to any template
+            applied here (a template was removed, a rule changed, or the page moved). When an infobox still
+            applies the next save rewrites the JSON from the matched templates and drops the stray data; when
+            none applies there's no Infobox tab, so this is the only trace that the leftover data is there. }}
+        {{#infoboxHasOrphans}}
+        <div class="alert alert-secondary d-flex align-items-start gap-2 py-2" role="alert">
+            <i class="mdi mdi-broom" aria-hidden="true"></i>
+            <div>This page has saved infobox data that no longer applies to any template used here, so it isn't shown.{{#hasInfoboxTabs}} Saving the page will clear it.{{/hasInfoboxTabs}}</div>
+        </div>
+        {{/infoboxHasOrphans}}
+        <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input class="form-control" type="text" id="titlePanel" value="{{title}}" placeholder="Page title" autocomplete="off">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Short description</label>
+            <textarea class="form-control" name="description" rows="2" maxlength="1000" placeholder="Short summary shown under the title and in link previews">{{description}}</textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="tagInput">Tags</label>
+            {{! Chip editor backed by the hidden comma-separated "tags" field, so the form contract
+                (and parseTags on the server) is unchanged. Suggestions come from /u/v1/tags; typing
+                a tag that doesn't exist yet simply creates it on save. }}
+            <div class="tag-editor form-control" id="tagEditor">
+                <input type="text" id="tagInput" placeholder="Add a tag…" autocomplete="off" maxlength="100" aria-label="Add a tag">
+                <ul class="tag-suggest" id="tagSuggest" hidden></ul>
+            </div>
+            <input type="hidden" name="tags" id="tagsField" value="{{tagsText}}">
+        </div>
+        {{! Content format is changed from the page's "Page actions → Convert" menu (server-side); this
+            hidden field just carries the current format through an ordinary save. }}
+        <input type="hidden" name="contentFormat" value="{{contentFormat}}">
+        <div class="page-info-row">
+            <div class="mb-3 pi-locale"><label class="form-label">Locale</label>
+                <select class="form-select" id="moveLocale" name="locale" required>
+                    {{#localeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/localeOptions}}
+                </select>
+            </div>
+            <div class="mb-3 pi-path"><label class="form-label">Path</label>
+                <div class="input-group">
+                    <input class="form-control" type="text" id="movePath" name="path" value="{{pagePath}}" required>
+                    <button class="btn btn-outline-secondary" type="button" id="browseMove"><i class="mdi mdi-file-tree" aria-hidden="true"></i> Browse…</button>
+                </div>
+            </div>
+        </div>
+        <p class="form-text">Changing the path or locale moves the page; ensure any links pointing to this page are updated.</p>
+        </div>{{! /#pi-general }}
+
+        {{! Pages that link to this one (backlinks). Read-only list — moving/renaming this page does not
+            rewrite these references, hence the warning. Empty state shown when nothing links here yet. }}
+        <div class="tab-pane fade" id="pi-linked" role="tabpanel" aria-labelledby="pi-tab-linked">
+        {{#hasBacklinks}}
+        <div class="mb-3">
+            <label class="form-label">Linked from ({{backlinkCount}})</label>
+            <ul class="list-group" style="max-height:16rem;overflow-y:auto;">
+                {{#backlinks}}
+                <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                    <a href="{{url}}" target="_blank" rel="noopener">{{title}}</a>
+                    <code class="text-secondary small text-truncate">{{locale}}/{{path}}</code>
+                </li>
+                {{/backlinks}}
+            </ul>
+            <p class="form-text"><i class="mdi mdi-alert-outline text-warning" aria-hidden="true"></i> Moving or renaming this page will break these links — they are not updated automatically.</p>
+        </div>
+        {{/hasBacklinks}}
+        {{^hasBacklinks}}
+        <p class="text-secondary d-flex align-items-center gap-2 mb-0"><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> No other pages link to this page yet.</p>
+        {{/hasBacklinks}}
+        </div>{{! /#pi-linked }}
+
+        <div class="tab-pane fade" id="pi-metadata" role="tabpanel" aria-labelledby="pi-tab-metadata">
+        <div class="mb-3">
+            <label class="form-label">Search engines (robots)</label>
+            <select class="form-select" name="metaRobots">
+                {{#metaRobotsOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/metaRobotsOptions}}
+            </select>
+            <p class="form-text">Overrides the site-wide default <code>&lt;meta name="robots"&gt;</code> for this page. Applies on "Update live now".</p>
+        </div>
+        </div>{{! /#pi-metadata }}
+
+        {{! Custom Code: per-page CSS + JS injected into this page's <head> on view (never sanitized;
+            gated by manage:theme in the model, so the whole tab is absent for other users). CSS is
+            wrapped in a <style> tag on render, so no tags here; JS is emitted verbatim, so the author
+            includes their own <script> tags. Blank clears. Monospace + nowrap so the
+            code is legible. Textarea values use double-stache (HTML-escaped); the browser decodes them
+            back on read/submit, so a value containing </textarea> can't break out of the field. }}
+        {{#canManageCode}}
+        <div class="tab-pane fade" id="pi-code" role="tabpanel" aria-labelledby="pi-tab-code">
+        <p class="text-secondary">Inject custom CSS and JavaScript into the <code>&lt;head&gt;</code> of this page only. Use with caution, as code is included as-is.  If scheduled, custom styles and scripts will be published when draft becomes live.</p>
+        <div class="mb-3">
+            <label class="form-label" for="customCss">CSS</label>
+            <textarea class="form-control text-nowrap" style="font-family:var(--bs-font-monospace);" name="customCss" id="customCss" rows="8" spellcheck="false" autocomplete="off" maxlength="20000">{{pageCustomCss}}</textarea>
+            <p class="form-text">Do not include <code>&lt;style&gt;</code> tags.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="customJs">JavaScript</label>
+            <textarea class="form-control text-nowrap" style="font-family:var(--bs-font-monospace);" name="customJs" id="customJs" rows="8" spellcheck="false" autocomplete="off" maxlength="20000">{{pageCustomJs}}</textarea>
+            <p class="form-text">Wrap in script tags.</p>
+        </div>
+        </div>{{! /#pi-code }}
+        {{/canManageCode}}
+
+        {{! Infobox: one pane per template matched at this page's path/tags. Values post as
+            infobox.<templateSlug>.<field> and the server rebuilds the JSON per template. A blank field
+            is omitted on render; leaving every field on a tab blank omits that whole infobox. The nudge
+            below doesn't restate the template name (the tab title / "Fields for..." line already give
+            it) — keeping it generic sidesteps any awkward "a/an <name> infobox" phrasing entirely. }}
+        {{#infoboxTabs}}
+        <div class="tab-pane fade" id="pi-infobox-{{tabId}}" role="tabpanel" aria-labelledby="pi-tab-infobox-{{tabId}}">
+        {{#unfilled}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-alert-outline" aria-hidden="true"></i> This page is specified to use this infobox template. Please fill it in below.</div>{{/unfilled}}
+        <p class="text-secondary">Fields for the <strong>{{templateName}}</strong> infobox shown on this page. Leave a field blank to omit it; values support basic inline Markdown (bold, italic, links).</p>
+        {{#fields}}
+        <div class="mb-3">
+            <label class="form-label" for="ib-{{inputName}}">{{label}}</label>
+            {{#isString}}<input class="form-control" type="text" name="{{inputName}}" id="ib-{{inputName}}" value="{{value}}" autocomplete="off">{{/isString}}
+            {{#isChoice}}<select class="form-select" name="{{inputName}}" id="ib-{{inputName}}">{{#options}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/options}}</select>{{/isChoice}}
+            {{#isArray}}<div class="d-flex flex-wrap gap-3">{{#options}}<div class="form-check"><input class="form-check-input" type="checkbox" name="{{inputName}}" id="ib-{{inputName}}-{{value}}" value="{{value}}" {{#selected}}checked{{/selected}}><label class="form-check-label" for="ib-{{inputName}}-{{value}}">{{label}}</label></div>{{/options}}</div>{{/isArray}}
+            {{#hasHelp}}<p class="form-text">{{help}}</p>{{/hasHelp}}
+        </div>
+        {{/fields}}
+        </div>{{! end of one infobox pane. Keep this comment free of nested tag braces: Mustache closes a comment at the first closing braces and would leak the rest as a stray text node. }}
+        {{/infoboxTabs}}
+
+        <div class="tab-pane fade" id="pi-schedule" role="tabpanel" aria-labelledby="pi-tab-schedule">
+        {{#showPublishControls}}
+        <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="published" {{#published}}checked{{/published}}><label class="form-check-label">Published <span class="text-secondary">— when unchecked, the page is a draft visible only to editors</span></label></div>
+        <div class="mb-3">
+            <label class="form-label">Publish at (optional)</label>
+            <input class="form-control" type="datetime-local" name="publishAt" value="{{publishAt}}">
+            <p class="form-text">If the page is left as a draft, it will auto-publish at this time (server time). Ignored once published.</p>
+        </div>
+        {{/showPublishControls}}
+        {{#showApply}}
+        {{#hasStaged}}
+        <div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-edit-outline" aria-hidden="true"></i> Editing a staged update{{#stagedScheduled}} — scheduled to publish at {{stagedScheduledAt}}{{/stagedScheduled}}{{^stagedScheduled}} (no schedule yet){{/stagedScheduled}}. <a href="{{viewUrl}}?staged" class="alert-link">Preview</a></div>
+        {{/hasStaged}}
+        <div class="mb-3">
+            <label class="form-label">Apply</label>
+            <select class="form-select" name="applyMode" onchange="var s=document.getElementById('stagedAtRow'); if(s) s.style.display = this.value==='scheduled' ? '' : 'none';">
+                <option value="now" {{#applyNowSel}}selected{{/applyNowSel}}>Update live now</option>
+                <option value="staged" {{#applyStagedSel}}selected{{/applyStagedSel}}>Save as staged draft (no date)</option>
+                <option value="scheduled" {{#applyScheduledSel}}selected{{/applyScheduledSel}}>Schedule publish at…</option>
+            </select>
+        </div>
+        <div class="mb-3" id="stagedAtRow" style="{{^applyScheduledSel}}display:none{{/applyScheduledSel}}">
+            <label class="form-label">Publish at</label>
+            <input class="form-control" type="datetime-local" name="stagedPublishAt" value="{{stagedPublishAtInput}}">
+        </div>
+        <p class="form-text">Staged saves capture content only; tags, path &amp; permissions apply only with "Update live now". The live page stays unchanged until publish.</p>
+        {{#hasStaged}}
+        <button type="submit" name="discardStaged" value="1" formnovalidate class="btn btn-outline-danger" onclick="return confirm('Discard the staged update and go back to editing the live page?');">Discard staged update</button>
+        {{/hasStaged}}
+        {{/showApply}}
+        </div>{{! /#pi-schedule }}
+        </div>{{! /.tab-content }}
+        </div>{{! /.modal-body }}
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="submit" class="btn btn-success"><i class="mdi mdi-check" aria-hidden="true"></i> Save page</button>
+        </div>
+    </div>{{! /.modal-content }}
+    </div>{{! /.modal-dialog }}
+    </div>{{! /#pageInfo modal }}
+
+    <main class="editor-content">
+        <textarea name="content" rows="24">{{content}}</textarea>
+    </main>
+</form>
+{{#loggedIn}}
+{{! Target of the account menu's Logout button (via form="logoutForm"); must not nest in the editor form. }}
+<form method="post" action="/logout" id="logoutForm" class="m-0">{{{csrfField}}}</form>
+{{/loggedIn}}
+<script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js" integrity="sha384-KtB38COewxfrhJxoN2d+olxJAeT08LF8cVZ6DQ8Poqu89zIptqO6zAXoIxpGNWYE" crossorigin="anonymous"></script>
+{{! Bootstrap JS — the editor omits the standard footer partial, so load the bundle here too. This
+    powers the asset detail modal + tabs (Bootstrap Modal/Tab plugins) used from Insert Image. }}
+{{#assetsCdn}}<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>{{/assetsCdn}}{{^assetsCdn}}<script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>{{/assetsCdn}}
+<script src="/static/wk-browser.js"></script>
+<script>
+(function () {
+  // Page Info is a Bootstrap modal (opened by the toolbar button via data-bs-toggle). Auto-open it when
+  // the save came back with a validation error, since the offending fields (path/locale/…) live inside it.
+  var pageInfoEl = document.getElementById('pageInfo');
+  if (pageInfoEl && document.querySelector('.editor-error') && window.bootstrap) {
+    window.bootstrap.Modal.getOrCreateInstance(pageInfoEl).show();
+  }
+  // Title shows in the bar and in Page Info, backed by one field — keep them in sync.
+  var titleBar = document.getElementById('titleBar');
+  var titlePanel = document.getElementById('titlePanel');
+  if (titleBar && titlePanel) {
+    titleBar.addEventListener('input', function () { titlePanel.value = titleBar.value; });
+    titlePanel.addEventListener('input', function () { titleBar.value = titlePanel.value; });
+  }
+
+  // Tags (Page Info): chip editor with autocomplete. Chips are rendered from / synced to the hidden
+  // "tags" field (comma-separated), suggestions come from /u/v1/tags (fetched once, on first use).
+  // Free-typed values that match no suggestion are simply new tags — the server creates them on save.
+  (function () {
+    var editor = document.getElementById('tagEditor');
+    var input = document.getElementById('tagInput');
+    var field = document.getElementById('tagsField');
+    var box = document.getElementById('tagSuggest');
+    if (!editor || !input || !field || !box) return;
+    var tags = field.value.split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean);
+    var allPromise = null, items = [], active = -1;
+
+    function loadAll() {
+      if (!allPromise) {
+        allPromise = fetch('/u/v1/tags', { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .catch(function () { return []; });
+      }
+      return allPromise;
+    }
+    function sync() { field.value = tags.join(', '); }
+    function renderChips() {
+      editor.querySelectorAll('.tag-chip').forEach(function (c) { c.remove(); });
+      tags.forEach(function (t) {
+        var chip = document.createElement('span');
+        chip.className = 'tag-chip';
+        var label = document.createElement('span');
+        label.textContent = t;
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'tag-chip-remove';
+        x.setAttribute('aria-label', 'Remove tag ' + t);
+        x.innerHTML = '<i class="mdi mdi-close-circle" aria-hidden="true"></i>';
+        x.addEventListener('click', function () {
+          tags = tags.filter(function (o) { return o !== t; });
+          sync(); renderChips(); input.focus();
+        });
+        chip.appendChild(label); chip.appendChild(x);
+        editor.insertBefore(chip, input);
+      });
+    }
+    function closeSuggest() { box.hidden = true; box.innerHTML = ''; items = []; active = -1; }
+    // Mirrors the server's normalizeTags: trimmed, lowercased, capped at 100 chars, deduped.
+    function addTag(raw) {
+      var t = raw.trim().toLowerCase().slice(0, 100);
+      if (t && tags.indexOf(t) === -1) { tags.push(t); sync(); renderChips(); }
+      input.value = '';
+      closeSuggest();
+    }
+    function renderSuggest(matches, q) {
+      closeSuggest();
+      if (!matches.length) return;
+      items = matches;
+      matches.forEach(function (m) {
+        var li = document.createElement('li');
+        var idx = q ? m.indexOf(q) : -1;
+        if (idx !== -1) {
+          li.appendChild(document.createTextNode(m.slice(0, idx)));
+          var mark = document.createElement('mark');
+          mark.textContent = m.slice(idx, idx + q.length);
+          li.appendChild(mark);
+          li.appendChild(document.createTextNode(m.slice(idx + q.length)));
+        } else {
+          li.textContent = m;
+        }
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); addTag(m); });
+        box.appendChild(li);
+      });
+      active = -1;
+      box.hidden = false;
+    }
+    function refreshSuggest() {
+      var q = input.value.trim().toLowerCase();
+      loadAll().then(function (all) {
+        if (input.value.trim().toLowerCase() !== q) return; // input changed while loading
+        var matches = all.filter(function (t) {
+          return tags.indexOf(t) === -1 && (!q || t.indexOf(q) !== -1);
+        }).slice(0, 8);
+        renderSuggest(matches, q);
+      });
+    }
+    function move(delta) {
+      if (!items.length) return;
+      if (active >= 0) box.childNodes[active].classList.remove('active');
+      active = (active + delta + items.length) % items.length;
+      var el = box.childNodes[active];
+      el.classList.add('active');
+      el.scrollIntoView({ block: 'nearest' });
+    }
+    input.addEventListener('input', refreshSuggest);
+    input.addEventListener('focus', refreshSuggest);
+    // Commit typed text on blur (Vuetify-combobox behavior, like WikiJS); the delay lets a suggestion
+    // mousedown run first (it clears the input, so nothing double-commits).
+    input.addEventListener('blur', function () {
+      setTimeout(function () { if (input.value.trim()) addTag(input.value); else closeSuggest(); }, 150);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault(); // the tag input must never submit the surrounding page form
+        if (!box.hidden && active >= 0) addTag(items[active]);
+        else if (input.value.trim()) addTag(input.value);
+      } else if (e.key === ',') {
+        e.preventDefault();
+        if (input.value.trim()) addTag(input.value);
+      } else if (e.key === 'ArrowDown' && !box.hidden) { e.preventDefault(); move(1); }
+      else if (e.key === 'ArrowUp' && !box.hidden) { e.preventDefault(); move(-1); }
+      else if (e.key === 'Escape' && !box.hidden) { e.preventDefault(); closeSuggest(); }
+      else if (e.key === 'Backspace' && !input.value && tags.length) { tags.pop(); sync(); renderChips(); }
+    });
+    // Clicking anywhere in the box focuses the input, so it feels like one big field.
+    editor.addEventListener('mousedown', function (e) { if (e.target === editor) { e.preventDefault(); input.focus(); } });
+    // A half-typed tag still counts when saving directly.
+    var f = editor.closest('form');
+    if (f) f.addEventListener('submit', function () { if (input.value.trim()) addTag(input.value); });
+    renderChips();
+  })();
+
+  // The enabled content locales, read from the Page Info locale <select> (shared by the move/link pickers).
+  function localeOptionValues() {
+    var sel = document.getElementById('moveLocale');
+    return sel ? [].map.call(sel.options, function (o) { return o.value; }) : [];
+  }
+
+  var textarea = document.querySelector('textarea[name="content"]');
+  if (!textarea || typeof EasyMDE === 'undefined') return;
+  var formatSelect = document.querySelector('[name="contentFormat"]');
+  var mde = function (name, action, icon, title, noDisable) {
+    return { name: name, action: action, className: "mdi mdi-" + icon, title: title, noDisable: !!noDisable };
+  };
+  var easymde = new EasyMDE({
+    element: textarea,
+    autoDownloadFontAwesome: false,
+    spellChecker: false,
+    nativeSpellcheck: true,
+    inputStyle: "contenteditable",
+    status: false,
+    // EasyMDE turns each button's `name` into a CSS class on the <button>; prefix them all so e.g.
+    // the "table" button doesn't pick up Bootstrap's .table styling (and to avoid future collisions).
+    toolbarButtonClassPrefix: "mde",
+    // Side-by-side preview should NOT force fullscreen, so our sticky top bar stays visible.
+    sideBySideFullscreen: false,
+    toolbar: [
+      mde("bold", EasyMDE.toggleBold, "format-bold", "Bold"),
+      mde("italic", EasyMDE.toggleItalic, "format-italic", "Italic"),
+      mde("heading", EasyMDE.toggleHeadingSmaller, "format-header-pound", "Heading"),
+      "|",
+      mde("quote", EasyMDE.toggleBlockquote, "format-quote-close", "Quote"),
+      mde("unordered-list", EasyMDE.toggleUnorderedList, "format-list-bulleted", "Bulleted list"),
+      mde("ordered-list", EasyMDE.toggleOrderedList, "format-list-numbered", "Numbered list"),
+      "|",
+      mde("link", function (editor) {
+        // Prefer the page picker (link to an existing wiki page); fall back to EasyMDE's URL prompt.
+        if (!window.WikiKtPagePicker) { EasyMDE.drawLink(editor); return; }
+        var cm = editor.codemirror;
+        var sel = cm.getSelection();
+        var ed = document.querySelector("form.editor");
+        var dl = (ed && ed.dataset.defaultLocale) || "";
+        WikiKtPagePicker.open({
+          title: "Link to Page", confirmLabel: "Insert link",
+          defaultLocale: dl, locale: (ed && ed.dataset.pageLocale) || dl,
+          locales: localeOptionValues()
+        }).then(function (r) {
+          if (!r) return;
+          var text = sel || r.title || r.path;
+          cm.replaceSelection("[" + text + "](" + r.url + ")");
+          cm.focus();
+        });
+      }, "link-variant", "Link"),
+      mde("image", function (editor) {
+        // Prefer the asset browser; fall back to EasyMDE's URL prompt if it failed to load.
+        if (!window.WikiKtAssetBrowser) { EasyMDE.drawImage(editor); return; }
+        WikiKtAssetBrowser.open({ imagesOnly: true, title: "Insert Image", confirmLabel: "Insert" })
+          .then(function (asset) {
+            if (!asset) return;
+            var cm = editor.codemirror;
+            // If the asset has a stored default alt, use the {alt} token so it stays in sync; otherwise
+            // fall back to the filename as a starting alt.
+            var alt = asset.hasAlt ? "{alt}" : asset.filename.replace(/\.[^.]+$/, "");
+            // Author a locale-relative path: omit the locale when the asset is in this page's locale (it
+            // resolves to the page locale at render), use an explicit /<locale>/ for a cross-locale asset.
+            var ed = document.querySelector("form.editor");
+            var pageLoc = (ed && ed.dataset.pageLocale) || (ed && ed.dataset.defaultLocale) || "";
+            var ref = asset.locale === pageLoc ? "/" + asset.path : "/" + asset.locale + "/" + asset.path;
+            cm.replaceSelection("![" + alt + "](" + ref + ")");
+            cm.focus();
+          });
+      }, "image", "Image"),
+      mde("code", EasyMDE.toggleCodeBlock, "code-tags", "Code block"),
+      mde("table", EasyMDE.drawTable, "table", "Table"),
+      "|",
+      // Full-pane preview (swaps in place of the editor) — shown only on compact screens, where
+      // the side-by-side split is impractical; CSS hides one or the other per breakpoint.
+      mde("preview", EasyMDE.togglePreview, "eye-outline", "Preview", true),
+      mde("side-by-side", function (editor) {
+        EasyMDE.toggleSideBySide(editor);
+        positionSidePreview();
+      }, "view-split-vertical", "Side-by-side", true),
+      mde("fullscreen", function (editor) {
+        EasyMDE.toggleFullScreen(editor);
+        positionSidePreview();
+      }, "fullscreen", "Fullscreen", true),
+      "|",
+      mde("plain-view", function (editor) {
+        var c = editor.codemirror.getWrapperElement().parentNode;
+        if (c) c.classList.toggle("editor--plain");
+      }, "file-code-outline", "Plain text view", true),
+    ],
+    previewRender: function (plainText, preview) {
+      var fmt = formatSelect ? formatSelect.value : 'MARKDOWN';
+      var pageLoc = (form && form.dataset.pageLocale) || '';
+      var pagePath = (form && form.dataset.pagePath) || '';
+      fetch('/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body: 'contentFormat=' + encodeURIComponent(fmt) + '&locale=' + encodeURIComponent(pageLoc)
+          + '&path=' + encodeURIComponent(pagePath) + '&content=' + encodeURIComponent(plainText)
+      })
+        .then(function (r) { return r.text(); })
+        .then(function (html) { preview.innerHTML = '<div class="wiki-content">' + html + '</div>'; })
+        .catch(function () { preview.innerHTML = '<p class="text-danger">Preview failed.</p>'; });
+      return 'Loading preview…';
+    }
+  });
+  // Firefox doesn't reliably paint ::before icons on <button>; move each toolbar icon into a
+  // child <i> (the same pattern as the header icons, which render everywhere).
+  document.querySelectorAll('.editor-toolbar button[class*="mdi-"]').forEach(function (btn) {
+    var iconClass = Array.from(btn.classList).find(function (c) { return c.indexOf('mdi-') === 0; });
+    if (!iconClass) return;
+    btn.classList.remove('mdi', iconClass);
+    var icon = document.createElement('i');
+    icon.className = 'mdi ' + iconClass;
+    icon.setAttribute('aria-hidden', 'true');
+    btn.insertBefore(icon, btn.firstChild);
+  });
+  // Keep the formatting toolbar pinned just below the editor bar: expose the bar's rendered height
+  // (it wraps to two rows on narrow screens) as --wk-editor-bar-h so the sticky offset in site.css
+  // tracks it. ResizeObserver covers the wrap/unwrap; resize covers browsers without it.
+  var editorBar = document.querySelector('.editor-bar');
+  if (editorBar) {
+    var syncBarHeight = function () {
+      document.documentElement.style.setProperty('--wk-editor-bar-h', editorBar.offsetHeight + 'px');
+    };
+    syncBarHeight();
+    window.addEventListener('resize', syncBarHeight);
+    if (window.ResizeObserver) new ResizeObserver(syncBarHeight).observe(editorBar);
+  }
+
+  var cm = easymde.codemirror;
+  var form = textarea.closest('form');
+  var editorContainer = cm.getWrapperElement().parentNode;
+
+  // Apply the global "plain view" default (monospace, no inline styling). The toolbar's
+  // plain-view button toggles it for the current session.
+  if (form && editorContainer && form.dataset.plainEditor === 'true') {
+    editorContainer.classList.add('editor--plain');
+  }
+
+  setupLinkAutocomplete(cm, form);
+
+  // "Browse…" beside the Path field (Page Info): pick a destination to move the page to.
+  var browseMove = document.getElementById('browseMove');
+  var movePath = document.getElementById('movePath');
+  var moveLocale = document.getElementById('moveLocale');
+  if (browseMove && window.WikiKtPagePicker) {
+    browseMove.addEventListener('click', function () {
+      WikiKtPagePicker.open({
+        title: 'Move page to…',
+        confirmLabel: 'Choose location',
+        defaultLocale: form.dataset.defaultLocale || '',
+        locale: (moveLocale && moveLocale.value.trim()) || form.dataset.defaultLocale || '',
+        locales: localeOptionValues(),
+        path: movePath.value.trim()
+      }).then(function (r) {
+        if (!r) return;
+        movePath.value = r.path;
+        if (moveLocale) moveLocale.value = r.locale;
+      });
+    });
+  }
+
+  // Editor starts inline (NOT side-by-side/fullscreen) so the top bar stays visible.
+  // Guarantee the latest editor content is written back to the textarea before submit.
+  if (form) form.addEventListener('submit', function () { cm.save(); });
+
+  // EasyMDE's side-by-side preview is position:fixed and sized for fullscreen. With
+  // sideBySideFullscreen:false it shows inline, so re-anchor it to the editor's box (below the
+  // sticky bar). In real fullscreen, clear our overrides and let EasyMDE's own CSS govern.
+  function positionSidePreview() {
+    var preview = editorContainer.querySelector('.editor-preview-side');
+    if (!preview) return;
+    if (cm.getWrapperElement().classList.contains('CodeMirror-fullscreen')) {
+      preview.style.top = '';
+      preview.style.height = '';
+      return;
+    }
+    var rect = cm.getWrapperElement().getBoundingClientRect();
+    preview.style.top = rect.top + 'px';
+    preview.style.height = rect.height + 'px';
+  }
+  // Keep the inline preview aligned as the page scrolls, the window resizes, or the editor grows.
+  window.addEventListener('scroll', positionSidePreview, { passive: true });
+  window.addEventListener('resize', positionSidePreview);
+  cm.on('changes', positionSidePreview);
+
+  // Suggest existing page paths when typing a Markdown link target: "[text](<partial>".
+  function setupLinkAutocomplete(cm, form) {
+    var defaultLocale = (form && form.dataset.defaultLocale) || '';
+    var pagesPromise = null;
+    function loadPages() {
+      if (!pagesPromise) {
+        pagesPromise = fetch('/u/v1/pages/paths', { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .catch(function () { return []; });
+      }
+      return pagesPromise;
+    }
+    // Canonical view URL for a page (mirrors server-side wikiViewUrl): default locale has no prefix.
+    function viewUrl(p) {
+      return '/' + p.locale + '/' + p.path;
+    }
+
+    var box = null, items = [], active = -1, fromCh = 0, toCh = 0, lineNo = 0, suppress = false;
+
+    function close() {
+      if (box && box.parentNode) box.parentNode.removeChild(box);
+      box = null; items = []; active = -1;
+    }
+    function render(matches) {
+      close();
+      if (!matches.length) return;
+      items = matches;
+      box = document.createElement('ul');
+      box.className = 'cm-path-hints';
+      matches.forEach(function (m, i) {
+        var li = document.createElement('li');
+        var u = document.createElement('span'); u.className = 'cm-path-hint-url'; u.textContent = m.url;
+        var t = document.createElement('span'); t.className = 'cm-path-hint-title'; t.textContent = m.title;
+        li.appendChild(u); li.appendChild(t);
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(i); });
+        box.appendChild(li);
+      });
+      active = 0;
+      box.childNodes[0].classList.add('active');
+      var coords = cm.cursorCoords(true, 'page');
+      box.style.left = coords.left + 'px';
+      box.style.top = coords.bottom + 'px';
+      document.body.appendChild(box);
+    }
+    function move(delta) {
+      if (!box) return;
+      box.childNodes[active].classList.remove('active');
+      active = (active + delta + items.length) % items.length;
+      var el = box.childNodes[active];
+      el.classList.add('active');
+      el.scrollIntoView({ block: 'nearest' });
+    }
+    function choose(i) {
+      var m = items[i];
+      if (!m) return;
+      suppress = true; // the resulting cursorActivity should not reopen the dropdown
+      // Auto-close the link: append ")" unless one is already right after the cursor (e.g. the editor
+      // auto-inserted it). Either way the cursor ends just past the ")" so typing continues after the link.
+      var hasClose = cm.getLine(lineNo).charAt(toCh) === ')';
+      cm.replaceRange(hasClose ? m.url : m.url + ')', { line: lineNo, ch: fromCh }, { line: lineNo, ch: toCh });
+      cm.setCursor({ line: lineNo, ch: fromCh + m.url.length + 1 });
+      close();
+      cm.focus();
+    }
+    function refresh() {
+      if (suppress) { suppress = false; close(); return; }
+      var cur = cm.getCursor();
+      var before = cm.getLine(cur.line).slice(0, cur.ch);
+      var m = /\]\(([^)\s]*)$/.exec(before); // "](" + partial path, no closing ")" yet
+      if (!m) { close(); return; }
+      var partial = m[1];
+      lineNo = cur.line; fromCh = cur.ch - partial.length; toCh = cur.ch;
+      var q = partial.toLowerCase();
+      loadPages().then(function (pages) {
+        var c2 = cm.getCursor();
+        if (c2.line !== lineNo || c2.ch !== toCh) return; // cursor moved while resolving
+        var matches = [];
+        for (var i = 0; i < pages.length && matches.length < 12; i++) {
+          var url = viewUrl(pages[i]);
+          if (!q || url.toLowerCase().indexOf(q) !== -1 || pages[i].title.toLowerCase().indexOf(q) !== -1) {
+            matches.push({ url: url, title: pages[i].title });
+          }
+        }
+        render(matches);
+      });
+    }
+
+    cm.on('cursorActivity', refresh);
+    cm.on('blur', function () { setTimeout(close, 150); });
+    // Intercept navigation keys while the dropdown is open (capture phase, before CodeMirror).
+    cm.getWrapperElement().addEventListener('keydown', function (e) {
+      if (!box) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); choose(active); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    }, true);
+  }
+})();
+</script>
+{{{bodyHtml}}}</body>
+</html>

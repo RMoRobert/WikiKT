@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isNew}}New Group{{/isNew}}{{^isNew}}Edit Group{{/isNew}} | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>{{#isNew}}New Group{{/isNew}}{{^isNew}}Edit Group{{/isNew}}</h1>
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="{{#isNew}}/a/groups{{/isNew}}{{^isNew}}/a/groups/{{group.id}}{{/isNew}}" class="edit-form">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input class="form-control" type="text" name="name" value="{{group.name}}" required {{#group.isSystem}}readonly{{/group.isSystem}}>
+        </div>
+        <p class="text-secondary">After creating the group, set its admin capabilities on the <strong>Permissions</strong> tab and its content access on the <strong>Page Rules</strong> tab.</p>
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+    {{^isNew}}
+    {{^group.isSystem}}
+    <form method="post" action="/a/groups/{{group.id}}/delete" onsubmit="return confirm('Delete this group?');">
+        {{{csrfField}}}
+        <button type="submit" class="btn btn-danger">Delete group</button>
+    </form>
+    {{/group.isSystem}}
+    {{/isNew}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

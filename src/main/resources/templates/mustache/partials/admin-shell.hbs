@@ -1,0 +1,6 @@
+{{! Opens the admin console layout: top navbar, then the sidebar + content flex row. Each admin page
+    includes this right after <body>, emits its content, then closes with admin-shell-end.hbs. }}
+{{>partials/header.hbs}}
+<div class="admin-shell">
+{{>partials/admin-sidebar.hbs}}
+<main class="admin-main">

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <div class="page-meta"><h1>Users</h1><a class="btn btn-primary" href="/a/users/new">New user</a></div>
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Username</th><th>Email</th><th>Groups</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+        {{#users}}
+        <tr>
+            <td>{{username}}</td>
+            <td>{{email}}</td>
+            <td>{{groupNames}}</td>
+            <td>{{#active}}<span class="badge text-bg-success">{{statusLabel}}</span>{{/active}}{{^active}}<span class="badge text-bg-warning">{{statusLabel}}</span>{{/active}}</td>
+            <td>{{createdAt}}</td>
+            <td>
+                {{#pendingApproval}}
+                <form method="post" action="/a/users/{{id}}/approve" class="d-inline">
+                    {{{csrfField}}}
+                    <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                </form>
+                {{/pendingApproval}}
+                <a class="btn btn-sm btn-primary" href="/a/users/{{id}}/edit">Edit</a>
+            </td>
+        </tr>
+        {{/users}}
+        </tbody>
+    </table>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

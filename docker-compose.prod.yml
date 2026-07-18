@@ -1,0 +1,81 @@
+# Production example: WikiKT + PostgreSQL + Caddy reverse proxy with automatic HTTPS (Let's Encrypt).
+# Configure via a .env file next to this compose file; see docker/README.md for template.
+# Example usage: docker compose -f docker-compose.prod.yml up -d
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: wikikt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: wikikt
+    volumes:
+      # PostgreSQL 18+ image keeps its data in a version subdir, so mount the PARENT
+      # (/var/lib/postgresql), not /var/lib/postgresql/data — the old path makes PG18 refuse to start.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wikikt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  wikikt:
+    build: .
+    environment:
+      WIKIKT_ENV: production
+      WIKIKT_DATABASE_TYPE: postgres
+      WIKIKT_DATABASE_R2DBC_URL: r2dbc:postgresql://postgres:5432/wikikt
+      WIKIKT_DATABASE_USERNAME: wikikt
+      WIKIKT_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Both session keys required in production mode (see docker/README.md for how to generate hex format keys for this).
+      WIKIKT_SESSION_ENCRYPTION_KEY: ${WIKIKT_SESSION_ENCRYPTION_KEY:?set WIKIKT_SESSION_ENCRYPTION_KEY in .env}
+      WIKIKT_SESSION_SIGN_KEY: ${WIKIKT_SESSION_SIGN_KEY:?set WIKIKT_SESSION_SIGN_KEY in .env}
+      # Dedicated key that encrypts stored MFA (TOTP) secrets at rest; required in production. Generate a
+      # random 32-byte hex value the same way as the session keys (see docker/README.md).
+      WIKIKT_MFA_KEY: ${WIKIKT_MFA_KEY:?set WIKIKT_MFA_KEY in .env}
+      WIKIKT_ADMIN_PASSWORD: ${WIKIKT_ADMIN_PASSWORD:?set WIKIKT_ADMIN_PASSWORD in .env}
+      # Caddy terminates TLS in front of this; honor X-Forwarded-* and mark cookie secure.
+      WIKIKT_TRUST_PROXY: "true"
+      WIKIKT_SESSION_SECURE_COOKIE: "true"
+      # Canonical public URL for links placed in outbound email (password reset, welcome). Derived from
+      # the domain Caddy serves, so those links never trust a client-supplied Host header.
+      WIKIKT_PUBLIC_URL: "https://${WIKIKT_DOMAIN}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Uploaded assets + the git-sync working clone if Git sync enabled (note: database itself lives in postgres_data)
+      - wikikt_data:/app/data
+    expose:
+      - "8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      WIKIKT_DOMAIN: ${WIKIKT_DOMAIN:?set WIKIKT_DOMAIN in .env}
+      # Optional: additional site hostnames (space-separated). Caddy gets a cert for each and routes
+      # them to WikiKT. Each needs its own DNS record; each site must also exist in Admin > Sites.
+      WIKIKT_EXTRA_DOMAINS: ${WIKIKT_EXTRA_DOMAINS:-}
+    depends_on:
+      - wikikt
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  wikikt_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,112 @@
+# Example simple of home/self-hosted stack: WikiKT + PostgreSQL (no Caddy; recommend behind own reverse proxy,
+# or see docker-compose.prod.yml for a full-featured production stack).
+# Add TLS yourself (recommended) with your own reverse proxy, or run plain HTTP on a trusted LAN (not recommended but
+# may be useful for testing or simple home LAN deployment).
+#
+#   Two ways to supply the values below (passwords, keys, public URL):
+#     A) .env file (command-line): copy .env.home.example -> .env, fill it in, chmod 600 .env.
+#        The ${VAR:?...} placeholders read from this; a missing value will fail to start and note this.
+#     B) Inline (Portainer web editor or similar, no .env): replace each ${VAR:?...} with a
+#        literal value. The `# inline:` comments show example values. (Be sure to keep this file
+#        private, out of source control, etc., if using this method.)
+#   Start:      docker compose -f docker-compose.home.yml up -d --build
+#   Logs:       docker compose -f docker-compose.home.yml logs -f wikikt
+#   Upgrade:    docker compose -f docker-compose.home.yml up -d --build
+#
+# Two things differ from docker-compose.prod.yml: no `caddy` service as part of stack, and app
+# publishes a host port (`ports:`) so your own proxy or a browser on the LAN can reach it.
+
+# The DB password is needed by both the postgres service and the wikikt app. It is defined once
+# here and aliased (*db_password) into both, so there is only one place to set it.
+#   Option A (.env):  leave as-is; value comes from POSTGRES_PASSWORD in your .env.
+#   Option B (inline): replace the ${...} with a literal, e.g. &db_password "my-strong-password".
+x-db-password: &db_password "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: wikikt
+      POSTGRES_PASSWORD: *db_password
+      POSTGRES_DB: wikikt
+    volumes:
+      # PostgreSQL 18+ image keeps its data in a version subdir, so mount the PARENT
+      # (/var/lib/postgresql), not /var/lib/postgresql/data — the old path makes PG18 refuse to start.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wikikt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  wikikt:
+    build: .
+    # --- Ship a prebuilt image instead of building on this box (docker save | docker load) ---
+    # Comment out `build: .` above and uncomment the next line. Build it on your workstation with:
+    #   docker buildx build --platform linux/amd64 -t wikikt:latest --load .   # --platform: Mac->x86 host
+    #   docker save wikikt:latest | gzip | ssh user@homebox 'gunzip | docker load'
+    # image: wikikt:latest
+    environment:
+      WIKIKT_ENV: production
+      WIKIKT_ADMIN_PASSWORD: ${WIKIKT_ADMIN_PASSWORD:?set WIKIKT_ADMIN_PASSWORD in .env}
+      # inline (B): WIKIKT_ADMIN_PASSWORD: "your-admin-password"   (must not be or start with "changeme")
+      # Both session keys are required in production (hex; see .env.home.example to generate).
+      WIKIKT_SESSION_ENCRYPTION_KEY: ${WIKIKT_SESSION_ENCRYPTION_KEY:?set WIKIKT_SESSION_ENCRYPTION_KEY in .env}
+      WIKIKT_SESSION_SIGN_KEY: ${WIKIKT_SESSION_SIGN_KEY:?set WIKIKT_SESSION_SIGN_KEY in .env}
+      # inline (B): paste hex from `openssl rand -hex 16` (encryption) and `openssl rand -hex 32` (sign):
+      #   WIKIKT_SESSION_ENCRYPTION_KEY: "<32 hex chars>"
+      #   WIKIKT_SESSION_SIGN_KEY: "<64 hex chars>"
+      # Encrypts stored MFA (TOTP) secrets at rest; required in production (32-byte hex, like the sign key).
+      WIKIKT_MFA_KEY: ${WIKIKT_MFA_KEY:?set WIKIKT_MFA_KEY in .env}
+      # inline (B): WIKIKT_MFA_KEY: "<64 hex chars from `openssl rand -hex 32`>"
+
+      # --- Database: PostgreSQL (active) -----------------------------------------------------
+      WIKIKT_DATABASE_TYPE: postgres
+      WIKIKT_DATABASE_R2DBC_URL: r2dbc:postgresql://postgres:5432/wikikt
+      WIKIKT_DATABASE_USERNAME: wikikt
+      WIKIKT_DATABASE_PASSWORD: *db_password   # As defined for Postgres
+      # --- Database: H2 instead of PostgreSQL (ALTERNATIVE) ----------------------------------
+      # H2 is a simple built-in option and lives in the wikikt_data volume (/app/data/wikikt.mv.db).
+      # To use it: (1) delete the four WIKIKT_DATABASE_* lines above, (2) delete the `postgres`
+      # service (top of this file) and the `postgres_data` volume (bottom), and (3) delete the
+      # `depends_on:` block below. Nothing else to set; H2 needs no URL, user, or password. Not
+      # recommended for production deployments but may be OK for single-user setups and testing.
+
+      # --- TLS posture: Run production behind your own HTTPS reverse proxy ---------------
+      # Assumes something in front terminates TLS (nginx/Caddy/etc.) with a real or
+      # self-signed cert. Production mode requires a Secure cookie, so it will
+      # refuse to boot without TLS in front.
+      WIKIKT_TRUST_PROXY: "true"           # honor X-Forwarded-* from the proxy
+      WIKIKT_SESSION_SECURE_COOKIE: "true" # cookie never sent over plain HTTP
+      WIKIKT_PUBLIC_URL: ${WIKIKT_PUBLIC_URL:?set WIKIKT_PUBLIC_URL in .env, e.g. https://wiki.home.lan}
+      # inline (B): WIKIKT_PUBLIC_URL: "https://wiki.home.lan"
+      # --- TLS posture: plain HTTP on a trusted LAN, no TLS (DEV ALTERNATIVE) -----------------
+      # Production won't run without TLS, so drop to development mode. It only WARNS on insecure
+      # defaults instead of failing, so keep ADMIN_PASSWORD + both session keys set above.
+      # Replace the WIKIKT_ENV line at the top and the three TLS lines above with:
+      #   WIKIKT_ENV: development
+      #   WIKIKT_TRUST_PROXY: "false"            # directly exposed: must NOT trust X-Forwarded-For
+      #   WIKIKT_SESSION_SECURE_COOKIE: "false"  # allow the cookie over plain HTTP
+      #   WIKIKT_PUBLIC_URL: "http://192.168.1.50:8080"   # only affects outbound-email links
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Uploaded assets, git-sync working clone (if Git Sync enabled), and H2 DB file (if using H2):
+      - wikikt_data:/app/data
+    ports:
+      # Exposes the app on the host. If your reverse proxy runs on this same host, harden it to
+      # loopback only: "127.0.0.1:8080:8080". Left open so a proxy (or browser) on another LAN
+      # machine can reach it. Change first number to move the host port (e.g. "9000:8080").
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres_data:   # delete this line if you switch to H2
+  wikikt_data:

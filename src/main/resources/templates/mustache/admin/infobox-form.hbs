@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isNew}}New Infobox Template{{/isNew}}{{^isNew}}Edit Infobox Template{{/isNew}} | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>{{#isNew}}New Infobox Template{{/isNew}}{{^isNew}}Edit Infobox Template{{/isNew}}</h1>
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="{{#isNew}}/a/infoboxes{{/isNew}}{{^isNew}}/a/infoboxes/{{id}}{{/isNew}}" class="edit-form">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input class="form-control" type="text" name="name" value="{{name}}" placeholder="e.g. Integration" required>
+            <p class="form-text">Shown as the infobox card's heading on the page.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Slug</label>
+            <input class="form-control" type="text" name="slug" value="{{slug}}" placeholder="e.g. app_info">
+            <p class="form-text">Stable identifier (lowercase letters, numbers, <code>-</code>, <code>_</code>). Leave blank to derive it from the name.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <input class="form-control" type="text" name="description" value="{{description}}" placeholder="Optional — a note for editors">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Fields</label>
+            <textarea class="form-control font-monospace" name="fields" rows="8" placeholder="platform_version | Introduced in | string | | Platform version the app first shipped in.&#10;deployment | Runs | array | Local, Cloud&#10;transport | Communication | select | Polling, Push&#10;official | Official | boolean | | Uses a documented API.&#10;notes | Notes | string">{{fieldsText}}</textarea>
+            <div class="form-text">
+                One field per line: <code>name | label | type | options | help</code>
+                <ul class="mb-0 mt-1">
+                    <li><strong>name</strong> — the key stored on the page (required); <strong>label</strong> — shown on the card (defaults to name).</li>
+                    <li><strong>type</strong> — <code>string</code>, <code>select</code>, <code>boolean</code>, or <code>array</code>. Append <code>*</code> to mark it required (e.g. <code>string*</code>).</li>
+                    <li><strong>options</strong> — comma-separated, for <code>select</code> and <code>array</code>. <strong>help</strong> — optional hint shown in the editor.</li>
+                    <li>Only trailing columns can be omitted. Values support inline Markdown (bold, italic, links).</li>
+                </ul>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-outline-secondary" href="/a/infoboxes">Cancel</a>
+    </form>
+    {{^isNew}}
+    <form method="post" action="/a/infoboxes/{{id}}/delete" class="mt-4" onsubmit="return confirm('Delete this template and its path rules? Pages keep their stored data but stop showing the infobox.');">
+        {{{csrfField}}}
+        <button type="submit" class="btn btn-danger">Delete template</button>
+    </form>
+    {{/isNew}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

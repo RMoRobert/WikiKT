@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Keys | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <div class="page-meta">
+        <h1>API keys</h1>
+        {{#canCreate}}<a class="btn btn-primary" href="{{baseUrl}}/new">New key</a>{{/canCreate}}
+    </div>
+    {{>partials/api-keys-body.hbs}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

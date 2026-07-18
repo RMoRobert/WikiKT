@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error {{code}} | {{siteName}}</title>
+    <meta name="robots" content="noindex">
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+    <main class="wiki-main page-view">
+        <article class="wiki-content">
+            <header>
+                <h1><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i> Error {{code}}</h1>
+            </header>
+            <div class="alert alert-warning" role="alert">{{message}}</div>
+            <p><a class="btn btn-outline-secondary" href="/"><i class="mdi mdi-home" aria-hidden="true"></i> Back to home</a></p>
+        </article>
+    </main>
+</div>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

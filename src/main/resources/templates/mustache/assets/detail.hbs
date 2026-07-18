@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{path}} | Assets</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<main class="container narrow">
+    <div class="page-meta"><h1>{{path}}</h1><a class="btn btn-secondary" href="/f">All assets</a></div>
+
+    {{! The asset detail/edit surface. Bootstrap tabs (General / Info / History) + a persistent
+        action bar (Delete left, Save right). The whole `.asset-detail` block is injected verbatim as
+        the body of the asset detail modal (wk-browser.js); standalone it's a normal tabbed page driven
+        by Bootstrap's tab plugin (loaded site-wide via the footer partial). Save lives in the action
+        bar and submits the Info metadata form via the `form=` attribute. }}
+    <div class="asset-detail">
+        {{#message}}<div class="alert alert-info py-2">{{message}}</div>{{/message}}
+
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" id="asset-tab-general" data-bs-toggle="tab" data-bs-target="#asset-pane-general" type="button" role="tab" aria-controls="asset-pane-general" aria-selected="true">General</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="asset-tab-info" data-bs-toggle="tab" data-bs-target="#asset-pane-info" type="button" role="tab" aria-controls="asset-pane-info" aria-selected="false">Info</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="asset-tab-history" data-bs-toggle="tab" data-bs-target="#asset-pane-history" type="button" role="tab" aria-controls="asset-pane-history" aria-selected="false">History</button></li>
+        </ul>
+
+        <div class="tab-content pt-3">
+            <div class="tab-pane fade show active" id="asset-pane-general" role="tabpanel" aria-labelledby="asset-tab-general">
+                <p><a href="{{url}}"><img src="{{url}}" alt="{{originalFilename}}" style="max-width:100%;height:auto"></a></p>
+                <dl class="row mb-2">
+                    <dt class="col-sm-3">Locale</dt><dd class="col-sm-9">{{locale}}</dd>
+                    <dt class="col-sm-3">Type</dt><dd class="col-sm-9">{{mime}}</dd>
+                    <dt class="col-sm-3">Size</dt><dd class="col-sm-9">{{sizeKb}} KB</dd>
+                    <dt class="col-sm-3">Filename</dt><dd class="col-sm-9">{{originalFilename}}</dd>
+                    <dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>{{url}}</code></dd>
+                </dl>
+                <div class="mb-3"><label class="form-label">Markdown to embed</label><input type="text" readonly value="{{markdown}}" onclick="this.select()" class="form-control"></div>
+
+                {{#hasPending}}
+                <div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-outline" aria-hidden="true"></i> A replacement ({{pendingFilename}}) is scheduled for {{pendingScheduledAt}}.
+                    <form method="post" action="/f/{{id}}/pending/delete" onsubmit="return confirm('Cancel the scheduled replacement?');" class="ms-auto m-0">
+                        {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                    </form>
+                </div>
+                {{/hasPending}}
+
+                <h2 class="h5 border-top pt-3">Replace file</h2>
+                <p class="text-secondary">Upload a new image to replace this one at the same path — every page and fragment using it updates automatically. The current version is kept in history (last {{maxVersions}}).</p>
+                <form method="post" action="/f/{{id}}/replace" enctype="multipart/form-data" class="edit-form">
+                    {{{csrfField}}}
+                    <div class="mb-3"><label class="form-label">New image</label><input type="file" name="file" accept="image/png,image/jpeg,image/gif,image/webp" required class="form-control"></div>
+                    <div class="mb-3"><label class="form-label">When</label>
+                        <select name="when" onchange="var s=this.closest('form').querySelector('.replace-at-row'); if(s) s.style.display=this.value==='scheduled'?'':'none';" class="form-select">
+                            <option value="now">Replace now</option>
+                            <option value="scheduled">Schedule for…</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 replace-at-row" style="display:none"><label class="form-label">At</label><input type="datetime-local" name="scheduleAt" class="form-control"></div>
+                    <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Replace</button>
+                </form>
+            </div>
+
+            <div class="tab-pane fade" id="asset-pane-info" role="tabpanel" aria-labelledby="asset-tab-info">
+                <form id="assetMetaForm" method="post" action="/f/{{id}}/meta" class="edit-form">
+                    {{{csrfField}}}
+                    <div class="mb-3">
+                        <label class="form-label">Default alt text</label>
+                        <input type="text" name="altText" value="{{altText}}" maxlength="1000" class="form-control" placeholder="Describes the image for screen readers and broken-image fallback">
+                        <p class="form-text">Used wherever the image is embedded with the <code>{alt}</code> token — <code>![{alt}]({{url}})</code> — so one edit updates every use. A normal alt in the markdown still wins; a bare <code>![](…)</code> stays intentionally empty.</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description <span class="text-secondary">(editors only)</span></label>
+                        <textarea name="description" rows="2" maxlength="2000" class="form-control" placeholder="Notes to help editors find this image — never shown to readers">{{description}}</textarea>
+                        <p class="form-text">Searchable from the <a href="/f">asset manager</a> filter. Not rendered on any page.</p>
+                    </div>
+                </form>
+
+                <h2 class="h5 border-top pt-3">Used by {{usageCount}}</h2>
+                {{#hasUsages}}
+                    <p class="text-secondary">Changing or deleting this asset affects:</p>
+                    <ul>
+                        {{#usages}}<li>{{type}}: <a href="{{url}}">{{label}}</a> <small class="text-secondary">({{locale}})</small></li>{{/usages}}
+                    </ul>
+                {{/hasUsages}}
+                {{^hasUsages}}<p class="text-secondary">Not referenced by any page or fragment.</p>{{/hasUsages}}
+            </div>
+
+            <div class="tab-pane fade" id="asset-pane-history" role="tabpanel" aria-labelledby="asset-tab-history">
+                {{#hasRevisions}}
+                    <table class="table table-hover align-middle">
+                        <thead><tr><th>Version</th><th>Type</th><th>Size</th><th>Filename</th><th>Archived</th><th></th></tr></thead>
+                        <tbody>
+                        {{#revisions}}
+                            <tr>
+                                <td>v{{version}}</td>
+                                <td>{{mime}}</td>
+                                <td>{{sizeKb}} KB</td>
+                                <td>{{filename}}</td>
+                                <td>{{createdAt}}</td>
+                                <td>
+                                    <form method="post" action="/f/{{assetId}}/restore/{{id}}" onsubmit="return confirm('Restore this version as the current file?');">
+                                        {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-primary">Restore</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {{/revisions}}
+                        </tbody>
+                    </table>
+                {{/hasRevisions}}
+                {{^hasRevisions}}<p class="text-secondary">No prior versions yet.</p>{{/hasRevisions}}
+            </div>
+        </div>
+
+        <div class="asset-actions d-flex justify-content-between align-items-center gap-2 border-top pt-3 mt-2">
+            <form method="post" action="/f/{{id}}/delete" onsubmit="return confirm('Delete this asset? Pages still linking to it will show a broken image.');" class="m-0">
+                {{{csrfField}}}
+                <button type="submit" class="btn btn-outline-danger"><i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> Delete</button>
+            </form>
+            <div class="d-flex gap-2">
+                <button type="submit" form="assetMetaForm" class="btn btn-outline-secondary">Save</button>
+                <button type="submit" form="assetMetaForm" class="btn btn-primary" data-wkad-close="1">Save and close</button>
+            </div>
+        </div>
+    </div>
+</main>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

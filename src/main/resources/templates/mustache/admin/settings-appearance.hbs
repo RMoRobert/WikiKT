@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appearance | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Appearance</h1>
+    {{#saved}}<div class="alert alert-success" role="alert">Settings saved.</div>{{/saved}}
+    <form method="post" action="/a/settings/appearance" class="edit-form">
+        {{{csrfField}}}
+        <h2>Theme</h2>
+        <div class="mb-4" style="max-width:22rem">
+            <label class="form-label" for="siteTheme">Default theme mode</label>
+            <select class="form-select" id="siteTheme" name="siteTheme">
+                {{#themeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/themeOptions}}
+            </select>
+            <p class="form-text">Signed-in users can override their own theme (Account | Settings) for their account,
+                and guests can use theme switcher button (if enabled below) to persist choice in browser.</p>
+        </div>
+        <div class="form-check mb-4">
+            <input class="form-check-input" type="checkbox" name="showThemePicker" id="showThemePicker" value="1" {{#showThemePicker}}checked{{/showThemePicker}}>
+            <label class="form-check-label" for="showThemePicker">Show the theme switcher (<i class="mdi mdi-theme-light-dark" aria-hidden="true"></i>) in the header</label>
+            <p class="form-text">Lets visitors change the theme mode (light/dark) themselves. Turning off uses only admin-selected theme, or logged in users can override in account settings for themselves.</p>
+        </div>
+
+        <h2>Branding</h2>
+        <div class="mb-3">
+            <label class="form-label">Logo <span class="text-secondary">(optional)</span></label>
+            <input type="hidden" name="siteLogoUrl" id="logoUrl" value="{{logoValue}}">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <img id="logoPreview" alt="" style="width:36px;height:36px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.25rem;background:var(--bs-tertiary-bg);padding:2px;" src="{{#logoValue}}{{logoValue}}{{/logoValue}}{{^logoValue}}/logo.svg{{/logoValue}}">
+                <code id="logoLabel" class="text-secondary">{{#logoValue}}{{logoValue}}{{/logoValue}}{{^logoValue}}— Default (logo.svg) —{{/logoValue}}</code>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="browseLogo"><i class="mdi mdi-image-multiple-outline" aria-hidden="true"></i> Browse…</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="clearLogo">Use default</button>
+            </div>
+            <p class="form-text">Shown beside the site name. Defaults to the bundled <code>/logo.svg</code>; pick an uploaded image <a href="/f">asset</a> to override. For best results use a square image, at least 35x35px.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Favicon <span class="text-secondary">(optional)</span></label>
+            <input type="hidden" name="siteFaviconUrl" id="faviconUrl" value="{{faviconValue}}">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <img id="faviconPreview" alt="" style="width:36px;height:36px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.25rem;background:var(--bs-tertiary-bg);padding:2px;" src="{{#faviconValue}}{{faviconValue}}{{/faviconValue}}{{^faviconValue}}/favicon.svg{{/faviconValue}}">
+                <code id="faviconLabel" class="text-secondary">{{#faviconValue}}{{faviconValue}}{{/faviconValue}}{{^faviconValue}}— Default (favicon.svg) —{{/faviconValue}}</code>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="browseFavicon"><i class="mdi mdi-image-multiple-outline" aria-hidden="true"></i> Browse…</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="clearFavicon">Use default</button>
+            </div>
+            <p class="form-text">The browser-tab icon. Defaults to the bundled <code>/favicon.svg</code>; pick an uploaded image <a href="/f">asset</a> to override (a square SVG or PNG works best).</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Brand color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteBrandColor" value="{{siteBrandColorValue}}" placeholder="#0172ad" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">A hex color (e.g. <code>#0172ad</code>) used as the accent for links and buttons. Leave blank for the default theme.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Header color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteHeaderColor" value="{{siteHeaderColorValue}}" placeholder="#1f2933" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">A hex color for the top header bar (e.g. <code>#1f2933</code> for a dark bar). Text and buttons switch to light automatically on dark backgrounds. Leave blank for a subtly tinted default.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Sidebar color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarColor" value="{{siteSidebarColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">A hex color for the navigation sidebar in light mode. Text switches between light and dark automatically for contrast. Leave blank for the default blue.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Sidebar color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarColorDark" value="{{siteSidebarColorDarkValue}}" placeholder="#212529" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">The sidebar color used when the site is in dark mode. Leave blank for the default dark surface.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Heading underline color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteHeadingLineColor" value="{{siteHeadingLineColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">Section headings on wiki pages get a thin underline with gradient to white. Leave blank for a neutral gray.</p>
+        </div>
+
+        <h2>Table of contents</h2>
+        <div class="mb-3">
+            <label class="form-label">Display</label>
+            <select class="form-select" name="tocMode">
+                {{#tocModeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/tocModeOptions}}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Position</label>
+            <select class="form-select" name="tocSide">
+                {{#tocSideOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/tocSideOptions}}
+            </select>
+            <p class="form-text">Auto-built from each page's H1 and H2 headings. "Floating" overlays the side margin; "Separate column" sits beside the content; "Disabled" hides it site-wide. Position chooses the left or right side.</p>
+        </div>
+
+        <h2>Typography</h2>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="bodyFont">Body font</label>
+                <select class="form-select wk-font-select" id="bodyFont" name="bodyFont" data-custom="bodyFontCustomWrap">
+                    {{#bodyFontOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/bodyFontOptions}}
+                </select>
+                <div class="mt-2 {{^bodyFontIsCustom}}d-none{{/bodyFontIsCustom}}" id="bodyFontCustomWrap">
+                    <input class="form-control" type="text" name="bodyFontCustom" value="{{bodyFontCustomValue}}" placeholder="'Inter', sans-serif" maxlength="200">
+                    <p class="form-text mb-0">CSS <code>font-family</code> value; load the font itself in Custom CSS below.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="headingFont">Heading font</label>
+                <select class="form-select wk-font-select" id="headingFont" name="headingFont" data-custom="headingFontCustomWrap">
+                    {{#headingFontOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/headingFontOptions}}
+                </select>
+                <div class="mt-2 {{^headingFontIsCustom}}d-none{{/headingFontIsCustom}}" id="headingFontCustomWrap">
+                    <input class="form-control" type="text" name="headingFontCustom" value="{{headingFontCustomValue}}" placeholder="'Merriweather', serif" maxlength="200">
+                    <p class="form-text mb-0">CSS <code>font-family</code> value; load the font itself in Custom CSS below.</p>
+                </div>
+            </div>
+        </div>
+        <p class="form-text">Built-in fonts load automatically from Google Fonts. Pick <strong>Custom…</strong> to use your own —
+            enter its <code>font-family</code> and load it via Custom CSS below (<code>@font-face</code>, <code>@import</code>, or a
+            self-hosted <a href="/f">asset</a>). Third-party hosts currently must be Google Fonts or jsDelivr (per content-security policy).</p>
+        <div class="mb-3" style="max-width:14rem">
+            <label class="form-label" for="baseFontSize">Base text size</label>
+            <div class="input-group">
+                <input class="form-control" type="number" id="baseFontSize" name="baseFontSize" min="12" max="24" value="{{baseFontSizeValue}}">
+                <span class="input-group-text">px</span>
+            </div>
+            <p class="form-text">Root body size (default 16). The rest scales from it.</p>
+        </div>
+
+        <h2>Custom CSS <span class="text-secondary fs-6">(advanced)</span></h2>
+        <div class="mb-3">
+            <textarea class="form-control text-body-emphasis" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="customCss" name="customCss" rows="8" spellcheck="false" placeholder=".content h1 { letter-spacing: -0.02em; }&#10;:root { --bs-border-radius: 0.75rem; }" maxlength="20000">{{customCssValue}}</textarea>
+            <p class="form-text">Injected into <code>&lt;head&gt;</code> of every page after the theme, so it overrides built-i
+                styles. Examples: theme via CSS variables like <code>--bs-primary</code>. External resources (images,
+                <code>@import</code>, <code>@font-face</code>) can currently load only from this server, Google Fonts,
+                or jsDelivr per content-security policy.</p>
+        </div>
+
+        <h2>Custom HTML <span class="text-secondary fs-6">(advanced)</span></h2>
+        <p class="text-secondary">Raw HTML injected verbatim into every page. Example uses: analytics, verification
+            <code>&lt;meta&gt;</code> tags, chat widgets, etc. <strong>Unlike Custom CSS, this is not
+            sanitized</strong>, so only trusted admins should use it; a mistake can break the page.
+            <strong>Note:</strong> the content-security policy still applies: inline scripts run, but scripts loaded
+            from an external host work only from allowed sources. Third-party analytics hosts would need a CSP change.</p>
+        <div class="mb-3">
+            <label class="form-label" for="headHtml">Head HTML <span class="text-secondary">— injected at the end of <code>&lt;head&gt;</code></span></label>
+            <textarea class="form-control" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="headHtml" name="headHtml" rows="5" spellcheck="false" placeholder="&lt;meta name=&quot;google-site-verification&quot; content=&quot;…&quot;&gt;" maxlength="20000">{{headHtmlValue}}</textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="bodyHtml">Body HTML <span class="text-secondary">— injected before <code>&lt;/body&gt;</code></span></label>
+            <textarea class="form-control" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="bodyHtml" name="bodyHtml" rows="5" spellcheck="false" placeholder="&lt;script&gt;/* end-of-body script */&lt;/script&gt;" maxlength="20000">{{bodyHtmlValue}}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+{{>partials/admin-shell-end.hbs}}
+<script src="/static/wk-browser.js"></script>
+<script>
+(function () {
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function wire(kind, def) {
+    var input = document.getElementById(kind + 'Url');
+    var preview = document.getElementById(kind + 'Preview');
+    var label = document.getElementById(kind + 'Label');
+    var browse = document.getElementById('browse' + cap(kind));
+    var clear = document.getElementById('clear' + cap(kind));
+    if (!browse || !window.WikiKtAssetBrowser) return;
+    browse.addEventListener('click', function () {
+      WikiKtAssetBrowser.open({ imagesOnly: true, title: 'Select ' + cap(kind), confirmLabel: 'Choose' })
+        .then(function (a) {
+          if (!a) return;
+          input.value = a.url; preview.src = a.url; label.textContent = a.url;
+        });
+    });
+    clear.addEventListener('click', function () {
+      input.value = ''; preview.src = def; label.textContent = '— Default (' + def.slice(1) + ') —';
+    });
+  }
+  wire('logo', '/logo.svg');
+  wire('favicon', '/favicon.svg');
+
+  // Reveal the custom font-family field only when its select is on "Custom…".
+  document.querySelectorAll('.wk-font-select').forEach(function (sel) {
+    var wrap = document.getElementById(sel.dataset.custom);
+    if (!wrap) return;
+    sel.addEventListener('change', function () {
+      wrap.classList.toggle('d-none', sel.value !== 'custom');
+    });
+  });
+})();
+</script>
+{{{bodyHtml}}}</body>
+</html>

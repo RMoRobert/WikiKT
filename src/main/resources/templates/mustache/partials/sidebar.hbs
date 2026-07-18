@@ -1,0 +1,32 @@
+{{! Wiki sidebar. Lives as the first child of a `.container.wiki-layout` flex row, before <main>, and is
+    the single source for all navigation modes (Administration > Navigation), driven by the model built
+    in WikiRouting.navModel: the static curated menu (navShowStatic), the auto-built drill-down site tree
+    (navShowTree), or both with a per-visitor switch (navShowToggle). The whole aside is gated on
+    showSidebar, so `none` mode (and empty menus) renders nothing. The compact-screen show/hide is driven
+    by the hamburger in partials/header.hbs, which finds #wikiSidebar and wires itself. }}
+{{#showSidebar}}
+<aside class="wiki-sidebar" id="wikiSidebar">
+    {{#navShowToggle}}
+    {{! Static ⇄ tree switch (both mode). wk-nav-browser.js remembers the choice in the wk-nav-view cookie. }}
+    <div class="wk-nav-switch" role="tablist" aria-label="Navigation view">
+        <button type="button" class="wk-nav-switch-btn{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static" aria-label="Main navigation menu tree"><i class="mdi mdi-menu" aria-hidden="true"></i> Main Menu</button>
+        <button type="button" class="wk-nav-switch-btn{{#navTreeActive}} is-active{{/navTreeActive}}" data-nav-view="tree" aria-label="Browse pages"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i> Browse</button>
+    </div>
+    {{/navShowToggle}}
+    {{#navShowStatic}}
+    <nav class="wk-nav-pane wk-nav-pane--static{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static">
+        {{>partials/nav-items.hbs}}
+        {{#canManageNav}}<a class="wiki-nav-edit" href="{{editMenuUrl}}"><i class="mdi mdi-pencil-outline" aria-hidden="true"></i> Edit menu</a>{{/canManageNav}}
+    </nav>
+    {{/navShowStatic}}
+    {{#navShowTree}}
+    {{! Drill-down page browser: JS (wk-nav-browser.js) reads the embedded tree JSON and renders one folder
+        level at a time — clicking a folder drills in, pages open, an "up" control climbs back out. }}
+    <nav class="wk-nav-pane wk-nav-pane--tree{{#navTreeActive}} is-active{{/navTreeActive}}" data-nav-view="tree" data-nav-tree data-current-path="{{navTreePath}}" aria-label="Browse pages">
+        <div class="wk-tree" data-tree-body></div>
+        <script type="application/json" data-tree-data>{{{navTreeJson}}}</script>
+    </nav>
+    <script src="/static/wk-nav-browser.js"></script>
+    {{/navShowTree}}
+</aside>
+{{/showSidebar}}

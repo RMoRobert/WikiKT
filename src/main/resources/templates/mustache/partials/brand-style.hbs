@@ -1,0 +1,10 @@
+{{#siteBrandColor}}<style>:root{--bs-primary:{{siteBrandColor}};--bs-link-color:{{siteBrandColor}};--bs-link-hover-color:{{siteBrandColor}};}</style>{{/siteBrandColor}}
+{{#siteHeaderColor}}<style>.wk-navbar,.editor-bar{--wk-navbar-bg:{{siteHeaderColor}};{{^siteHeaderDark}}--bs-navbar-color:rgba(0,0,0,.65);--bs-navbar-hover-color:#000;--bs-navbar-active-color:#000;--bs-navbar-brand-color:#000;--bs-navbar-brand-hover-color:#000;{{/siteHeaderDark}}}{{^siteHeaderDark}}.wk-navbar .btn-outline-light{--bs-btn-color:#1f2933;--bs-btn-border-color:rgba(0,0,0,.28);--bs-btn-hover-color:#000;--bs-btn-hover-bg:rgba(0,0,0,.06);--bs-btn-hover-border-color:rgba(0,0,0,.45);}{{/siteHeaderDark}}</style>{{/siteHeaderColor}}
+{{! Admin sidebar colors, one per color mode. A light color flips the white-based foreground tints
+    (defaults in site.css) to black-based ones, plus an edge line so a pale column still reads
+    against the canvas. :not/:root[..] scoping keeps each override inside its own color mode. }}
+{{#siteSidebarColor}}<style>:root:not([data-bs-theme='dark']){--wk-sidebar-bg:{{siteSidebarColor}};{{^siteSidebarColorIsDark}}--wk-sidebar-fg:rgba(0,0,0,.82);--wk-sidebar-fg-muted:rgba(0,0,0,.55);--wk-sidebar-hover-bg:rgba(0,0,0,.07);--wk-sidebar-active-bg:rgba(0,0,0,.12);--wk-sidebar-line:rgba(0,0,0,.2);--wk-sidebar-edge:rgba(0,0,0,.15);{{/siteSidebarColorIsDark}}}</style>{{/siteSidebarColor}}
+{{#siteSidebarColorDark}}<style>:root[data-bs-theme='dark']{--wk-sidebar-bg:{{siteSidebarColorDark}};{{^siteSidebarColorDarkIsDark}}--wk-sidebar-fg:rgba(0,0,0,.82);--wk-sidebar-fg-muted:rgba(0,0,0,.55);--wk-sidebar-hover-bg:rgba(0,0,0,.07);--wk-sidebar-active-bg:rgba(0,0,0,.12);--wk-sidebar-line:rgba(0,0,0,.2);--wk-sidebar-edge:rgba(0,0,0,.15);{{/siteSidebarColorDarkIsDark}}}</style>{{/siteSidebarColorDark}}
+{{! Content-heading underline: the fade is built here from the single admin-chosen color (falls back
+    to a neutral border-color fade in site.css when unset). }}
+{{#siteHeadingLineColor}}<style>:root{--wk-heading-line:linear-gradient(90deg,{{siteHeadingLineColor}},transparent);}</style>{{/siteHeadingLineColor}}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isNew}}New Fragment{{/isNew}}{{^isNew}}Edit Fragment{{/isNew}} | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>{{#isNew}}New Fragment{{/isNew}}{{^isNew}}Edit Fragment{{/isNew}}</h1>
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="{{#isNew}}/a/fragments{{/isNew}}{{^isNew}}/a/fragments/{{id}}{{/isNew}}" class="edit-form">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label">Key</label>
+            <input class="form-control" type="text" name="key" value="{{key}}" placeholder="e.g. safety-warning or /shared/footer" required>
+            <p class="form-text">Include it in a page with <code>&#123;&#123;fragment:{{key}}&#125;&#125;</code> (Markdown pages only).</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Locale</label>
+            <input class="form-control" type="text" name="locale" value="{{locale}}">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input class="form-control" type="text" name="title" value="{{title}}" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Content (Markdown)</label>
+            <textarea class="form-control" name="content" rows="14">{{content}}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+    {{^isNew}}
+    <section class="usages">
+        <h2>Used by {{usageCount}} page(s)</h2>
+        {{#hasUsages}}
+        <p class="text-secondary">Editing this fragment changes these pages:</p>
+        <ul>
+            {{#usages}}<li><a href="{{viewUrl}}">{{path}}</a> <small class="text-secondary">({{locale}}) · <a href="{{editUrl}}">edit</a></small></li>{{/usages}}
+        </ul>
+        {{/hasUsages}}
+        {{^hasUsages}}<p class="text-secondary">No pages currently use this fragment.</p>{{/hasUsages}}
+    </section>
+    <form method="post" action="/a/fragments/{{id}}/delete" onsubmit="return confirm('Delete this fragment? Pages using it will show a missing-fragment marker.');">
+        {{{csrfField}}}
+        <button type="submit" class="btn btn-danger">Delete fragment</button>
+    </form>
+    {{/isNew}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

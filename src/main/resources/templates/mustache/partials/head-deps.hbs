@@ -1,0 +1,8 @@
+{{! Shared head dependency links: font preconnect, Material Design Icons, Bootstrap CSS.
+    Bootstrap is CDN/local-aware via framework-css.hbs (assetsCdn flag). A page-specific
+    vendor stylesheet (highlight, EasyMDE) goes AFTER this include and BEFORE head-styles.hbs,
+    so it sits between Bootstrap and site.css in the cascade, letting site.css win. }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" integrity="sha384-HphS8cQyN+eYiJ5PMbzShG6qZdRtvHPVLPkYb8JwMkmNgaIxrFVDhQe3jIbq3EZ2" crossorigin="anonymous">
+{{>partials/framework-css.hbs}}

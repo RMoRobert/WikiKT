@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isNew}}New site{{/isNew}}{{^isNew}}Edit site{{/isNew}} | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <p class="mb-2"><a href="/a/sites" class="text-decoration-none"><i class="mdi mdi-arrow-left" aria-hidden="true"></i> All sites</a></p>
+    <h1>{{#isNew}}New site{{/isNew}}{{^isNew}}Edit site{{/isNew}}</h1>
+
+    {{#error}}<div class="alert alert-danger" role="alert"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i> {{error}}</div>{{/error}}
+
+    <form method="post" action="{{formAction}}" class="edit-form" style="max-width:36rem">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label" for="siteName">Name</label>
+            <input class="form-control" type="text" id="siteName" name="name" value="{{nameValue}}" placeholder="Developer docs" maxlength="100" required autofocus>
+            <p class="form-text">Shown in this admin list and the site switcher.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="siteHostname">Hostname <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" id="siteHostname" name="hostname" value="{{hostnameValue}}" placeholder="wiki.example.com" maxlength="255">
+            <p class="form-text">The domain or sub-domain this site answers to (TIP: if using reverse proxy, must
+                forward original <code>Host</code> header; many do by default).</p>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="isCatchAll" id="siteCatchAll" {{#isCatchAll}}checked{{/isCatchAll}}>
+            <label class="form-check-label" for="siteCatchAll">Catch-all: serve if no (other) hostname matches</label>
+            <p class="form-text">Enabling this option for one site will disable it for any others (only one site can be catch-all).</p>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save-outline" aria-hidden="true"></i> {{#isNew}}Create site{{/isNew}}{{^isNew}}Save{{/isNew}}</button>
+        <a href="/a/sites" class="btn btn-outline-secondary ms-2">Cancel</a>
+    </form>
+
+    {{^isNew}}
+    <hr class="my-4" style="max-width:36rem">
+    <h2 class="h5">Content &amp; branding</h2>
+    <p class="text-secondary" style="max-width:36rem">A site's pages, navigation, appearance,
+        locale, and other settings are edited using the admin pages (General,
+        Appearance, Pages, etc. above) for each site.</p>
+    {{#isManaging}}
+    <p class="text-secondary">You are managing this site now.</p>
+    {{/isManaging}}
+    {{^isManaging}}
+    <form method="post" action="/a/sites/select" class="m-0">
+        {{{csrfField}}}
+        <input type="hidden" name="siteId" value="{{editId}}">
+        <input type="hidden" name="return" value="/a/settings">
+        <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Manage this site &amp; open settings</button>
+    </form>
+    {{/isManaging}}
+    {{/isNew}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{label}} template | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="/a/mail">Mail</a></li><li class="breadcrumb-item active" aria-current="page">{{label}}</li></ol></nav>
+    <h1>{{label}} template</h1>
+    {{#saved}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> Template saved.</div>{{/saved}}
+    {{#reset}}<div class="alert alert-success" role="alert"><i class="mdi mdi-backup-restore" aria-hidden="true"></i> Reverted to the default template.</div>{{/reset}}
+    <p class="text-secondary" style="max-width:52rem">{{description}}
+        {{#isDefault}}<span class="badge text-bg-secondary">Using default</span>{{/isDefault}}
+        {{^isDefault}}<span class="badge text-bg-info">Customized</span>{{/isDefault}}</p>
+
+    <div class="mb-3">
+        <span class="text-secondary small">Available placeholders:</span>
+        {{#variables}}<code class="me-1">{{mustacheOpen}}{{name}}{{mustacheClose}}</code>{{/variables}}
+    </div>
+
+    <form method="post" action="/a/mail/templates/{{key}}" class="edit-form" style="max-width:52rem">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label" for="subject">Subject</label>
+            <input class="form-control" type="text" id="subject" name="subject" value="{{subject}}" maxlength="500" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="textBody">Plain-text body</label>
+            <textarea class="form-control" id="textBody" name="textBody" rows="10" style="font-family:var(--bs-font-monospace);font-size:0.88rem" required>{{textBody}}</textarea>
+            <p class="form-text mb-0">The message every mail client can read. Always sent.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="htmlBody">HTML body <span class="text-secondary">(optional)</span></label>
+            <textarea class="form-control" id="htmlBody" name="htmlBody" rows="8" style="font-family:var(--bs-font-monospace);font-size:0.88rem" placeholder="Leave blank to send plain text only">{{htmlBody}}</textarea>
+            <p class="form-text mb-0">When set, sent as a multipart message alongside the plain-text body. Values are HTML-escaped.</p>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save-outline" aria-hidden="true"></i> Save template</button>
+        <a class="btn btn-outline-secondary" href="/a/mail">Cancel</a>
+    </form>
+
+    {{^isDefault}}
+    <form method="post" action="/a/mail/templates/{{key}}/reset" class="edit-form mt-3" onsubmit="return confirm('Discard your customizations and revert to the built-in default?');">
+        {{{csrfField}}}
+        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="mdi mdi-backup-restore" aria-hidden="true"></i> Reset to default</button>
+    </form>
+    {{/isDefault}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

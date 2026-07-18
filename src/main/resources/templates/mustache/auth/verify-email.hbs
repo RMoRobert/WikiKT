@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm your account | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main">
+    <div style="max-width:28rem;">
+    <h1 class="h3 my-4">Account confirmation</h1>
+    {{#confirm}}
+        <p>Click below to confirm your email address and activate your account.</p>
+        <form method="post" action="/verify-email">
+            {{{csrfField}}}
+            <input type="hidden" name="token" value="{{token}}">
+            <button type="submit" class="btn btn-primary">Confirm my email</button>
+        </form>
+    {{/confirm}}
+    {{#confirmed}}
+        {{#pendingApproval}}
+            <div class="alert alert-success" role="alert">
+                Thanks — your email address is confirmed. Your account now needs an administrator to approve
+                it before you can sign in. We'll email you once it's approved.
+            </div>
+        {{/pendingApproval}}
+        {{^pendingApproval}}
+            <div class="alert alert-success" role="alert">
+                Your email address is confirmed and your account is now active. You can sign in.
+            </div>
+            <p><a class="btn btn-primary" href="/login">Sign in</a></p>
+        {{/pendingApproval}}
+    {{/confirmed}}
+    {{#invalid}}
+        <div class="alert alert-danger" role="alert">
+            This confirmation link is invalid, has expired, or has already been used. If you registered more
+            than a day ago, please register again to receive a fresh link.
+        </div>
+        <p><a href="/register">Register again</a> &middot; <a href="/login">Back to sign in</a></p>
+    {{/invalid}}
+    </div>
+</main>
+</div>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

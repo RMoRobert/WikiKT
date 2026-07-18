@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>General | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>General</h1>
+    {{#saved}}<div class="alert alert-success" role="alert">Settings saved.</div>{{/saved}}
+    {{#reindexed}}<div class="alert alert-success" role="alert">Search index rebuilt.</div>{{/reindexed}}
+    <form method="post" action="/a/settings" class="edit-form">
+        {{{csrfField}}}
+        <h2>Site</h2>
+        <div class="mb-3">
+            <label class="form-label">Site name</label>
+            <input class="form-control" type="text" name="siteName" value="{{siteNameValue}}" placeholder="{{siteNameDefault}}" maxlength="100">
+            <p class="form-text">Shown in page headers and browser title.</p>
+        </div>
+
+        <h2>Footer</h2>
+        <div class="mb-3">
+            <label class="form-label">Organization name <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteOrgName" value="{{siteOrgNameValue}}" maxlength="100" placeholder="e.g. Acme">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Content license <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteContentLicense" value="{{siteContentLicenseValue}}" maxlength="200" placeholder="e.g. All rights reserved">
+            <p class="form-text">By default, a footer is automatically generated using the above text. Basic Markdown is supported (links, emphasis, etc.).</p>
+        </div>
+
+        <h2>SEO</h2>
+        <div class="mb-3">
+            <label class="form-label">Default page description <span class="text-secondary">(optional)</span></label>
+            <textarea class="form-control" name="siteDescription" rows="2" maxlength="500" placeholder="Used as the meta description for pages that don't set their own">{{siteDescriptionValue}}</textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Default search-engine indexing (robots)</label>
+            <select class="form-select" name="siteMetaRobots">
+                {{#siteRobotsOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/siteRobotsOptions}}
+            </select>
+            <p class="form-text">The default <code>&lt;meta name="robots"&gt;</code> for pages. Individual pages can override this from their Page Info panel.</p>
+        </div>
+
+        <h2>Editor</h2>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="editorPlainView" value="1" {{#editorPlainView}}checked{{/editorPlainView}}>
+            <label class="form-check-label">Use plain-text Markdown editor as default</label>
+        </div>
+        <p class="form-text">When enabled, the Markdown editor defaults to a monospace font and does not show inline styling (e.g. <code>**bold**</code> is not rendered bold while editing). Users can still toggle the view for their current session from the editor toolbar.</p>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+
+    <h2>Search</h2>
+    <p class="text-secondary">Search indexes updates on each page and fragment save. You can rebuild it manually here if results look stale.</p>
+    <form method="post" action="/a/settings/reindex" class="edit-form">
+        {{{csrfField}}}
+        <button type="submit" class="btn btn-secondary">Rebuild search index</button>
+    </form>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

@@ -1,0 +1,43 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - com.wikikt.ApplicationKt.module
+
+wikikt:
+  # development | production (or WIKIKT_ENV). In production the app refuses to start with the
+  # default admin password or unconfigured session keys, instead of only warning.
+  environment: development
+  defaultLocale: en
+  defaultAdmin:
+    username: admin
+    # SECURITY: set via WIKIKT_ADMIN_PASSWORD (or a non-empty value here). Left empty it falls back
+    # to the built-in default ('changeme'), which warns in development and is fatal in production.
+    password: ""
+  session:
+    # Set these (or WIKIKT_SESSION_ENCRYPTION_KEY / WIKIKT_SESSION_SIGN_KEY) to random hex
+    # values in production. Empty values fall back to the built-in development keys (warned).
+    encryptionKey: ""
+    signKey: ""
+    # Enable once served over HTTPS.
+    secureCookie: false
+    # Session lifetime in seconds (default 604800 = 7 days).
+    maxAgeSeconds: 604800
+  database:
+    type: postgres
+    h2:
+      r2dbcUrl: r2dbc:h2:file:///./data/wikikt?DB_CLOSE_DELAY=-1
+      username: sa
+      password: ""
+    postgres:
+      r2dbcUrl: r2dbc:postgresql://localhost:5432/wikikt
+      username: wikikt
+      password: wikikt
+    # See application.yaml for what these mean. Keep maxSize under PostgreSQL's max_connections (100).
+    pool:
+      maxSize: 10
+      initialSize: 2
+      maxIdleTimeSeconds: 1800
+      maxLifeTimeSeconds: 3600
+      maxAcquireTimeSeconds: 10

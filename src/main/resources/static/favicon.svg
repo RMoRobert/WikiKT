@@ -1,0 +1,12 @@
+<svg id="visual" viewBox="0 0 900 900" width="900" height="900" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1">
+    <defs>
+        <clipPath id="roundedClip">
+            <rect x="0" y="0" width="900" height="900" rx="100"></rect>
+        </clipPath>
+    </defs>
+    <g clip-path="url(#roundedClip)">
+        <rect x="0" y="0" width="900" height="900" fill="#0172ad"></rect>
+        <path d="M0 597L129 708L257 656L386 579L514 694L643 507L771 513L900 483L900 901L771 901L643 901L514 901L386 901L257 901L129 901L0 901Z" fill="#00537f" stroke-linecap="square" stroke-linejoin="bevel"></path>
+        <text x="450" y="625" font-family="Roboto, system-ui, sans-serif" font-size="700" font-weight="700" fill="#ffffff" text-anchor="middle">W</text>
+    </g>
+</svg>

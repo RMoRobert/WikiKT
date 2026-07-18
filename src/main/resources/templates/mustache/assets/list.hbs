@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assets | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<main class="container">
+    <div class="page-meta"><h1><i class="mdi mdi-image-multiple-outline" aria-hidden="true"></i> Assets</h1></div>
+    {{#message}}<div class="alert alert-info py-2">{{message}}</div>{{/message}}
+
+    <h2>Library <span class="text-secondary fs-6">({{assetCount}})</span></h2>
+    <div id="assetManager">
+        {{! Embedded folder browser renders here (asset-manager.js). No-JS fallback below. }}
+        <noscript><p class="text-secondary">Enable JavaScript to browse assets by folder, or use the upload form below.</p></noscript>
+    </div>
+
+    <h2 class="mt-4">Upload</h2>
+    <form method="post" action="/f" enctype="multipart/form-data" class="edit-form">
+        {{{csrfField}}}
+        <div class="mb-3">
+            <label class="form-label">Folder</label>
+            <input type="text" id="uploadFolder" name="folder" placeholder="(root)" class="form-control">
+            <p class="form-text">Upload will :go to <code id="uploadTarget">/ (root)</code>.<br>Browse to a folder above or type a new path name to upload to other location.</p>
+        </div>
+        <div class="mb-3"><label class="form-label">Locale</label>
+            <select name="locale" class="form-select">
+                {{#localeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/localeOptions}}
+            </select>
+        </div>
+        <div class="mb-3"><label class="form-label">Files</label><input type="file" name="file" multiple accept="image/png,image/jpeg,image/gif,image/webp" class="form-control"></div>
+        <p class="text-secondary">Images only (png, jpeg, gif, webp). Up to {{maxFiles}} files, {{maxMb}} MB each. Full path becomes the above upload path plus the filename.</p>
+        <button type="submit" class="btn btn-primary">Upload</button>
+    </form>
+</main>
+<script>window.__WK_ASSETS__ = {{{assetsJson}}};</script>
+<script src="/static/wk-browser.js"></script>
+<script src="/static/asset-manager.js"></script>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

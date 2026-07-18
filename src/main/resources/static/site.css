@@ -1,0 +1,1509 @@
+/*
+ * WikiKT styles on top of Bootstrap 5. Bootstrap provides the component library (navbar, cards, forms,
+ * tables, buttons, grid); this file covers WikiKT-specific chrome and the bits Bootstrap doesn't style.
+ */
+
+/* --- Bootstrap base: WikiKT's default typography is Roboto for both body and headings. These are
+   overridden per-site by an inline <style> in partials/head-styles.hbs (Appearance settings) --- */
+:root {
+    --bs-body-font-family: Roboto, system-ui, "Segoe UI", Oxygen, Ubuntu, Cantarell, Helvetica, Arial, "Helvetica Neue", sans-serif;
+    --wk-heading-font: var(--bs-body-font-family);
+    --bs-body-font-size: 1rem;
+    --bs-body-line-height: 1.5;
+}
+
+/* Bootstrap's default form placeholder colour is --bs-secondary-color (0.75 alpha) — dark enough that a
+   placeholder reads like typed text. Drop to the more-muted --bs-tertiary-color (0.5) so placeholders
+   clearly look like hints, not content. Theme-aware (light + dark). `.form-control::placeholder` is
+   listed so this matches Bootstrap's own specificity and wins by load order; bare input/textarea covers
+   the few non-.form-control fields (tag editor, header search). The editor title, on the dark bar, keeps
+   its own more-specific white-on-dark ::placeholder rule below. */
+.form-control::placeholder,
+input::placeholder,
+textarea::placeholder {
+    color: var(--bs-tertiary-color);
+    opacity: 1;
+}
+
+/* --- Page chrome palette. Content sits directly on --bs-body-bg (white / dark); the
+   chrome around it is a full-height colored nav sidebar plus a muted breadcrumb band (--wk-crumb-bg)
+   under the header. Dark mode turns the sidebar into a plain dark surface.
+   The sidebar bg + foreground tints are admin-customizable per site (Admin > Appearance): partials/
+   brand-style.hbs overrides --wk-sidebar-bg for light/dark mode and flips the fg vars to black-based
+   tints when the chosen color is light. Keep the two var sets in sync with that partial. --- */
+:root {
+    --wk-crumb-bg: #eef0f4;
+    --wk-navbar-bg: #243D42;
+    --wk-sidebar-w: 16rem;
+    /* Extra breathing room between the fixed sidebar column and the content column (added on top of
+       the .container gutter by the desktop offset rules below). */
+    --wk-sidebar-gap: 0.75rem;
+    --wk-sidebar-bg: #2168ab;
+    --wk-sidebar-fg: rgba(255, 255, 255, 0.95);
+    --wk-sidebar-fg-muted: rgba(255, 255, 255, 0.72);
+    --wk-sidebar-hover-bg: rgba(255, 255, 255, 0.14);
+    --wk-sidebar-active-bg: rgba(255, 255, 255, 0.22);
+    --wk-sidebar-line: rgba(255, 255, 255, 0.3);
+    --wk-sidebar-edge: transparent;
+    /* Admin console sidebar — a FIXED neutral palette, deliberately NOT the customizable --wk-sidebar-*
+       vars above: a bad admin color pick would make the console (incl. the page needed to fix it)
+       unreadable. Light mode = light-gray column; dark mode = the same dark surface the public
+       sidebar uses. brand-style.hbs must never override these. */
+    --wk-admin-bg: #f4f6f9;
+    --wk-admin-fg: var(--bs-body-color);
+    --wk-admin-fg-muted: var(--bs-secondary-color);
+    --wk-admin-hover-bg: rgba(0, 0, 0, 0.05);
+    --wk-admin-edge: var(--bs-border-color);
+}
+[data-bs-theme="dark"] {
+    --wk-crumb-bg: #1a1e22;
+    --wk-sidebar-bg: #212529;
+    --wk-sidebar-fg: rgba(255, 255, 255, 0.85);
+    --wk-sidebar-fg-muted: rgba(255, 255, 255, 0.55);
+    --wk-sidebar-hover-bg: rgba(255, 255, 255, 0.1);
+    --wk-sidebar-active-bg: rgba(255, 255, 255, 0.16);
+    --wk-sidebar-line: rgba(255, 255, 255, 0.16);
+    --wk-sidebar-edge: var(--bs-border-color);
+    --wk-admin-bg: #212529;
+    --wk-admin-fg: rgba(255, 255, 255, 0.85);
+    --wk-admin-fg-muted: rgba(255, 255, 255, 0.55);
+    --wk-admin-hover-bg: rgba(255, 255, 255, 0.1);
+    --wk-admin-edge: var(--bs-border-color);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--wk-heading-font);
+    font-weight: 750;
+}
+/* Bootstrap's reboot zeroes heading margin-top, so H2 section headings sit cramped against the
+   preceding block (most visible in the admin settings forms). Give them breathing room; margin
+   collapses with the previous element's margin-bottom, so this reads as ~2rem, not additive. */
+h2 { margin-top: 2rem; }
+
+/* Breadcrumb band: a full-width muted strip under the sticky header holding the
+   breadcrumb trail; the crumbs use a "›" divider (not Bootstrap's default "/") and smaller text.
+   The first crumb is a home icon (set in the template); size it up slightly from the small text. */
+.wk-crumbbar {
+    padding: 0.15rem 0;
+    background: var(--wk-crumb-bg);
+    border-bottom: var(--bs-border-width) solid var(--bs-border-color);
+}
+.breadcrumb {
+    --bs-breadcrumb-divider: '\203A';
+    margin: 0;
+    padding: 0.45rem 0;
+    font-size: 0.85rem;
+}
+/* Subtle breadcrumb style; hover restores full body color for feedback. */
+.wk-crumbbar .breadcrumb,
+.wk-crumbbar .breadcrumb a { color: var(--bs-secondary-color); text-decoration: none; }
+.wk-crumbbar .breadcrumb a:hover { color: var(--bs-body-color); }
+.wk-crumbbar .breadcrumb-item.active { color: var(--bs-secondary-color); }
+/* Vertically center every crumb (and the dividers) instead of baseline-aligning: the home icon's
+   1rem glyph box is taller than the 0.85rem text, so on the baseline it sat visibly low. */
+.breadcrumb-item { display: flex; align-items: center; }
+/* inline-block because transforms are ignored on inline boxes; the translateY is an optical nudge
+   that plants the house glyph's base exactly on the text baseline (flex-centering its font box
+   alone leaves the glyph ink riding high, since MDI ink sits high inside its em box). */
+.breadcrumb .mdi { display: inline-block; font-size: 1rem; line-height: 1; transform: translateY(0.07em); }
+
+/* --- Page editor --- */
+.editor { display: flex; flex-direction: column; }
+.editor-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5; /* below EasyMDE fullscreen (8), so user-initiated fullscreen cleanly covers it */
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 3.25rem;
+    padding: 0.35rem 1rem;
+    /* Share the site navbar's color (admin-customizable via the header color — see brand-style.hbs,
+       which also lists .editor-bar) so the editor chrome matches the rest of the site. Foreground is
+       hardcoded light, mirroring .wk-navbar .nav-icon. */
+    background: var(--wk-navbar-bg);
+    border-bottom: var(--bs-border-width) solid rgba(0, 0, 0, 0.22);
+}
+.editor-bar .brand { flex: 0 0 auto; font-weight: 700; font-size: 1.1rem; text-decoration: none; white-space: nowrap; color: #fff; }
+.editor-title {
+    flex: 1 1 auto;
+    min-width: 6rem;
+    height: 2.4rem;
+    /* Horizontal margin (on top of the bar's gap) keeps the field's border clear of the brand and
+       the actions — a flush stretch put the hover border right up against the site name. */
+    margin: 0 1rem;
+    padding: 0 0.75rem;
+    /* Always bordered so it reads as an editable field rather than a static heading. Translucent
+       light treatment so it sits on the dark bar (see .editor-bar). */
+    border: var(--bs-border-width) solid rgba(255, 255, 255, 0.25);
+    border-radius: var(--bs-border-radius);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+    color: #fff;
+    text-align: center;
+    font-family: Mulish, var(--bs-body-font-family);
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+.editor-title::placeholder { color: rgba(255, 255, 255, 0.6); font-weight: 500; }
+.editor-title:hover { border-color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.12); }
+.editor-title:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.15);
+}
+.editor-bar-actions { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.4rem; }
+/* Flat bar buttons. color:inherit keeps them on the editor bar's text color. */
+.bar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    height: 2.4rem;
+    margin: 0;
+    padding: 0 0.85rem;
+    font-size: 0.9rem;
+    line-height: 1;
+    border: var(--bs-border-width) solid transparent;
+    border-radius: var(--bs-border-radius);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.bar-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+/* Desktop hides the full-pane Preview toggle (side-by-side is better there); compact screens flip
+   the two — the split preview is impractical on a phone (see the media block below). */
+.editor-toolbar button.mde-preview { display: none; }
+/* Save — the affirmative "go" action (Bootstrap success/green): filled, the loudest button in the bar. */
+.bar-btn.success { background: var(--bs-success); border-color: var(--bs-success); color: #fff; }
+.bar-btn.success:hover { background: var(--bs-success); border-color: var(--bs-success); color: #fff; filter: brightness(1.08); }
+/* Page Info — second in the hierarchy: an outline in the (brand-customizable) primary color. The
+   color-mix lightens it enough to stay legible on the dark bar; hover fills solid. */
+.bar-btn.outline {
+    border-color: color-mix(in srgb, var(--bs-primary) 68%, white);
+    color: color-mix(in srgb, var(--bs-primary) 55%, white);
+}
+.bar-btn.outline:hover { background: var(--bs-primary); border-color: var(--bs-primary); color: #fff; }
+.bar-btn.icon-only { padding: 0 0.85rem; }
+/* Bar icons are larger than the bare glyph; icon-only buttons get a bigger glyph still. */
+.editor-bar .mdi { font-size: 1.2rem; }
+.bar-btn.icon-only .mdi,
+.editor-bar .account-menu summary .mdi { font-size: 1.45rem; }
+/* Account menu in the editor bar: a flat icon button matching the others. */
+.editor-bar .account-menu { margin: 0; position: relative; }
+.editor-bar .account-menu summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.4rem;
+    width: 2.75rem;
+    margin: 0;
+    padding: 0;
+    border: var(--bs-border-width) solid transparent;
+    border-radius: var(--bs-border-radius);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+}
+.editor-bar .account-menu summary::after { display: none; }
+
+/* Compact editor bar: truncated brand + icon-only actions on row one, the title on its own full-width
+   row two (kept visible — a display:none'd required field would block submits with no feedback).
+   The toolbar swaps side-by-side preview (impractical on a phone) for the full-pane Preview toggle. */
+@media (max-width: 768px) {
+    .editor-bar { flex-wrap: wrap; }
+    /* Tight enough that brand + all five icon buttons share row one on a 375px phone. */
+    .editor-bar .brand-name { max-width: 4.5rem; overflow: hidden; text-overflow: ellipsis; }
+    .editor-bar-actions { margin-left: auto; gap: 0.25rem; }
+    .bar-btn-label { display: none; }
+    .bar-btn, .bar-btn.icon-only { padding: 0 0.55rem; }
+    .editor-title { order: 10; flex-basis: 100%; margin: 0.25rem 0 0; }
+    .editor-toolbar button.mde-preview { display: inline-block; }
+    .editor-toolbar button.mde-side-by-side { display: none; }
+}
+.editor-bar .account-menu summary:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+/* Native <details> menu popup: float it as a light card. The summary/icon is light chrome on the dark
+   bar, but the menu itself is an ordinary light surface (was in-flow + transparent, i.e. dark-on-dark
+   once the bar went dark). */
+.editor-bar .account-menu ul {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    z-index: 10;
+    min-width: 11rem;
+    margin: 0;
+    padding: 0.4rem 0;
+    list-style: none;
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+.editor-bar .account-menu ul li small { display: block; padding: 0.25rem 1rem; }
+.editor-bar .account-menu ul .wk-linklike {
+    display: block;
+    width: 100%;
+    padding: 0.4rem 1rem;
+    text-align: left;
+    text-decoration: none;
+    color: var(--bs-body-color);
+}
+.editor-bar .account-menu ul .wk-linklike:hover { background: var(--bs-secondary-bg); }
+.editor-error { margin: 0.75rem 1rem 0; }
+/* Page Info is now a Bootstrap modal (page/edit.hbs); only the path+locale split row needs styling. */
+.page-info-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.page-info-row > .mb-3 { flex: 1; min-width: 12rem; }
+/* Locale is normally a short code, so keep it narrow and let Path take the rest (asset/link-browser style). */
+.page-info-row > .pi-locale { flex: 0 1 9rem; min-width: 7rem; }
+.page-info-row > .pi-path { flex: 4 1 16rem; }
+.editor-content { padding: 1rem; }
+
+/* Inline side-by-side preview (sideBySideFullscreen:false): JS sets its top/height to match the
+   editor; keep it under the sticky editor bar (z-index 5). Real fullscreen restores z-index 9. */
+.editor-preview-side { z-index: 4; }
+.CodeMirror-fullscreen ~ .editor-preview-side { z-index: 9; }
+
+/* Customize syntax highlight colors: quotes are dark blue (not gray/comment-like), links are dark green. */
+.CodeMirror .cm-quote { color: var(--bs-primary, #0d47a1); }
+.CodeMirror .cm-link { color: #1b5e20; }  /* dark green */
+.CodeMirror .cm-url { color: var(--bs-secondary-color); }  /* gray, for the destination URL */
+
+/* Plain editor view: monospace font, no rendered inline styling (raw Markdown source look). */
+.editor--plain .CodeMirror { font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
+.editor--plain .cm-strong { font-weight: normal; }
+.editor--plain .cm-em { font-style: normal; }
+.editor--plain .cm-strikethrough { text-decoration: none; }
+.editor--plain .cm-header { font-size: inherit; line-height: inherit; font-weight: normal; }
+.editor--plain .cm-quote { font-style: normal; color: inherit; }
+.editor--plain .cm-link, .editor--plain .cm-url { text-decoration: none; }
+/* In plain-text mode, disable all syntax token colors for a flat source look. */
+.editor--plain .cm-atom,
+.editor--plain .cm-bracket,
+.editor--plain .cm-builtin,
+.editor--plain .cm-comment,
+.editor--plain .cm-def,
+.editor--plain .cm-em,
+.editor--plain .cm-error,
+.editor--plain .cm-header,
+.editor--plain .cm-hr,
+.editor--plain .cm-image,
+.editor--plain .cm-keyword,
+.editor--plain .cm-link,
+.editor--plain .cm-meta,
+.editor--plain .cm-number,
+.editor--plain .cm-operator,
+.editor--plain .cm-property,
+.editor--plain .cm-quote,
+.editor--plain .cm-string,
+.editor--plain .cm-strong,
+.editor--plain .cm-tag,
+.editor--plain .cm-type,
+.editor--plain .cm-url,
+.editor--plain .cm-variable { color: inherit; }
+
+/* Link-path autocomplete dropdown (anchored at the cursor; above EasyMDE fullscreen's z-index 8). */
+.cm-path-hints {
+    position: absolute;
+    z-index: 50;
+    margin: 0;
+    padding: 0.25rem 0;
+    list-style: none;
+    max-height: 16rem;
+    overflow-y: auto;
+    min-width: 18rem;
+    max-width: 32rem;
+    background: var(--bs-body-bg, var(--bs-body-bg));
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    box-shadow: var(--bs-box-shadow, 0 4px 12px rgba(0, 0, 0, 0.15));
+}
+.cm-path-hints li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    padding: 0.3rem 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.cm-path-hints li.active { background: var(--bs-primary); color: #fff; }
+.cm-path-hint-url { font-family: var(--bs-font-monospace, ui-monospace, monospace); font-size: 0.85rem; }
+.cm-path-hint-title { font-size: 0.75rem; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; }
+.cm-path-hints li.active .cm-path-hint-title { opacity: 0.85; }
+
+/* Tag chip editor (Page Info): existing tags as removable chips plus an inline free-text input,
+   all inside one .form-control box; suggestions drop down beneath it. */
+.tag-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    height: auto;
+    cursor: text;
+}
+.tag-editor input {
+    flex: 1 1 8rem;
+    min-width: 8rem;
+    border: none;
+    background: transparent;
+    outline: none;
+    box-shadow: none;
+    padding: 0.1rem 0;
+    font-size: inherit;
+    color: inherit;
+}
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.1rem 0.35rem 0.1rem 0.65rem;
+    border-radius: 2rem;
+    background: var(--bs-primary);
+    color: #fff;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+.tag-chip-remove {
+    border: none;
+    background: none;
+    color: inherit;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    opacity: 0.75;
+    cursor: pointer;
+    font-size: 1rem;
+}
+.tag-chip-remove:hover { opacity: 1; }
+.tag-suggest {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    right: 0;
+    z-index: 10;
+    margin: 0;
+    padding: 0.25rem 0;
+    list-style: none;
+    max-height: 14rem;
+    overflow-y: auto;
+    background: var(--bs-body-bg);
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    box-shadow: var(--bs-box-shadow, 0 4px 12px rgba(0, 0, 0, 0.15));
+}
+.tag-suggest li { padding: 0.35rem 0.8rem; cursor: pointer; }
+.tag-suggest li.active, .tag-suggest li:hover { background: var(--bs-secondary-bg); }
+.tag-suggest mark { padding: 0; background: transparent; font-weight: 700; color: inherit; }
+
+/* --- Top navbar (Bootstrap) ---
+   Background comes from the admin "header color" setting via brand-style.hbs (--wk-navbar-bg); unset,
+   it falls back to a neutral dark bar. data-bs-theme="dark" on the navbar keeps text/icons light;
+   brand-style overrides the navbar fg vars when a *light* header color is chosen. --wikikt-header-h is
+   the approx navbar height, used below to offset the sticky side columns so they clear the bar. */
+:root { --wikikt-header-h: 3.6rem; }
+/* The navbar is fixed-top, not sticky: a sticky bar lives in the document's scroll layer, so the
+   macOS/iOS rubber-band overscroll (most visible at the bottom of a long page) drags it along and the
+   bar visibly bounces. A fixed bar sits in the viewport layer, outside the bounce, so it stays put
+   while the page content underneath keeps its elastic scroll. Fixed leaves flow, so reserve its height
+   with body padding — scoped to pages that actually render the navbar (the editor bar isn't one). */
+body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
+.wk-navbar {
+    background: var(--wk-navbar-bg);
+    --bs-navbar-color: rgba(255, 255, 255, 0.82);
+    --bs-navbar-hover-color: #fff;
+    --bs-navbar-active-color: #fff;
+    --bs-navbar-brand-color: #fff;
+    --bs-navbar-brand-hover-color: #fff;
+}
+.wk-navbar .navbar-brand { font-weight: 700; font-size: 1.15rem; }
+/* Definite height, NOT max-height: with only a max-height the image's width exists purely via
+   aspect-ratio transfer, which Chromium ignores when computing the brand's intrinsic width — the
+   editor bar then sized the brand as if the logo were 0 wide and the title box overlapped the name. */
+.brand-logo { height: 1.6rem; width: auto; display: block; }
+
+/* Shared brand wrapper — also used by the editor bar (which has its own .editor-bar .brand sizing). */
+.brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; }
+.brand-name { white-space: nowrap; }
+
+/* Long site names must truncate, not wrap the bar. This is a Bootstrap navbar-expand-xl, so below xl
+   the navbar flex row wraps; without this a long .brand-name (white-space: nowrap) is sized at its full
+   content width first, so .header-actions gets shoved onto a second row before any shrinking happens.
+   That taller-than-expected bar then also pushed the compact sidebar pop-over (anchored at the fixed
+   --wikikt-header-h) under the wrapped row. */
+.wk-navbar .navbar-brand.brand { min-width: 0; overflow: hidden; }
+.wk-navbar .brand-name { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1199.98px) {
+    /* Below xl (where the bar wraps): flex-basis 0 + grow makes the brand's hypothetical size 0, so the
+       toggle, brand and action icons all collect on the top line together and the brand then grows to
+       fill only the leftover space, ellipsizing its text. The search #wkSearch collapse still drops to
+       its own row (it's a 100%-basis navbar-collapse), and the action icons stay intact (flex-shrink:0). */
+    .wk-navbar .navbar-brand.brand { flex: 1 1 0; }
+    .wk-navbar .header-actions { flex-shrink: 0; }
+}
+
+/* Large icon action buttons in the top navbar (flat, no labels). */
+.wk-navbar .nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--bs-border-radius);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.82);
+    text-decoration: none;
+    cursor: pointer;
+}
+.wk-navbar .nav-icon:hover,
+.wk-navbar .nav-icon:focus-visible {
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+}
+.wk-navbar .nav-icon .mdi { font-size: 1.5rem; line-height: 1; }
+/* No caret on the icon dropdown toggles — the glyph is the whole affordance. */
+.wk-navbar .nav-icon.dropdown-toggle::after { display: none; }
+/* Labeled variant (the admin "Exit" button): auto width with an icon + text label. */
+.wk-navbar .nav-icon-label { width: auto; gap: 0.35rem; padding: 0 0.75rem; font-weight: 600; }
+.wk-navbar .nav-icon-label .mdi { font-size: 1.25rem; }
+
+/* Account dropdown: prominent display name over a secondary account id. */
+.account-dropdown { min-width: 14rem; }
+.account-dropdown .account-id { padding: 0.4rem 1rem 0.5rem; }
+.account-dropdown .account-name { font-weight: 700; font-size: 1.05rem; line-height: 1.25; }
+.account-dropdown .account-sub { color: var(--bs-secondary-color); font-size: 0.85rem; word-break: break-all; }
+
+/* Site footer (copyright / license / "Powered by"), rendered at the bottom of every full page. */
+.site-footer {
+    margin-top: calc(1rem * 2);
+    border-top: var(--bs-border-width) solid var(--bs-border-color);
+    padding: 1rem 0;
+    color: var(--bs-secondary-color);
+    font-size: 0.85rem;
+    text-align: center;
+}
+.site-footer p { margin: 0; }
+.site-footer a { color: inherit; }
+
+/* --- Header search (in the navbar, pill-style) + live results dropdown --- */
+/* Light search box on the dark navbar. data-bs-theme="light" (in header.hbs) flips the --bs-* colors;
+   color-scheme:light is also needed so the UA renders the <input type=search> text dark, not white
+   (color-scheme is inherited and the navbar sets it to dark). */
+.header-search { position: relative; width: 100%; max-width: 32rem; color-scheme: light; }
+.header-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.7rem;
+    /* Breathing room around the pill so it isn't jammed against the brand / action buttons. */
+    margin-inline: 1rem;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: 2rem;
+    background: var(--bs-body-bg, var(--bs-body-bg));
+}
+.header-search-box:focus-within { border-color: var(--bs-secondary-color); }
+.header-search-box .mdi { color: var(--bs-secondary-color); font-size: 1.2rem; }
+.header-search-box input[type="search"] {
+    flex: 1;
+    margin: 0;
+    height: auto;
+    line-height: 1.4;
+    padding: 0.1rem 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0.95rem;
+}
+.header-search-box input[type="search"]:focus { outline: none; box-shadow: none; }
+.search-dropdown {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    right: 0;
+    z-index: 6; /* above the editor bar's 5, below EasyMDE fullscreen's 8 (editor has no header anyway) */
+    margin: 0;
+    padding: 0.25rem 0;
+    list-style: none;
+    max-height: 24rem;
+    overflow-y: auto;
+    background: var(--bs-body-bg, var(--bs-body-bg));
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: 0; /* fully rectangular popup */
+    box-shadow: var(--bs-box-shadow, 0 6px 18px rgba(0, 0, 0, 0.18));
+}
+.search-dropdown li { margin: 0; }
+/* Divider between consecutive results, so each hit reads as its own row. Deliberately lighter than the
+   "see all results" separator below, which stays a full border to set the footer apart. */
+.search-dropdown-item + .search-dropdown-item {
+    border-top: var(--bs-border-width) solid var(--bs-border-color-translucent);
+}
+.search-dropdown a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.4rem 0.8rem;
+    text-decoration: none;
+    /* NOT `inherit`: the popup is pinned to the light theme (data-bs-theme="light" on the form), but
+       `inherit` would take the *computed* colour from the dark page body — near-white text on the
+       popup's white background. Use the light theme's own body colour instead. */
+    color: var(--bs-body-color);
+}
+/* Neutral hover/active highlight (matches Bootstrap's own dropdown items) — the bright primary blue
+   looked out of place against the dark header. */
+.search-dropdown-item.active a,
+.search-dropdown-all.active a,
+.search-dropdown a:hover { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
+.search-dropdown .sd-title { font-weight: 600; }
+.search-dropdown .sd-snippet { font-size: 0.8rem; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-dropdown .sd-path { display: block; font-size: 0.7rem; color: var(--bs-tertiary-color); margin: 0.1rem 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-dropdown-item.active .sd-snippet, .search-dropdown a:hover .sd-snippet { opacity: 0.9; }
+.search-dropdown-item.active .sd-path, .search-dropdown a:hover .sd-path { color: var(--bs-tertiary-color); }
+.search-dropdown-all { border-top: var(--bs-border-width) solid var(--bs-border-color); }
+.search-dropdown-all a { font-size: 0.85rem; font-weight: 600; color: var(--bs-primary); }
+.search-dropdown-all.active a, .search-dropdown-all a:hover { color: var(--bs-primary); }
+/* Non-interactive status row: the min-length hint and the "no results" message. */
+.search-dropdown-msg { padding: 0.55rem 0.8rem; font-size: 0.85rem; color: var(--bs-secondary-color); }
+
+/* --- Search results page --- */
+.search-summary { color: var(--bs-secondary-color); margin-bottom: 1rem; }
+.search-results { list-style: none; padding: 0; margin: 0; }
+.search-result { padding: 0.8rem 0; border-bottom: var(--bs-border-width) solid var(--bs-border-color); }
+.search-result-title { font-size: 1.15rem; font-weight: 600; text-decoration: none; }
+.search-result-path { display: block; font-size: 0.8rem; color: var(--bs-secondary-color); margin: 0.1rem 0; }
+.search-result-desc { margin: 0.3rem 0 0; font-style: italic; }
+.search-result-snippet { margin: 0.3rem 0 0; color: var(--bs-body-color); }
+.search-locale-scope { font-size: 0.8rem; margin: 1.5rem 0 0; }
+/* The navbar's action buttons (Page actions, New page, Administration, Login, account) and their
+   dropdowns are native Bootstrap components now; their labels hide below xl via `d-none d-xl-inline`
+   in header.hbs, and the whole bar collapses to a hamburger below lg. No custom CSS needed here. */
+
+/* --- Page meta row (title + action button) --- */
+.page-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.page-meta h1 { margin: 0; }
+.page-meta a[role="button"] { margin: 0; }
+
+/* --- Inline "Restore" button in the history table --- */
+.inline-restore { display: inline; margin: 0; }
+.inline-restore button {
+    width: auto;
+    margin: 0 0 0 0.5rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+/* --- EasyMDE toolbar uses MDI icons (we don't load Font Awesome); inherit the toolbar text color. --- */
+.editor-toolbar button { color: inherit; }
+.editor-toolbar button .mdi { font-size: 1.05rem; }
+.editor-toolbar button .mdi::before { vertical-align: middle; }
+/* Pin the formatting toolbar (bold / italic / link / …) just under the sticky editor bar so it stays
+   visible however far the content is scrolled. --wk-editor-bar-h is measured in edit.hbs (the bar
+   wraps taller on narrow screens); it falls back to the desktop bar height. Needs an opaque background
+   and full opacity (EasyMDE dims the bar to 0.6 at rest) so scrolling text can't show through. The
+   `:not(.fullscreen)` guard leaves EasyMDE's own fixed-position fullscreen toolbar untouched. */
+.editor-content .editor-toolbar:not(.fullscreen) {
+    position: sticky;
+    top: var(--wk-editor-bar-h, 3.25rem);
+    z-index: 4; /* under the editor bar (5), above the CodeMirror surface */
+    opacity: 1;
+    background: var(--bs-body-bg);
+}
+
+/* --- Rendered Markdown content (Bootstrap leaves bare <table>/<pre>/<blockquote> unstyled) --- */
+.wiki-content table {
+    width: auto;
+    max-width: 100%;
+    margin: 1rem 0;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+.wiki-content th, .wiki-content td {
+    border: 1px solid var(--bs-border-color);
+    padding: 0.4rem 0.65rem;
+    text-align: left;
+    vertical-align: top;
+}
+.wiki-content thead th { background: var(--bs-secondary-bg); }
+.wiki-content tbody tr:nth-child(even) { background: var(--bs-tertiary-bg); }
+.wiki-content pre {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: 0.75rem 1rem;
+    overflow: auto;
+}
+.wiki-content pre code { color: inherit; }
+/* highlight.js paints the <code>; let our <pre> own the box (bg/padding) so they don't double up. */
+.wiki-content pre code.hljs { background: transparent; padding: 0; }
+.wiki-content blockquote {
+    margin: 1rem 0;
+    padding: 0.25rem 0 0.25rem 1rem;
+    border-left: 0.25rem solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+}
+.wiki-content img { max-width: 100%; height: auto; }
+
+.wiki-content header {
+    border-bottom: 1px solid var(--bs-light-border-subtle);
+    margin-bottom: 1em;.
+}
+
+.wiki-content header p {
+    color: var(--bs-secondary-color);
+    font-size: 85%;
+}
+
+/* Wiki.js {.links-list}: a list of links rendered as titled, described blocks. Each <li> is one link
+   whose text is `[icon Title *description*](url)` -> title (link) + an italic description divider. */
+.links-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 1rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.links-list > li { margin: 0; }
+.links-list > li > a {
+    position: relative; /* anchors the ::before accent bar */
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius); /* all corners rounded, incl. the leading side */
+    /* Flat fill (not a gradient) so the only shading is the outer box-shadow, never behind the text. */
+    background: var(--bs-body-bg);
+    text-decoration: none;
+    font-weight: 500; /* Make title bold (description reset below). */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+/* Wiki.js-style accent bar down the leading edge: neutral at rest, blue on hover (red for redlinks). */
+.links-list > li > a::before {
+    content: "";
+    position: absolute;
+    inset: -1px; /* cover the card's border box exactly -> the rounded corners line up perfectly */
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-border-color);
+    clip-path: inset(0 calc(100% - 3px) 0 0); /* reveal only the 3px leading strip */
+    transition: background-color 0.12s ease;
+    pointer-events: none;
+}
+.links-list > li > a:hover {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    color: var(--bs-link-color); /* hold the title colour steady — no Bootstrap link-hover darkening */
+}
+.links-list > li > a:hover::before { background: var(--bs-primary); }
+/* Redlink (target page missing): the accent goes red, matching the red link text elsewhere. The
+   colour is likewise held steady on hover (overriding the global .is-new-page:hover darkening). */
+.links-list > li > a.is-new-page:hover { color: var(--wk-redlink, #d1332a); }
+.links-list > li > a.is-new-page:hover::before { background: var(--wk-redlink, #d1332a); }
+.links-list > li > a > em {
+    font-style: normal;
+    font-weight: 400; /* only the title is bold; the description stays regular weight */
+    color: var(--bs-secondary-color);
+    border-inline-start: var(--bs-border-width) solid var(--bs-border-color);
+    padding-inline-start: 0.7rem;
+}
+.wiki-content iframe { max-width: 100%; border: 0; }
+
+/* Redlinks: an internal link whose target page does not exist yet. The
+   `is-new-page` class is added at render time by PageRenderService.markRedlinks and is baked into the
+   cached body; it disappears once the target page is created. Themeable via --wk-redlink. */
+.wiki-content a.is-new-page,
+.wiki-content a.is-new-page:visited { color: var(--wk-redlink, #d1332a); }
+.wiki-content a.is-new-page:hover { color: var(--wk-redlink-hover, #a72118); }
+
+/* External-link marker: an "opens elsewhere" icon appended to links leaving the wiki. The class +
+   icon are added at render time by HtmlSanitizer.markExternalLinks (gated by the Rendering setting)
+   and baked into the cached body. Sized down and nudged up to sit as a small superscript glyph. */
+.wiki-content a.wk-external-link .wk-external-link-icon {
+    font-size: 0.8em;
+    margin-inline-start: 0.15em;
+    vertical-align: text-top;
+    text-decoration: none;
+    opacity: 0.75;
+}
+.wiki-content details {
+    margin: 1rem 0;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 6px;
+    padding: 0.25em 0.75em;
+}
+
+.wiki-content summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.25em 0.5em;
+}
+
+.wiki-content details[open] summary {
+    margin-bottom: 0.5em;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+/* Copy-to-clipboard button on code blocks (added by code-copy.js). Hidden until hover on desktop;
+   always shown on touch devices. */
+.wiki-content pre.code-copy { position: relative; }
+.wiki-content .code-copy-btn {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+    color: var(--bs-secondary-color);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s ease, color 0.12s ease;
+}
+.wiki-content pre.code-copy:hover .code-copy-btn,
+.wiki-content .code-copy-btn:focus-visible { opacity: 1; }
+.wiki-content .code-copy-btn:hover { color: var(--bs-body-color); }
+.wiki-content .code-copy-btn.copied { opacity: 1; color: var(--bs-success, #198754); }
+.wiki-content .code-copy-btn .mdi { font-size: 1rem; line-height: 1; }
+@media (hover: none) { .wiki-content .code-copy-btn { opacity: 0.6; } }
+
+/* Content tabs ({.tabset}) — Bootstrap nav-tabs + panes; just add a little padding. */
+.wk-tabset { margin: 1rem 0; }
+.wk-tabset > .tab-content { padding: 1rem 0; }
+.wk-tabset .tab-pane > :first-child { margin-top: 0; }
+
+/* Task lists (GFM): drop the bullet and align the checkbox where it would have been. */
+.wiki-content li:has(> input[type="checkbox"]) { list-style: none; margin-inline-start: -1.3em; }
+.wiki-content li > input[type="checkbox"] { margin-inline-end: 0.45em; }
+
+/* Footnotes: a subtle, smaller section under the content. */
+.wiki-content .footnotes {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: var(--bs-border-width) solid var(--bs-border-color);
+    font-size: 0.9rem;
+    color: var(--bs-secondary-color);
+}
+.wiki-content .footnote-ref { font-size: 0.8em; }
+
+/* --- Callout boxes ({.is-info} / {.is-warning} / ...) --- */
+.wiki-content .is-info,
+.wiki-content .is-success,
+.wiki-content .is-warning,
+.wiki-content .is-danger,
+.wiki-content .is-error {
+    position: relative;
+    border-left: 4px solid;
+    /* Square left edge (straight accent line); soften only the right corners. */
+    border-radius: 0 var(--bs-border-radius) var(--bs-border-radius) 0;
+    padding: 0.9rem 1.1rem 0.9rem 3rem;
+    margin: 1.25rem 0;
+}
+.wiki-content .is-info p:last-child,
+.wiki-content .is-success p:last-child,
+.wiki-content .is-warning p:last-child,
+.wiki-content .is-danger p:last-child,
+.wiki-content .is-error p:last-child { margin-bottom: 0; }
+.wiki-content .callout-icon {
+    position: absolute;
+    left: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.35rem;
+    line-height: 1;
+}
+/* Establish a block formatting context on every decorated content block, so its BOX (background/border) —
+   not just its inline text — respects a floated infobox card, per "all page content wraps around, never
+   over" (a plain block's background otherwise ignores a float entirely; only inline text reflows around
+   it by default). `.wiki-content pre` already gets this from its own `overflow: auto` above. */
+.wiki-content blockquote,
+.wiki-content .is-info,
+.wiki-content .is-success,
+.wiki-content .is-warning,
+.wiki-content .is-danger,
+.wiki-content .is-error,
+.wiki-content table,
+.wiki-content details,
+.wk-tabset {
+    overflow: hidden;
+}
+/* .links-list is intentionally NOT in the list above: it's already a flex container (its own
+   formatting context, so floats don't intrude — same float-wrapping benefit), and `overflow: hidden`
+   would clip the items' resting/hover box-shadow (most visibly under the last item). */
+.wiki-content .is-info { border-color: #1976d2; background: #e3f2fd; color: #0d3c61; }
+.wiki-content .is-info .callout-icon { color: #1976d2; }
+.wiki-content .is-success { border-color: #2e7d32; background: #e8f5e9; color: #1b5e20; }
+.wiki-content .is-success .callout-icon { color: #2e7d32; }
+.wiki-content .is-warning { border-color: #f9a825; background: #fff8e1; color: #6d4c00; }
+.wiki-content .is-warning .callout-icon { color: #c87f00; }
+.wiki-content .is-danger,
+.wiki-content .is-error { border-color: #d32f2f; background: #fdecea; color: #8e1b16; }
+.wiki-content .is-danger .callout-icon,
+.wiki-content .is-error .callout-icon { color: #d32f2f; }
+
+/* --- Page layout with optional left nav sidebar --- */
+.wiki-layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    /* Breathing room between the sticky header and the panels sitting on the canvas. */
+    padding-top: 1rem;
+}
+.wiki-main { flex: 1; min-width: 0; }
+.wiki-sidebar {
+    padding: 0.9rem 0.6rem;
+    background: var(--wk-sidebar-bg);
+    color: var(--wk-sidebar-fg);
+}
+/* Desktop: fixed full-height column flush with the viewport's top-left, under the sticky header
+   (same breakpoint as the drawer block below). Only the real page sidebar (a direct .wiki-layout
+   child) is pinned — the admin nav-editor preview reuses these classes and must stay in-flow. */
+@media (min-width: 768.02px) {
+    .wiki-layout > .wiki-sidebar {
+        position: fixed;
+        top: var(--wikikt-header-h);
+        bottom: 0;
+        left: 0;
+        width: var(--wk-sidebar-w);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        border-right: var(--bs-border-width) solid var(--wk-sidebar-edge);
+        /* Above page content, below the sticky header (Bootstrap sticky-top is 1020). */
+        z-index: 1015;
+    }
+    /* Shift the (otherwise centered) layout, breadcrumb band content, and footer out from under the
+       fixed column. width:auto (not .container's 100%) so the box fills exactly the space right of
+       the sidebar. The band shifts its inner .container (not itself) so its bg stays full-width. */
+    .wiki-layout:has(> .wiki-sidebar) { width: auto; margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
+    body:has(.wiki-layout > .wiki-sidebar) .wk-crumbbar > .container { width: auto; margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
+    body:has(.wiki-layout > .wiki-sidebar) .site-footer { margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
+}
+.wiki-sidebar nav a,
+.wiki-sidebar .nav-heading {
+    display: block;
+    padding: 0.45rem 0.5rem;
+    border-radius: var(--bs-border-radius);
+    margin: 0;
+}
+.wiki-sidebar nav a {
+    text-decoration: none;
+    color: var(--wk-sidebar-fg);
+    font-size: 0.85rem;
+}
+.wiki-sidebar nav a:hover { background: var(--wk-sidebar-hover-bg); }
+/* Item icons read a touch larger than the label text, aligned to the text baseline, with a small
+   gap before the label. */
+.wiki-sidebar nav a .mdi { font-size: 1.2rem; vertical-align: -0.18em; margin-right: 0.25rem; }
+.wiki-sidebar .nav-heading {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--wk-sidebar-fg-muted);
+    /* Tighter than the link padding: headings sit close to the group below them. */
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+    margin-top: 0.5rem;
+}
+.wiki-sidebar .nav-heading:first-child { margin-top: 0; }
+
+/* Compact-screen nav trigger: a hamburger in the header (before the brand) that reveals the wiki
+   sidebar as an in-flow drawer. It borrows .nav-icon's sizing/hover; display is governed here.
+   Hidden on desktop (the sidebar is a fixed column) and hidden until the header script confirms a
+   #wikiSidebar exists on the page (adds .is-active) — see partials/header.hbs. Scoped under .wk-navbar
+   so it beats `.wk-navbar .nav-icon { display: inline-flex }`. */
+.wk-navbar .wk-nav-toggle { display: none; margin-right: 0.4rem; }   /* gap so its hover box clears the brand */
+
+@media (max-width: 768px) {
+    /* Stack the columns. align-items stays flex-start from the base rule, which in a *column* flex
+       container is the CROSS (horizontal) axis — so .wiki-main would otherwise size to its widest
+       child's max-content width (a wide table / long code block / unbroken string) and push the page
+       wider than the viewport, forcing a horizontal scroll. width:100% pins it to the column width so
+       overflowing content scrolls inside its own box (tables/pre already have overflow:auto) instead. */
+    .wiki-layout { flex-direction: column; gap: 1rem; }
+    .wiki-layout > .wiki-main { width: 100%; }
+    .wk-navbar .wk-nav-toggle.is-active { display: inline-flex; }
+    /* Compact screens: the sidebar is a pop-over that floats OVER the content, anchored top-left just
+       under the header + hamburger — it doesn't push the article down. Out of flow (fixed), a fixed
+       panel width, scrolls if taller than the viewport, and sits below the sticky header (z 1020). */
+    .wiki-sidebar {
+        position: fixed;
+        top: var(--wikikt-header-h);           /* flush under the header — no gap */
+        left: 0;                                /* flush to the viewport's left edge */
+        width: var(--wk-sidebar-w);
+        max-width: 100vw;
+        max-height: calc(100vh - var(--wikikt-header-h));
+        overflow-y: auto;
+        z-index: 1019;
+        border-radius: 0 0 0.4rem 0;            /* square against the top/left edges; only the free bottom-right corner softened */
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.28);
+        display: none;                          /* collapsed by default — revealed by the hamburger (.is-open) */
+    }
+    .wiki-sidebar.is-open { display: block; }
+}
+
+/* --- Auto-generated table of contents (H1/H2) shown on page views --- */
+.page-toc { font-size: 0.85rem; }
+/* The title row is a real <button> so it can collapse the list on compact screens; on desktop it's
+   inert (no pointer events, no chevron) and reads as the plain card title. */
+.page-toc-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin: 0 0 0.4rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    text-align: start;
+    cursor: default;
+    pointer-events: none;
+}
+.page-toc-toggle .page-toc-title { margin: 0; }
+.page-toc-toggle .mdi { display: none; color: var(--bs-secondary-color); font-size: 1.1rem; line-height: 1; }
+.page-toc-title {
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--bs-secondary-color);
+    margin: 0 0 0.4rem;
+}
+.page-toc ul { list-style: none; margin: 0; padding: 0; }
+.page-toc li { margin: 0; }
+.page-toc a {
+    display: block;
+    padding: 0.2rem 0.5rem;
+    border-inline-start: 2px solid transparent;
+    border-radius: 0; /* rectangular — straight left accent bar, no rounded corners */
+    color: var(--bs-body-color);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.page-toc li.toc-h3 a { padding-inline-start: 1.25rem; color: var(--bs-secondary-color); }
+.page-toc a:hover {
+    background: var(--bs-tertiary-bg, rgba(0, 0, 0, 0.05));
+    border-inline-start-color: var(--bs-primary);
+}
+
+/* The side column reserves its own space (so it never overlaps content) and sticks while scrolling.
+   It holds the TOC (optional) and the always-present "page details" box, stacked. Left/right is
+   chosen with flex order. In "floating" mode the TOC reads as a detached card; in "column" mode it
+   sits inline like the nav sidebar. */
+.page-aside {
+    flex: 0 0 16rem;
+    align-self: flex-start;
+    position: sticky;
+    /* Clear the sticky header (matches .wiki-sidebar). */
+    top: calc(var(--wikikt-header-h) + 1rem);
+    max-height: calc(100vh - var(--wikikt-header-h) - 2rem);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    font-size: 0.85rem;
+}
+.page-aside--left { order: -1; }
+.page-aside--right { order: 1; }
+
+/* Every box in the side column (On This Page, Tags, Page details, Share) is a small bordered card. */
+.page-card {
+    padding: 0.7rem 0.85rem;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+}
+
+/* "Page details" box — last-modified by/on. */
+.page-meta-box .page-toc-title { margin-bottom: 0.5rem; }
+.page-meta-box { margin-top: 1rem; }
+.page-meta-row { margin: 0.4rem 0 0; line-height: 1.25; }
+.page-meta-label {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color);
+}
+
+/* Infobox — a titled card of key facts about the page subject (Wikipedia-style). Each field is a
+   label above its value (robust for long labels in the narrow card); empty fields are omitted
+   server-side. Placement: it lives inside the article. On desktop it floats to the right edge and the
+   body wraps around it; on compact screens it's a full-width block at the top of the article, under
+   the TOC (which the view script relocates to just above it). */
+.wk-infobox { border-color: var(--bs-primary-border-subtle, var(--bs-border-color)); }
+.wiki-content > .wk-infobox { width: 100%; margin: 0 0 1rem; box-sizing: border-box; }
+@media (min-width: 1200px) {
+    .wiki-content > .wk-infobox { float: right; width: 16rem; margin: 0.25rem 0 1rem 1.5rem; }
+}
+.wk-infobox-title { margin-bottom: 0.6rem; }
+.wk-infobox-list { margin: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+.wk-infobox-row { display: flex; flex-direction: column; gap: 0.1rem; }
+.wk-infobox-row dt {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+}
+.wk-infobox-row dd { margin: 0; line-height: 1.35; overflow-wrap: anywhere; }
+.wk-infobox-tag {
+    display: inline-block;
+    padding: 0.05rem 0.45rem;
+    margin: 0 0.2rem 0.2rem 0;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: 1rem;
+    font-size: 0.82em;
+    line-height: 1.5;
+}
+.wk-infobox-bool { display: inline-flex; align-items: center; gap: 0.15rem; }
+.wk-infobox-bool--yes { color: var(--bs-success, #198754); }
+.wk-infobox-bool--no { color: var(--bs-secondary-color); }
+.wk-infobox-bool .mdi { font-size: 1rem; line-height: 1; }
+
+/* Jumped-to headings shouldn't hide under the sticky header. */
+.wiki-content h1, .wiki-content h2 { scroll-margin-top: 5rem; }
+
+/* Section headings get full-width underlines (mapped one level down since content
+   headings are demoted on render: our h2 = a source h1, our h3 = a source h2). h2 gets a 2px line
+   that fades out to the right — neutral by default, overridable per site via --wk-heading-line
+   (Admin > Appearance "Heading underline color", emitted by partials/brand-style.hbs as a fade
+   built from the chosen color). h3 gets a plain hairline. */
+.wiki-content h2 {
+    margin-top: 2.5rem; /* extra separation above sections (the global h2 default is 2rem) */
+    padding-bottom: 0.3rem;
+    background: var(--wk-heading-line, linear-gradient(90deg, var(--bs-border-color), transparent)) left bottom / 100% 2px no-repeat;
+}
+.wiki-content h3 {
+    padding-bottom: 0.2rem;
+    border-bottom: var(--bs-border-width) solid var(--bs-border-color);
+}
+
+/* Below 1200px the side column leaves the row — with it in place, mid-width screens squeezed the
+   article between the nav sidebar and the 16rem TOC column. The TOC is MOVED into the article right
+   under the title by the view-page script (must match its 1199.98px matchMedia) and starts
+   collapsed — the title row becomes the expand/collapse toggle (.page-toc-toggle; inert on desktop). */
+@media (max-width: 1199.98px) {
+    .wiki-content .page-toc { margin: 0 0 1rem; }
+    .page-toc-toggle { pointer-events: auto; cursor: pointer; margin-bottom: 0; }
+    .page-toc-toggle .mdi { display: inline-block; transition: transform 0.15s ease; }
+    .page-toc.is-open .page-toc-toggle { margin-bottom: 0.4rem; }
+    .page-toc.is-open .page-toc-toggle .mdi { transform: rotate(180deg); }
+    .page-toc:not(.is-open) .page-toc-list { display: none; }
+}
+/* Mid widths (nav column still present): the remaining cards (Tags, Page details, Share) become a
+   wrapping strip below the article instead of a side column. */
+@media (min-width: 768.02px) and (max-width: 1199.98px) {
+    .wiki-layout { flex-wrap: wrap; }
+    .page-aside {
+        flex: 1 1 100%;
+        order: 2;
+        position: static;
+        max-height: none;
+        flex-direction: row;
+        flex-wrap: wrap;
+        /* Side-by-side cards keep their natural heights, TOP edges aligned (stretch made the
+           shorter card's bottom line up instead, which read as misalignment). */
+        align-items: flex-start;
+    }
+    .page-aside .page-card { flex: 1 1 15rem; }
+    /* .page-meta-box's margin-top separates it from the box above in the stacked column/narrow
+       layouts; in this row layout it just knocked the card out of top alignment. */
+    .page-aside .page-meta-box { margin-top: 0; }
+}
+/* On narrow screens, dissolve the side column (display:contents) so its pieces place independently
+   in the single column: "Page details" & co. keep their natural DOM position AFTER <main>, so they
+   show (and read, for screen readers) after the page body. */
+@media (max-width: 768px) {
+    .page-aside { display: contents; }
+    .page-card { width: 100%; }
+}
+
+/* --- Subtle "last updated" line below page content --- */
+.page-updated {
+    margin-top: 1.5rem;
+    text-align: right;
+    color: var(--bs-secondary-color);
+}
+
+/* --- Narrower column for forms/auth --- */
+.container.narrow { max-width: 34rem; }
+
+/* --- Edit form actions --- */
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.edit-form + form { margin-top: 1rem; }
+
+/* --- Print: drop the site chrome (navbar, nav sidebar, side column, footer) and print the content. --- */
+@media print {
+    /* .page-toc explicitly too: on compact screens it lives INSIDE the article, not the aside. */
+    .wk-navbar, .wiki-sidebar, .wk-nav-toggle, .page-aside, .page-toc, .site-footer, .wk-crumbbar { display: none !important; }
+    .wiki-layout { display: block; }
+    .wiki-main { width: 100%; }
+}
+
+
+/* Asset detail modal: the Delete/Save bar is lifted into the Bootstrap modal-footer (kept fixed below
+   the scrollable body by modal-dialog-scrollable, so it never overlaps content). Delete left, Save right. */
+.modal-footer.wkad-footer {
+    justify-content: space-between;
+    flex-wrap: nowrap;
+}
+/* A button that reads as a plain link — used where a state-changing action (e.g. the editor
+   account menu's Logout) must be a POST form button but sits among ordinary links. */
+.wk-linklike {
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: var(--bs-link-color);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* --- Administration console: a grouped left sidebar beside the content. Sits below the
+   sticky top navbar; collapses to a toggle-revealed drawer on small screens (mirrors .wiki-sidebar). --- */
+.admin-shell {
+    display: flex;
+    align-items: flex-start;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+/* Neutral column (fixed palette — see --wk-admin-* vars). Base styling applies to the mobile drawer
+   too; the desktop block below pins it full-height like .wiki-sidebar. */
+.admin-sidebar {
+    padding: 1rem 0.75rem;
+    background: var(--wk-admin-bg);
+    color: var(--wk-admin-fg);
+}
+.admin-sidebar nav { display: flex; flex-direction: column; gap: 0.1rem; }
+.admin-nav-heading {
+    margin: 1rem 0.6rem 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--wk-admin-fg-muted);
+}
+.admin-nav-heading:first-child { margin-top: 0.2rem; }
+.admin-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.375rem;
+    color: var(--wk-admin-fg);
+    text-decoration: none;
+    font-size: 0.95rem;
+    line-height: 1.3;
+}
+.admin-nav-link .mdi { font-size: 1.2rem; color: var(--wk-admin-fg-muted); }
+.admin-nav-link:hover { background: var(--wk-admin-hover-bg); }
+.admin-nav-link.active { background: var(--bs-primary); color: #fff; }
+.admin-nav-link.active .mdi { color: #fff; }
+.admin-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 1.25rem clamp(1rem, 3vw, 2.25rem) 2.5rem;
+}
+.admin-main > h1:first-child { margin-top: 0.25rem; }
+.admin-main .edit-form { max-width: 42rem; }
+.admin-nav-toggle { display: none; }
+/* Desktop: pin the sidebar as a full-height fixed column flush with the viewport's top-left (under
+   the sticky header), and offset the console content past it — mirrors .wiki-sidebar. */
+@media (min-width: 768.02px) {
+    .admin-shell { max-width: none; margin: 0 0 0 15rem; }
+    .admin-sidebar {
+        position: fixed;
+        top: var(--wikikt-header-h);
+        left: 0;
+        bottom: 0;
+        width: 15rem;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        border-right: 1px solid var(--wk-admin-edge);
+        z-index: 1015;
+    }
+    /* Keep console content readable on ultra-wide screens (the shell no longer centers). */
+    .admin-main { max-width: 1200px; }
+}
+@media (max-width: 767.98px) {
+    .admin-shell { flex-direction: column; }
+    .admin-sidebar {
+        width: 100%;
+        border-bottom: 1px solid var(--wk-admin-edge);
+        display: none;
+    }
+    .admin-sidebar.is-open { display: block; }
+    .admin-nav-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin: 0.75rem 0.75rem 0;
+        padding: 0.4rem 0.75rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.375rem;
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        font-weight: 600;
+    }
+    .admin-main { padding: 1rem; }
+}
+
+/* Nav menu divider (a horizontal rule between items) in the wiki sidebar. */
+.wiki-sidebar .nav-divider {
+    border: 0;
+    border-top: 1px solid var(--wk-sidebar-line);
+    margin: 0.5rem 0.25rem;
+    opacity: 1;
+}
+
+/* --- Visual navigation menu editor (admin/navigation-form.hbs + wk-nav-editor.js). --- */
+.admin-main .nav-form { max-width: 66rem; }
+.nav-editor { border: 1px solid var(--bs-border-color); border-radius: 0.5rem; background: var(--bs-body-bg); }
+.nav-ed-bar { display: flex; gap: 0.4rem; flex-wrap: wrap; padding: 0.6rem; border-bottom: 1px solid var(--bs-border-color); background: var(--bs-tertiary-bg); border-radius: 0.5rem 0.5rem 0 0; }
+.nav-ed-main { display: grid; grid-template-columns: 1fr 15rem; gap: 0.75rem; padding: 0.6rem; align-items: start; }
+.nav-ed-rows { display: flex; flex-direction: column; gap: 0.4rem; min-height: 3rem; }
+.nav-ed-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.4rem; border: 1px solid var(--bs-border-color); border-radius: 0.375rem; background: var(--bs-body-bg); }
+.nav-ed-row.nav-ed-dragging { opacity: 0.5; }
+.nav-ed-row.nav-ed-over { border-color: var(--bs-primary); box-shadow: 0 -2px 0 var(--bs-primary) inset; }
+.nav-ed-grip { color: var(--bs-secondary-color); cursor: grab; display: flex; }
+.nav-ed-grip .mdi { font-size: 1.15rem; }
+.nav-ed-badge { flex: none; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.1rem 0.4rem; border-radius: 0.25rem; background: var(--bs-secondary-bg); color: var(--bs-secondary-color); min-width: 3.6rem; text-align: center; }
+.nav-ed-link .nav-ed-badge { background: rgba(var(--bs-primary-rgb), 0.12); color: var(--bs-primary); }
+.nav-ed-iconprev { flex: none; width: 1.4rem; text-align: center; color: var(--bs-secondary-color); }
+.nav-ed-iconprev .mdi { font-size: 1.1rem; }
+.nav-ed-divline { flex: 1; border-top: 1px dashed var(--bs-border-color); text-align: center; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bs-secondary-color); line-height: 0; }
+.nav-ed-actions { flex: none; display: flex; gap: 0.15rem; margin-left: auto; }
+.nav-ed-actions .btn { padding: 0.15rem 0.4rem; line-height: 1; }
+.nav-ed-empty { color: var(--bs-secondary-color); font-size: 0.85rem; padding: 0.75rem; text-align: center; }
+.nav-ed-preview { position: sticky; top: 4rem; }
+.nav-ed-preview-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bs-secondary-color); margin: 0 0 0.3rem; }
+/* Reuse the real .wiki-sidebar styling (incl. the colored panel background) so the preview is
+   WYSIWYG; it stays in-flow (the fixed-position rule targets .wiki-layout > .wiki-sidebar only)
+   and gets card corners since the full-bleed column has none. */
+.nav-ed-preview-side { width: auto; max-height: none; border-radius: 0.375rem; }
+@media (max-width: 767.98px) { .nav-ed-main { grid-template-columns: 1fr; } .nav-ed-preview { position: static; } }
+
+/* Nav editor link row: label + (target field with a Browse button). */
+/* Two-line row body: (icon + label) over (path + Browse). The body grows; the grip/badge/actions
+   are centered beside it by the row's align-items. */
+.nav-ed-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.nav-ed-line { display: flex; align-items: center; gap: 0.3rem; }
+.nav-ed-f-icon { flex: 0 0 5.5rem; }
+.nav-ed-f-label { flex: 1 1 auto; min-width: 0; }
+.nav-ed-target input { flex: 1 1 auto; min-width: 0; }
+.nav-ed-target .btn { flex: none; }
+
+/* On-page "Edit menu" affordance at the foot of the wiki sidebar (nav managers only). */
+.wiki-sidebar .wiki-nav-edit {
+    margin-top: 0.5rem;
+    padding-top: 0.6rem;
+    /* A plain horizontal separator, not a bordered box: zero the nav-link pill radius this link
+       inherits (.wiki-sidebar nav a) so the top border's ends stay square instead of curling. */
+    border-top: 1px solid var(--wk-sidebar-line);
+    border-radius: 0;
+    font-size: 0.78rem;
+    color: var(--wk-sidebar-fg-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.wiki-sidebar .wiki-nav-edit:hover { color: var(--wk-sidebar-fg); background: transparent; }
+
+/* Nested (one-level) nav groups: a parent link + a caret toggle, with collapsible indented children. */
+.wiki-sidebar .nav-group-row { display: flex; align-items: stretch; }
+.wiki-sidebar .nav-group-row .nav-parent { flex: 1 1 auto; min-width: 0; }
+.wiki-sidebar .nav-caret {
+    flex: none;
+    background: none;
+    border: 0;
+    padding: 0 0.55rem;
+    cursor: pointer;
+    color: var(--wk-sidebar-fg-muted);
+    border-radius: 0.375rem;
+}
+.wiki-sidebar .nav-caret:hover { background: var(--wk-sidebar-hover-bg); color: var(--wk-sidebar-fg); }
+.wiki-sidebar .nav-caret .mdi { font-size: 1.25rem; transition: transform 0.15s ease; }
+.wiki-sidebar .nav-group.is-open .nav-caret .mdi { transform: rotate(180deg); }
+.wiki-sidebar .nav-children { display: none; }
+.wiki-sidebar .nav-group.is-open .nav-children { display: block; }
+.wiki-sidebar .nav-children a { padding-left: 2.4rem; }
+.wiki-sidebar a.active,
+.wiki-sidebar .nav-parent.active { color: var(--wk-sidebar-fg); background: var(--wk-sidebar-active-bg); }
+
+/* --- Sidebar navigation modes: static ⇄ tree view switch + drill-down page browser (wk-nav-browser.js) --- */
+/* View switch (both mode): a segmented control pinned at the top of the sidebar. */
+.wiki-sidebar .wk-nav-switch {
+    display: flex;
+    gap: 0.2rem;
+    padding: 0.2rem;
+    margin-bottom: 0.6rem;
+    background: var(--wk-sidebar-hover-bg);
+    border-radius: 0.4rem;
+}
+.wiki-sidebar .wk-nav-switch-btn {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.3rem 0.4rem;
+    border: 0;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--wk-sidebar-fg-muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.wiki-sidebar .wk-nav-switch-btn .mdi { font-size: 1.05rem; }
+.wiki-sidebar .wk-nav-switch-btn:hover { color: var(--wk-sidebar-fg); }
+.wiki-sidebar .wk-nav-switch-btn.is-active {
+    background: var(--wk-sidebar-bg);
+    color: var(--wk-sidebar-fg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* Panes: only the active one is shown. Single-mode sidebars have one pane, always active. */
+.wiki-sidebar .wk-nav-pane { display: none; }
+.wiki-sidebar .wk-nav-pane.is-active { display: block; }
+
+/* Drill-down browser: an "up a level" control above the current folder's rows. */
+.wiki-sidebar .wk-tree-up {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    margin-bottom: 0.3rem;
+    border: 0;
+    border-radius: var(--bs-border-radius);
+    background: var(--wk-sidebar-hover-bg);
+    color: var(--wk-sidebar-fg-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-align: start;
+    cursor: pointer;
+}
+.wiki-sidebar .wk-tree-up:hover { color: var(--wk-sidebar-fg); }
+.wiki-sidebar .wk-tree-up .mdi { flex: none; font-size: 1.1rem; }
+/* A folder/page row is a single full-width target: a page opens, a folder drills in. The folder vs file
+   icon is the only cue for which — no separate drill arrow, so nothing highlights independently. */
+.wiki-sidebar .wk-tree-row { display: flex; }
+.wiki-sidebar .wk-tree-link {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+    padding: 0.45rem 0.5rem;
+    border: 0;
+    border-radius: var(--bs-border-radius);
+    background: transparent;
+    color: var(--wk-sidebar-fg);
+    font-size: 0.85rem;
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+}
+.wiki-sidebar .wk-tree-link .mdi { flex: none; font-size: 1.2rem; vertical-align: -0.18em; margin-right: 0.15rem; }
+.wiki-sidebar .wk-tree-link:hover { background: var(--wk-sidebar-hover-bg); }
+.wiki-sidebar .wk-tree-link.active { background: var(--wk-sidebar-active-bg); }
+.wiki-sidebar .wk-tree-empty { color: var(--wk-sidebar-fg-muted); font-size: 0.8rem; padding: 0.5rem; }
+
+/* Nav editor: nested link rows are indented; the live preview indents children under their parent. */
+.nav-ed-row.nav-ed-nested { margin-left: 1.75rem; }
+.nav-ed-pv-link { display: flex; align-items: center; gap: 0.4rem; }
+.nav-ed-preview-side .nav-ed-pv-child { padding-left: 2rem; }
+.nav-ed-pv-caret { margin-left: auto; color: var(--bs-secondary-color); }
+
+/* Search results: tag facet bar (filter by tag / active tag pills). */
+.search-facets { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 1rem; }
+.search-facets-label { font-size: 0.85rem; color: var(--bs-secondary-color); margin-left: 0.25rem; }
+.search-facets .badge { font-weight: 500; }
+
+/* Admin site switcher (top of the admin sidebar): which site the console is managing. */
+.admin-site-switcher { padding: 0 0.5rem 0.5rem; }
+.admin-site-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--wk-admin-edge);
+    border-radius: 0.375rem;
+    background: var(--bs-body-bg);
+    color: var(--wk-admin-fg);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.admin-site-btn:hover { background: var(--wk-admin-hover-bg); }
+.admin-site-btn .admin-site-label { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-site-btn .mdi { font-size: 1.15rem; color: var(--wk-admin-fg-muted); }
+.admin-site-switcher .dropdown-menu { font-size: 0.9rem; }
+.admin-site-switcher .dropdown-menu form { display: block; margin: 0; }
+
+/* --- Wider content on large screens. Bootstrap's .container caps at 1320px (xxl); bump it so the
+   header, content, and footer (all .container) use more of a wide viewport while staying responsive.
+   BOOTSTRAP OVERRIDE (re-check on major Bootstrap upgrades): depends on the .container class and the
+   1400px xxl breakpoint — both stable, but this can't be a SASS var because we ship precompiled CSS. */
+@media (min-width: 1400px) {
+    .container { max-width: 1560px; }
+}
+
+/* --- Dark mode. Bootstrap's data-bs-theme="dark" (set pre-paint by the no-FOUC script in
+   head-styles.hbs) flips every --bs-* variable automatically, so site.css — which uses those variables —
+   mostly adapts for free. These rules cover the exceptions: content colors that were hardcoded for a
+   light background, and the light code-highlight theme (only github.min.css is vendored). --- */
+
+/* Callout boxes: darker translucent fills + light text so they read on a dark page. */
+[data-bs-theme="dark"] .wiki-content .is-info { border-color: #388bfd; background: #0d2540; color: #cfe4ff; }
+[data-bs-theme="dark"] .wiki-content .is-info .callout-icon { color: #6cb6ff; }
+[data-bs-theme="dark"] .wiki-content .is-success { border-color: #3fb950; background: #0f2a17; color: #c6f0d0; }
+[data-bs-theme="dark"] .wiki-content .is-success .callout-icon { color: #56d364; }
+[data-bs-theme="dark"] .wiki-content .is-warning { border-color: #d29922; background: #2e2606; color: #f2e2b3; }
+[data-bs-theme="dark"] .wiki-content .is-warning .callout-icon { color: #e3b341; }
+[data-bs-theme="dark"] .wiki-content .is-danger,
+[data-bs-theme="dark"] .wiki-content .is-error { border-color: #f85149; background: #3a1518; color: #ffd3d0; }
+[data-bs-theme="dark"] .wiki-content .is-danger .callout-icon,
+[data-bs-theme="dark"] .wiki-content .is-error .callout-icon { color: #ff7b72; }
+
+/* Code syntax highlighting: a GitHub-dark palette overriding the vendored light github theme (higher
+   specificity via the [data-bs-theme] prefix, so it wins without editing the vendor file). */
+/* Token colors only — the code block's background comes from .wiki-content pre (--bs-tertiary-bg,
+   which auto-darkens); highlight.js paints only the tokens on the transparent <code>. */
+[data-bs-theme="dark"] .hljs { color: #c9d1d9; }
+[data-bs-theme="dark"] .hljs-comment, [data-bs-theme="dark"] .hljs-code, [data-bs-theme="dark"] .hljs-formula { color: #8b949e; }
+[data-bs-theme="dark"] .hljs-keyword, [data-bs-theme="dark"] .hljs-doctag, [data-bs-theme="dark"] .hljs-template-tag,
+[data-bs-theme="dark"] .hljs-template-variable, [data-bs-theme="dark"] .hljs-type, [data-bs-theme="dark"] .hljs-variable.language_ { color: #ff7b72; }
+[data-bs-theme="dark"] .hljs-title, [data-bs-theme="dark"] .hljs-title.class_, [data-bs-theme="dark"] .hljs-title.function_, [data-bs-theme="dark"] .hljs-section { color: #d2a8ff; }
+[data-bs-theme="dark"] .hljs-attr, [data-bs-theme="dark"] .hljs-attribute, [data-bs-theme="dark"] .hljs-literal, [data-bs-theme="dark"] .hljs-meta,
+[data-bs-theme="dark"] .hljs-number, [data-bs-theme="dark"] .hljs-operator, [data-bs-theme="dark"] .hljs-selector-attr,
+[data-bs-theme="dark"] .hljs-selector-class, [data-bs-theme="dark"] .hljs-selector-id, [data-bs-theme="dark"] .hljs-variable { color: #79c0ff; }
+[data-bs-theme="dark"] .hljs-string, [data-bs-theme="dark"] .hljs-meta .hljs-string, [data-bs-theme="dark"] .hljs-regexp { color: #a5d6ff; }
+[data-bs-theme="dark"] .hljs-built_in, [data-bs-theme="dark"] .hljs-symbol { color: #ffa657; }
+[data-bs-theme="dark"] .hljs-name, [data-bs-theme="dark"] .hljs-quote, [data-bs-theme="dark"] .hljs-selector-tag, [data-bs-theme="dark"] .hljs-selector-pseudo { color: #7ee787; }
+[data-bs-theme="dark"] .hljs-emphasis { font-style: italic; }
+[data-bs-theme="dark"] .hljs-strong { font-weight: bold; }

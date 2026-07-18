@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Security</h1>
+    {{#saved}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> Security settings saved.</div>{{/saved}}
+
+    <h2><i class="mdi mdi-shield-lock-outline" aria-hidden="true"></i> Content Security Policy</h2>
+    <p class="text-secondary" style="max-width:52rem">The Content-Security-Policy header tells browsers which
+        sources a page may load scripts, styles, fonts, images, etc. from — a key defense against cross-site
+        scripting. WikiKT ships a safe <strong>baseline</strong> (below) that keeps the app working; you can
+        <strong>add extra trusted sources</strong> per directive to enable things the baseline doesn't allow
+        (e.g. a self-hosted font server, another CDN, an analytics host). You can't remove baseline
+        protections here, so a change can't lock you out.</p>
+    <p class="text-secondary" style="max-width:52rem">One source per line (or space-separated). A source is a host
+        (<code>https://cdn.example.com</code>), a wildcard host (<code>https://*.example.com</code>), or a scheme
+        (<code>https:</code>, <code>data:</code>). Invalid entries are dropped on save.</p>
+
+    <form method="post" action="/a/security" class="edit-form" style="max-width:52rem">
+        {{{csrfField}}}
+        {{#cspDirectives}}
+        <div class="mb-3">
+            <label class="form-label" for="{{field}}"><code>{{name}}</code> <span class="text-secondary">— {{label}}</span></label>
+            <textarea class="form-control" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="{{field}}" name="{{field}}" rows="2" spellcheck="false" placeholder="https://cdn.example.com" maxlength="2000">{{value}}</textarea>
+            <p class="form-text mb-0">Baseline: <code>{{baseline}}</code></p>
+        </div>
+        {{/cspDirectives}}
+
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="cspReportOnly" id="cspReportOnly" value="1" {{#cspReportOnly}}checked{{/cspReportOnly}}>
+            <label class="form-check-label" for="cspReportOnly">Report-only mode (don't block — log violations to the browser console)</label>
+            <p class="form-text">Sends <code>Content-Security-Policy-Report-Only</code> instead of enforcing. Use it to
+                test a change safely: nothing is blocked, but violations are reported in the browser dev-tools console.
+                Turn it back off to enforce.</p>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save-outline" aria-hidden="true"></i> Save policy</button>
+    </form>
+
+    <h3 class="h5 mt-4">Fixed directives</h3>
+    <p class="text-secondary" style="max-width:52rem">These stay locked to keep the app safe (they're rarely loosened
+        for legitimate reasons):</p>
+    <ul class="list-unstyled" style="font-family:var(--bs-font-monospace);font-size:0.85rem">
+        {{#cspFixed}}<li><code>{{name}}</code> {{sources}}</li>{{/cspFixed}}
+    </ul>
+
+    <h3 class="h5 mt-4">Effective policy</h3>
+    <p class="text-secondary">The header currently sent on every page of this site: <code>{{cspEffectiveHeader}}</code></p>
+    <div class="border rounded p-3 bg-body-tertiary" style="font-family:var(--bs-font-monospace);font-size:0.82rem;overflow-x:auto;white-space:pre-wrap;word-break:break-word">{{cspEffectiveValue}}</div>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

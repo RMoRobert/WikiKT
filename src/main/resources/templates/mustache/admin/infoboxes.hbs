@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infoboxes | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <div class="page-meta"><h1><i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Infoboxes</h1><a class="btn btn-primary" href="/a/infoboxes/new">New template</a></div>
+    {{#otherSite}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-information-outline" aria-hidden="true"></i> That template belongs to a different site. Showing <strong>{{managedSiteName}}</strong>'s templates instead.</div>{{/otherSite}}
+    <p class="text-secondary">A <strong>template</strong> is a named set of fields. A <strong>rule</strong> binds a template to pages by path or tag; editors then fill in the values on each page, which show as a fact card (Wikipedia-style) on the page.</p>
+
+    <h2 class="h5 mt-4">Templates</h2>
+    {{#hasTemplates}}
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Name</th><th>Slug</th><th>Fields</th><th></th></tr></thead>
+        <tbody>
+        {{#templates}}
+        <tr>
+            <td>{{name}}</td>
+            <td><code>{{slug}}</code></td>
+            <td>{{fieldCount}}</td>
+            <td><a class="btn btn-sm btn-primary" href="/a/infoboxes/{{id}}/edit">Edit</a></td>
+        </tr>
+        {{/templates}}
+        </tbody>
+    </table>
+    {{/hasTemplates}}
+    {{^hasTemplates}}<p class="text-secondary">No templates yet. <a href="/a/infoboxes/new">Create one</a> to get started.</p>{{/hasTemplates}}
+
+    <h2 class="h5 mt-4">Rules</h2>
+    <p class="text-secondary">A rule determines how a page is selected for an infobox in one of two ways: <strong>path</strong> — an exact path (<code>/example/test</code>), <code>example/test/*</code> (direct children in this path), or <code>example/test/**</code> (all descendants) — or <strong>tag</strong> (Page Info has tag added). A page may match more than one rule for one or more infoboxes. Infobox data is always optional; viewers will see no infobox, and editors will see a note encouraging them to fill out infobox data.</p>
+    {{#hasRules}}
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Match by</th><th>Pattern</th><th>Template</th><th></th></tr></thead>
+        <tbody>
+        {{#rules}}
+        <tr>
+            <td>{{#isTag}}<i class="mdi mdi-tag-outline" aria-hidden="true"></i> Tag{{/isTag}}{{^isTag}}<i class="mdi mdi-file-tree" aria-hidden="true"></i> Path{{/isTag}}</td>
+            <td><code>{{pattern}}</code></td>
+            <td>{{templateName}}</td>
+            <td>
+                <form method="post" action="/a/infoboxes/rules/{{id}}/delete" class="m-0" onsubmit="return confirm('Delete this rule? Pages it matched keep their stored data but stop showing the infobox.');">
+                    {{{csrfField}}}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {{/rules}}
+        </tbody>
+    </table>
+    {{/hasRules}}
+    {{^hasRules}}<p class="text-secondary">No rules yet.</p>{{/hasRules}}
+
+    {{#hasTemplateOptions}}
+    <form method="post" action="/a/infoboxes/rules" class="row g-2 align-items-end">
+        {{{csrfField}}}
+        <div class="col-auto">
+            <label class="form-label">Match by</label>
+            <select class="form-select" name="matchType">
+                <option value="PATH">Path</option>
+                <option value="TAG">Tag</option>
+            </select>
+        </div>
+        <div class="col">
+            <label class="form-label">Pattern</label>
+            <input class="form-control" type="text" name="pattern" placeholder="e.g. apps/** or a tag like integration" required>
+        </div>
+        <div class="col">
+            <label class="form-label">Template</label>
+            <select class="form-select" name="templateId" required>
+                {{#templateOptions}}<option value="{{id}}">{{name}}</option>{{/templateOptions}}
+            </select>
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Add rule</button>
+        </div>
+    </form>
+    {{/hasTemplateOptions}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tag: {{tag}} | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main">
+    <h1><i class="mdi mdi-tag-outline" aria-hidden="true"></i> Pages tagged “{{tag}}”</h1>
+    <p class="search-summary">{{resultCount}} page(s) tagged <strong>{{tag}}</strong>.</p>
+
+    {{#hasResults}}
+    <ul class="search-results">
+        {{#results}}
+        <li class="search-result">
+            <a class="search-result-title" href="{{url}}">{{title}}</a>
+            <span class="search-result-path">{{url}}</span>
+            {{#hasDescription}}<p class="search-result-desc">{{description}}</p>{{/hasDescription}}
+        </li>
+        {{/results}}
+    </ul>
+    {{/hasResults}}
+    {{^hasResults}}<p class="text-secondary">No pages are tagged “{{tag}}”.</p>{{/hasResults}}
+</main>
+</div>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

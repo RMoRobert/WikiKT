@@ -1,0 +1,38 @@
+{{! Shared wiki-sidebar item rendering: flat items (header / link / divider) plus one level of nested,
+    expandable link groups. Expects the `navItems` model built by buildNavItemModels (WikiRouting):
+    each link may carry `children` + `hasChildren`, and a group is `expanded` when it holds the current
+    page. Included once per page by page/view.hbs and partials/sidebar.hbs. }}
+{{#navItems}}
+{{#isDivider}}<hr class="nav-divider">{{/isDivider}}
+{{^isDivider}}
+{{#isHeader}}<p class="nav-heading">{{#hasIcon}}<i class="mdi mdi-{{icon}}" aria-hidden="true"></i> {{/hasIcon}}{{label}}</p>{{/isHeader}}
+{{^isHeader}}
+{{#hasChildren}}
+<div class="nav-group{{#expanded}} is-open{{/expanded}}">
+    <div class="nav-group-row">
+        <a class="nav-parent{{#active}} active{{/active}}" href="{{target}}">{{#hasIcon}}<i class="mdi mdi-{{icon}}" aria-hidden="true"></i> {{/hasIcon}}{{label}}</a>
+        <button type="button" class="nav-caret" aria-label="Toggle submenu" aria-expanded="{{#expanded}}true{{/expanded}}{{^expanded}}false{{/expanded}}"><i class="mdi mdi-chevron-down" aria-hidden="true"></i></button>
+    </div>
+    <div class="nav-children">
+        {{#children}}<a class="nav-child{{#active}} active{{/active}}" href="{{target}}">{{#hasIcon}}<i class="mdi mdi-{{icon}}" aria-hidden="true"></i> {{/hasIcon}}{{label}}</a>{{/children}}
+    </div>
+</div>
+{{/hasChildren}}
+{{^hasChildren}}<a{{#active}} class="active"{{/active}} href="{{target}}">{{#hasIcon}}<i class="mdi mdi-{{icon}}" aria-hidden="true"></i> {{/hasIcon}}{{label}}</a>{{/hasChildren}}
+{{/isHeader}}
+{{/isDivider}}
+{{/navItems}}
+<script>
+(function () {
+  document.querySelectorAll('.nav-caret').forEach(function (btn) {
+    if (btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      var group = btn.closest('.nav-group');
+      var open = group.classList.toggle('is-open');
+      btn.setAttribute('aria-expanded', String(open));
+    });
+  });
+})();
+</script>

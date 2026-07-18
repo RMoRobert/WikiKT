@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mail | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Mail</h1>
+    {{#saved}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> Mail settings saved.</div>{{/saved}}
+    {{#testMessage}}<div class="alert alert-info" role="alert"><i class="mdi mdi-information-outline" aria-hidden="true"></i> {{testMessage}}</div>{{/testMessage}}
+
+    <p class="text-secondary" style="max-width:52rem">Configure an SMTP server so {{siteName}} can send mail —
+        welcome messages, password resets, and admin notifications. Outgoing mail is queued and delivered by a
+        background worker, so a slow or unreachable server never blocks the app. Settings are per-site.</p>
+
+    <h2><i class="mdi mdi-server-network" aria-hidden="true"></i> SMTP server</h2>
+    <form method="post" action="/a/mail" class="edit-form" style="max-width:44rem">
+        {{{csrfField}}}
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="mailEnabled" id="mailEnabled" value="1" {{#mailEnabled}}checked{{/mailEnabled}}>
+            <label class="form-check-label" for="mailEnabled">Enable outgoing email</label>
+            <p class="form-text mb-0">When off, mail is still queued but nothing is sent.</p>
+        </div>
+        <div class="row g-3">
+            <div class="col-sm-8">
+                <label class="form-label" for="smtpHost">SMTP host</label>
+                <input class="form-control" type="text" id="smtpHost" name="smtpHost" value="{{smtpHost}}" placeholder="smtp.example.com" maxlength="255" autocomplete="off">
+            </div>
+            <div class="col-sm-4">
+                <label class="form-label" for="smtpPort">Port</label>
+                <input class="form-control" type="number" id="smtpPort" name="smtpPort" value="{{smtpPort}}" min="1" max="65535">
+            </div>
+        </div>
+        <div class="mb-3 mt-3">
+            <label class="form-label" for="smtpSecurity">Encryption</label>
+            <select class="form-select" id="smtpSecurity" name="smtpSecurity" style="max-width:16rem">
+                {{#securityOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/securityOptions}}
+            </select>
+        </div>
+        <div class="row g-3">
+            <div class="col-sm-6">
+                <label class="form-label" for="smtpUsername">Username</label>
+                <input class="form-control" type="text" id="smtpUsername" name="smtpUsername" value="{{smtpUsername}}" maxlength="255" autocomplete="off" placeholder="(none — no authentication)">
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="smtpPassword">Password</label>
+                <input class="form-control" type="password" id="smtpPassword" name="smtpPassword" value="" maxlength="500" autocomplete="new-password" placeholder="{{#hasPassword}}(unchanged — a password is stored){{/hasPassword}}{{^hasPassword}}(none stored){{/hasPassword}}">
+                {{#hasPassword}}
+                <div class="form-check mt-1">
+                    <input class="form-check-input" type="checkbox" name="clearSmtpPassword" id="clearSmtpPassword" value="1">
+                    <label class="form-check-label small" for="clearSmtpPassword">Clear the stored password</label>
+                </div>
+                {{/hasPassword}}
+            </div>
+        </div>
+        <hr class="my-4">
+        <div class="row g-3">
+            <div class="col-sm-6">
+                <label class="form-label" for="fromAddress">From address</label>
+                <input class="form-control" type="email" id="fromAddress" name="fromAddress" value="{{fromAddress}}" placeholder="noreply@example.com" maxlength="255" autocomplete="off">
+            </div>
+            <div class="col-sm-6">
+                <label class="form-label" for="fromName">From name <span class="text-secondary">(optional)</span></label>
+                <input class="form-control" type="text" id="fromName" name="fromName" value="{{fromName}}" placeholder="{{siteName}}" maxlength="255">
+            </div>
+        </div>
+        <div class="mb-3 mt-3">
+            <label class="form-label" for="adminRecipients">Admin notification recipients <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" id="adminRecipients" name="adminRecipients" value="{{adminRecipients}}" placeholder="ops@example.com, alerts@example.com" maxlength="1000" autocomplete="off">
+            <p class="form-text mb-0">Comma-separated addresses notified of events like new user accounts.</p>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save-outline" aria-hidden="true"></i> Save settings</button>
+    </form>
+
+    {{#hasLastRun}}
+    <p class="mt-3 mb-0">
+        Last send attempt: <strong>{{lastRunAt}}</strong> —
+        {{#lastRunOk}}<span class="badge text-bg-success">OK</span>{{/lastRunOk}}
+        {{^lastRunOk}}<span class="badge text-bg-danger">Failed</span>{{/lastRunOk}}
+        <br><span class="text-secondary">{{lastRunResult}}</span>
+    </p>
+    {{/hasLastRun}}
+
+    <h2 class="mt-4"><i class="mdi mdi-send-check-outline" aria-hidden="true"></i> Send a test email</h2>
+    <p class="text-secondary">Sends a test message immediately using the saved settings, so you can confirm they work.</p>
+    <form method="post" action="/a/mail/test" class="edit-form">
+        {{{csrfField}}}
+        <div class="input-group" style="max-width:32rem">
+            <input class="form-control" type="email" name="testRecipient" placeholder="you@example.com" maxlength="255" required>
+            <button type="submit" class="btn btn-outline-primary"{{^isConfigured}} disabled title="Configure the SMTP host and From address first"{{/isConfigured}}><i class="mdi mdi-send" aria-hidden="true"></i> Send test</button>
+        </div>
+    </form>
+
+    <h2 class="mt-4"><i class="mdi mdi-file-document-edit-outline" aria-hidden="true"></i> Templates</h2>
+    <p class="text-secondary">Customize the subject and body of each message. Templates use
+        <code>{{mustacheOpen}}variable{{mustacheClose}}</code> placeholders.</p>
+    <div class="list-group mb-3" style="max-width:44rem">
+        {{#templates}}
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="/a/mail/templates/{{key}}">
+            <span><span class="fw-semibold">{{label}}</span> <span class="small text-secondary d-block">{{description}}</span></span>
+            {{#customized}}<span class="badge text-bg-info">Customized</span>{{/customized}}
+        </a>
+        {{/templates}}
+    </div>
+
+    <h2 class="mt-4"><i class="mdi mdi-tray-full" aria-hidden="true"></i> Send queue</h2>
+    <p class="text-secondary mb-2">
+        <span class="badge text-bg-secondary">{{countPending}} pending</span>
+        <span class="badge text-bg-success">{{countSent}} sent</span>
+        <span class="badge text-bg-warning">{{countFailed}} retrying</span>
+        <span class="badge text-bg-danger">{{countDeadLetter}} failed</span>
+    </p>
+    {{#hasQueue}}
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Recipient</th><th>Template</th><th>Status</th><th>Created</th><th>Detail</th><th></th></tr></thead>
+            <tbody>
+            {{#queue}}
+            <tr>
+                <td class="text-truncate" style="max-width:14rem">{{recipient}}</td>
+                <td>{{template}}</td>
+                <td><span class="badge {{statusBadge}}">{{status}}</span>{{#attempts}} <span class="small text-secondary">×{{attempts}}</span>{{/attempts}}</td>
+                <td class="small text-nowrap">{{createdAt}}</td>
+                <td class="small text-secondary text-truncate" style="max-width:18rem" title="{{lastError}}">{{#sentAt}}Sent {{sentAt}}{{/sentAt}}{{^sentAt}}{{lastError}}{{/sentAt}}</td>
+                <td class="text-nowrap">
+                    {{#isRetryable}}
+                    <form method="post" action="/a/mail/queue/{{id}}/retry" class="edit-form d-inline">{{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-secondary" title="Retry now"><i class="mdi mdi-refresh" aria-hidden="true"></i></button></form>
+                    {{/isRetryable}}
+                    <form method="post" action="/a/mail/queue/{{id}}/delete" class="edit-form d-inline" onsubmit="return confirm('Delete this queued email?');">{{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="mdi mdi-delete-outline" aria-hidden="true"></i></button></form>
+                </td>
+            </tr>
+            {{/queue}}
+            </tbody>
+        </table>
+    </div>
+    {{/hasQueue}}
+    {{^hasQueue}}<p class="text-secondary">The queue is empty.</p>{{/hasQueue}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

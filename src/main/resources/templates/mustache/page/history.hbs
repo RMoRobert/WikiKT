@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History: {{title}} | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main">
+    <div class="page-meta">
+        <h1><i class="mdi mdi-history" aria-hidden="true"></i> History: {{title}}</h1>
+        <a class="btn btn-outline-secondary btn-sm" href="{{viewUrl}}">Back to page</a>
+    </div>
+    {{#empty}}<p class="text-secondary">No previous revisions yet. A revision is saved each time the page is edited.</p>{{/empty}}
+    {{^empty}}
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Revision</th><th>Saved</th><th>By</th><th></th></tr></thead>
+        <tbody>
+        {{#revisions}}
+        <tr>
+            <td>#{{revisionNumber}}</td>
+            <td>{{createdAt}}</td>
+            <td>{{author}}</td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" href="{{viewUrl}}">View</a>
+                {{#canEdit}}
+                <form class="inline-restore" method="post" action="{{historyUrl}}" onsubmit="return confirm('Restore revision #{{revisionNumber}}? The current version will be saved to history first.');">
+                    {{{csrfField}}}
+                    <input type="hidden" name="rev" value="{{revisionNumber}}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Restore</button>
+                </form>
+                {{/canEdit}}
+            </td>
+        </tr>
+        {{/revisions}}
+        </tbody>
+    </table>
+    {{/empty}}
+</main>
+</div>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

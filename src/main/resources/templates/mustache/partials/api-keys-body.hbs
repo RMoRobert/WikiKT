@@ -1,0 +1,56 @@
+{{! Shared API-keys list body: the one-time new-key reveal, the explanatory note, and the keys table.
+    Included by the admin API-keys page (admin-shell chrome) and the account API-keys tab (site chrome).
+    All actions are driven off the baseUrl field so the same markup serves /a/api-keys and /p/api-keys. }}
+{{#newKey}}
+<div class="alert alert-success">
+    <h2 class="h6 mb-2"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> Key created — copy it now</h2>
+    <p class="mb-2 small">This token is shown <strong>once</strong> and cannot be retrieved again. Store it somewhere safe.</p>
+    <code class="user-select-all d-block p-2 bg-body-tertiary border rounded text-break">{{newKey}}</code>
+    <p class="mt-2 mb-0 small text-secondary">Use it as a request header: <code>Authorization: Bearer {{newKey}}</code></p>
+</div>
+{{/newKey}}
+
+{{#showOwner}}
+<p class="text-secondary small">A key authenticates as its owning user and inherits that user's permissions (we suggest creating a dedicated user in the desired group[s] and issuing the key to that user for scoped permissions).</p>
+{{/showOwner}}
+{{^showOwner}}
+<p class="text-secondary small">Each key authenticates as you and has exactly your permissions. Treat it like a password.{{^canCreate}} Your account isn't permitted to create new keys — ask an administrator if you need one.{{/canCreate}}</p>
+{{/showOwner}}
+
+{{#hasKeys}}
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+    <thead><tr><th>Name</th>{{#showOwner}}<th>Owner</th>{{/showOwner}}<th>Partial key</th><th>Status</th><th>Last used</th><th>Expires</th><th></th></tr></thead>
+    <tbody>
+    {{#keys}}
+    <tr>
+        <td>{{name}}</td>
+        {{#showOwner}}<td>{{owner}}</td>{{/showOwner}}
+        <td><code>{{partialKey}}…</code></td>
+        <td>
+            {{#isActive}}<span class="badge text-bg-success">Active</span>{{/isActive}}
+            {{^isActive}}<span class="badge text-bg-secondary">{{status}}</span>{{/isActive}}
+        </td>
+        <td class="small text-secondary">{{lastUsed}}</td>
+        <td class="small text-secondary">{{expires}}</td>
+        <td class="text-end text-nowrap">
+            {{#isActive}}
+            <form method="post" action="{{baseUrl}}/{{id}}/revoke" class="d-inline" onsubmit="return confirm('Revoke this key? Clients using it will stop working immediately.');">
+                {{{csrfField}}}
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Revoke</button>
+            </form>
+            {{/isActive}}
+            <form method="post" action="{{baseUrl}}/{{id}}/delete" class="d-inline" onsubmit="return confirm('Delete this key permanently?');">
+                {{{csrfField}}}
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {{/keys}}
+    </tbody>
+</table>
+</div>
+{{/hasKeys}}
+{{^hasKeys}}
+<p class="text-secondary">No API keys yet.</p>
+{{/hasKeys}}

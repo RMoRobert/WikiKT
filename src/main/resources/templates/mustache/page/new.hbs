@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isDuplicate}}Duplicate page{{/isDuplicate}}{{^isDuplicate}}New page{{/isDuplicate}} | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main">
+    <div style="max-width:40rem;">
+    <h1>{{#isDuplicate}}Duplicate page{{/isDuplicate}}{{^isDuplicate}}New page{{/isDuplicate}}</h1>
+    {{#isDuplicate}}<p class="text-secondary">Copying content from <code>{{sourceLabel}}</code> into a new page — choose where it should live.</p>{{/isDuplicate}}
+    {{^isDuplicate}}<p class="text-secondary">Choose a path for the new page; you'll write its content next.</p>{{/isDuplicate}}
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="/new">
+        {{{csrfField}}}
+        {{#from}}<input type="hidden" name="from" value="{{from}}">{{/from}}
+        <input type="hidden" name="fromLocale" value="{{fromLocale}}">
+        <div class="mb-3">
+            <label class="form-label" for="newPath">Path</label>
+            <div class="input-group">
+                <input class="form-control" type="text" id="newPath" name="path" placeholder="e.g. apps/rule-machine/rule-6-1" required autofocus>
+                <button class="btn btn-outline-secondary" type="button" id="browsePath"><i class="mdi mdi-file-tree" aria-hidden="true"></i> Browse…</button>
+            </div>
+            <p class="form-text">Browse existing pages to pick a location, or type a new path.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="newLocale">Locale</label>
+            <select class="form-select" id="newLocale" name="locale">
+                {{#localeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/localeOptions}}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">{{#isDuplicate}}Create copy{{/isDuplicate}}{{^isDuplicate}}Continue{{/isDuplicate}}</button>
+    </form>
+    </div>
+</main>
+</div>
+{{>partials/footer.hbs}}
+<script src="/static/wk-browser.js"></script>
+<script>
+(function () {
+  var btn = document.getElementById('browsePath');
+  var pathInput = document.getElementById('newPath');
+  var localeInput = document.getElementById('newLocale');
+  if (!btn || !window.WikiKtPagePicker) return;
+  btn.addEventListener('click', function () {
+    var locales = localeInput ? [].map.call(localeInput.options, function (o) { return o.value; }) : [];
+    WikiKtPagePicker.open({
+      title: 'Select New Page Location',
+      confirmLabel: 'Select',
+      defaultLocale: '{{defaultLocale}}',
+      locale: (localeInput && localeInput.value.trim()) || '{{defaultLocale}}',
+      locales: locales,
+      path: pathInput.value.trim()
+    }).then(function (result) {
+      if (!result) return;
+      pathInput.value = result.path;
+      if (localeInput) localeInput.value = result.locale;
+      pathInput.focus();
+    });
+  });
+})();
+</script>
+{{{bodyHtml}}}</body>
+</html>

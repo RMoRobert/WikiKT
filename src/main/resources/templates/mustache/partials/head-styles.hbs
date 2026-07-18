@@ -1,0 +1,7 @@
+<script>(function(){try{var d=document.documentElement;var LI={{#loggedIn}}true{{/loggedIn}}{{^loggedIn}}false{{/loggedIn}};var DEF='{{themeMode}}';function dark(m){return m==='dark'||(m==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);}function apply(m){d.setAttribute('data-bs-theme',dark(m)?'dark':'light');window.__wkThemeMode=m;}window.wkApplyTheme=apply;window.__wkLoggedIn=LI;apply((LI?null:localStorage.getItem('wk-theme'))||DEF);if(window.matchMedia){window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){if(window.__wkThemeMode==='auto')apply('auto');});}}catch(e){}})();</script>
+<link rel="stylesheet" href="/static/site.css">
+{{#googleFontsUrl}}<link rel="stylesheet" href="{{{googleFontsUrl}}}">{{/googleFontsUrl}}
+<style>:root{--bs-body-font-family:{{{bodyFontStack}}};--wk-heading-font:{{{headingFontStack}}};--bs-body-font-size:{{baseFontSize}}px;}</style>
+{{#customCss}}<style>{{{customCss}}}</style>{{/customCss}}
+{{{headHtml}}}
+<link rel="icon" href="{{faviconUrl}}" sizes="any">

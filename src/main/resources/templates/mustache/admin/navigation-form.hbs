@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#isNew}}New Menu{{/isNew}}{{^isNew}}Edit Menu{{/isNew}} | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>{{#isNew}}New Menu{{/isNew}}{{^isNew}}Edit Menu{{/isNew}}</h1>
+    {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    <form method="post" action="{{#isNew}}/a/navigation{{/isNew}}{{^isNew}}/a/navigation/{{id}}{{/isNew}}" class="edit-form nav-form">
+        {{{csrfField}}}
+        <div class="mb-3" style="max-width:32rem">
+            <label class="form-label">Scope</label>
+            <input class="form-control" type="text" name="scope" value="{{scope}}" placeholder="e.g. apps/rule-machine (empty = default menu)">
+            <p class="form-text">Leave empty for the default menu. Otherwise a path prefix — the menu applies to that path and everything under it; the longest matching scope wins.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Items</label>
+
+            <div id="navEditor" class="nav-editor" data-default-locale="{{defaultLocale}}" hidden>
+                <div class="nav-ed-bar">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-add="link"><i class="mdi mdi-link-variant" aria-hidden="true"></i> Link</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-add="header"><i class="mdi mdi-format-header-pound" aria-hidden="true"></i> Header</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-add="divider"><i class="mdi mdi-minus" aria-hidden="true"></i> Divider</button>
+                    <button type="button" class="btn btn-sm btn-link ms-auto" data-toggle-source><i class="mdi mdi-code-tags" aria-hidden="true"></i> Source</button>
+                </div>
+                <div class="nav-ed-main">
+                    <div class="nav-ed-rows" data-rows></div>
+                    <div class="nav-ed-preview">
+                        <p class="nav-ed-preview-label">Sidebar preview</p>
+                        <div class="wiki-sidebar nav-ed-preview-side"><nav data-preview></nav></div>
+                    </div>
+                </div>
+            </div>
+
+            <textarea class="form-control" name="definition" id="navDefinition" rows="10" placeholder="One item per line">{{definition}}</textarea>
+            <details id="navSyntaxHelp">
+                <summary>Item syntax</summary>
+                <pre><code># Section heading        a non-link heading
+Label | /path           a link
+:home: Home | /         optional :mdi-icon: prefix
+  Child | /path         2-space indent nests a link under the one above
+---                     a divider (horizontal rule)</code></pre>
+                <p class="form-text">Icon names come from Material Design Icons (without the <code>mdi-</code> prefix), e.g. <code>:home:</code>, <code>:cog:</code>, <code>:file-document-outline:</code>. Indent a link two spaces to nest it (one level) under the link above it.</p>
+            </details>
+        </div>
+        {{! One action row: Save (primary) on the right; Delete pushed to the far left (me-auto) so
+            the destructive button is well clear of Save. Delete submits its own form via form= — a
+            form can't nest in the edit form — and the row wraps on narrow screens (flex-wrap). }}
+        <div class="d-flex flex-wrap gap-2 justify-content-end mt-3">
+            {{^isNew}}<button type="submit" form="navDeleteForm" class="btn btn-danger me-auto">Delete menu</button>{{/isNew}}
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </form>
+    {{^isNew}}
+    <form id="navDeleteForm" method="post" action="/a/navigation/{{id}}/delete" onsubmit="return confirm('Delete this menu?');">
+        {{{csrfField}}}
+    </form>
+    {{/isNew}}
+{{>partials/admin-shell-end.hbs}}
+<script src="/static/wk-browser.js"></script>
+<script src="/static/wk-nav-editor.js"></script>
+{{{bodyHtml}}}</body>
+</html>

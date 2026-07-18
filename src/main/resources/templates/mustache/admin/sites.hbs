@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sites | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <h1 class="mb-0">Sites</h1>
+        <a href="/a/sites/new" class="btn btn-primary"><i class="mdi mdi-plus" aria-hidden="true"></i> New site</a>
+    </div>
+    <p class="text-secondary mt-2">You can host multiple sites on one instance. Each site has its own content (pages,
+        assets, navigation, fragments) and settings; users and groups are shared across all sites. A
+        visitor reaches a specific site by its hostname, and WikiKIT uses the <code>Host</code> header
+        to determine which site to serve. The catch-all serves any host that does not match any configured
+        hostname.</p>
+    <p class="text-secondary">Use the site switcher (top of the sidebar) or <strong>Manage</strong> below to
+        choose which site you are currently editing.</p>
+
+    {{#saved}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> Site saved.</div>{{/saved}}
+    {{#deleted}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> Site deleted.</div>{{/deleted}}
+    {{#deleteError}}<div class="alert alert-danger" role="alert"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i> {{deleteError}}</div>{{/deleteError}}
+
+    <div class="list-group mt-3">
+        {{#sites}}
+        <div class="list-group-item d-flex align-items-center gap-3 flex-wrap py-3">
+            <i class="mdi mdi-web fs-3 text-secondary" aria-hidden="true"></i>
+            <div class="flex-grow-1" style="min-width:12rem">
+                <div class="fw-semibold">{{name}}{{#current}} <span class="badge text-bg-primary align-middle">Managing</span>{{/current}}</div>
+                <div class="mt-1">
+                    {{#isCatchAll}}<span class="badge rounded-pill text-bg-secondary"><i class="mdi mdi-star" aria-hidden="true"></i> catch-all</span>{{/isCatchAll}}
+                    {{#hasHostname}}<span class="badge rounded-pill text-bg-light border text-body"><i class="mdi mdi-web" aria-hidden="true"></i> {{hostname}}</span>{{/hasHostname}}
+                    {{^hasHostname}}{{^isCatchAll}}<span class="text-secondary small fst-italic">no hostname specified; not reachable unless catch-all</span>{{/isCatchAll}}{{/hasHostname}}
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-shrink-0">
+                {{^current}}<form method="post" action="/a/sites/select" class="m-0">{{{csrfField}}}<input type="hidden" name="siteId" value="{{id}}"><input type="hidden" name="return" value="/a/sites"><button type="submit" class="btn btn-sm btn-outline-secondary" title="Manage this site's content and settings"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Manage</button></form>{{/current}}
+                <a href="/a/sites/{{id}}/edit" class="btn btn-sm btn-outline-primary"><i class="mdi mdi-pencil-outline" aria-hidden="true"></i> Edit</a>
+                {{^isCatchAll}}<form method="post" action="/a/sites/{{id}}/delete" class="m-0" onsubmit="return confirm('Delete this site? This permanently removes all of its pages, assets, navigation, fragments, and settings. This cannot be undone.');">{{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-danger" title="Delete site"><i class="mdi mdi-trash-can-outline" aria-hidden="true"></i></button></form>{{/isCatchAll}}
+            </div>
+        </div>
+        {{/sites}}
+    </div>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

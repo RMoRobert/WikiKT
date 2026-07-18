@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pages | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Pages</h1>
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Title</th><th>Locale</th><th>Path</th><th>Tags</th><th>Updated</th><th></th></tr></thead>
+        <tbody>
+        {{#pages}}
+        <tr>
+            <td>{{title}}{{#description}}<br><small class="text-secondary">{{description}}</small>{{/description}}</td>
+            <td>{{locale}}</td>
+            <td>{{path}}</td>
+            <td>{{tags}}</td>
+            <td>{{updatedAt}}</td>
+            <td><a class="btn btn-sm btn-outline-secondary" href="{{viewUrl}}">View</a> <a class="btn btn-sm btn-primary" href="{{editUrl}}">Edit</a></td>
+        </tr>
+        {{/pages}}
+        </tbody>
+    </table>
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

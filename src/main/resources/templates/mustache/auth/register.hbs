@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create an account | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<div class="container wiki-layout">
+{{>partials/sidebar.hbs}}
+<main class="wiki-main">
+    <div style="max-width:28rem;">
+    <h1 class="h3 my-4">Create an account</h1>
+    {{#disabled}}
+        <div class="alert alert-info" role="alert">
+            Self-service registration isn't available on this site. Please contact an administrator for an account.
+        </div>
+        <p><a href="/login">Back to sign in</a></p>
+    {{/disabled}}
+    {{^disabled}}
+    {{#sent}}
+        <div class="alert alert-success" role="alert">
+            Almost there — check your inbox (and spam folder) for a message with a link to confirm your
+            email address and activate your account.
+        </div>
+        <p><a href="/login">Back to sign in</a></p>
+    {{/sent}}
+    {{^sent}}
+        {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+        <p class="text-muted">Register for an account. We'll email you a link to confirm your address.</p>
+        <form method="post" action="/register">
+            {{{csrfField}}}
+            {{! Honeypot: hidden from people (off-screen + aria-hidden + not tabbable), tempting to naive
+                bots that fill every input. A genuine submission leaves it blank. }}
+            <div aria-hidden="true" style="position:absolute; left:-9999px; top:-9999px; width:1px; height:1px; overflow:hidden;">
+                <label for="registerHomepage">Leave this field blank</label>
+                <input type="text" id="registerHomepage" name="homepage" tabindex="-1" autocomplete="off">
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="registerUsername">Username</label>
+                <input class="form-control" type="text" id="registerUsername" name="username" value="{{username}}" required autofocus maxlength="100">
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="registerEmail">Email address</label>
+                <input class="form-control" type="email" id="registerEmail" name="email" value="{{email}}" required maxlength="255">
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="registerPassword">Password</label>
+                <input class="form-control" type="password" id="registerPassword" name="password" minlength="5" maxlength="72" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="registerConfirm">Confirm password</label>
+                <input class="form-control" type="password" id="registerConfirm" name="confirm" minlength="5" maxlength="72" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Create account</button>
+            <a href="/login" class="btn btn-link">Back to sign in</a>
+        </form>
+    {{/sent}}
+    {{/disabled}}
+    </div>
+</main>
+</div>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Locale | Admin</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Locale</h1>
+    {{#saved}}<div class="alert alert-success" role="alert">Settings saved.</div>{{/saved}}
+    <form method="post" action="/a/settings/locale" class="edit-form">
+        {{{csrfField}}}
+        <h2>Content locales</h2>
+        <div class="mb-3">
+            <div class="border rounded p-2" style="max-height:16rem;overflow-y:auto;column-width:13rem;">
+                {{#localeChecklist}}
+                <div class="form-check" style="break-inside:avoid;">
+                    <input class="form-check-input" type="checkbox" name="siteLocales" value="{{code}}" id="loc-{{code}}" data-pages="{{pageCount}}" data-assets="{{assetCount}}" {{#checked}}checked{{/checked}} {{#isDefault}}disabled{{/isDefault}}>
+                    <label class="form-check-label" for="loc-{{code}}">{{name}} <span class="text-secondary">({{code}})</span>{{#isDefault}} <span class="badge text-bg-secondary">default</span>{{/isDefault}}</label>
+                </div>
+                {{/localeChecklist}}
+            </div>
+            <p class="form-text">Tick the locales enabled for content, in addition to the default locale <code>{{defaultLocaleValue}}</code> (always on). These populate the locale dropdowns when creating, moving, or uploading.</p>
+        </div>
+
+        <h2>URL scheme</h2>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="localeForcePrefix" value="1" id="localeForcePrefix" {{#localeForcePrefix}}checked{{/localeForcePrefix}}>
+            <label class="form-check-label" for="localeForcePrefix">Force locale prefix</label>
+        </div>
+        <p class="form-text">When on, a path without a locale prefix redirects to the primary locale — <code>/home</code> → <code>/{{defaultLocaleValue}}/home</code>. When off (the default), the locale is inferred from the primary locale but the URL is served as-is, so <code>/home</code> stays <code>/home</code>.</p>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+{{>partials/admin-shell-end.hbs}}
+
+{{! Shown before saving when the admin unticks a locale that still has pages/assets. }}
+<div class="modal fade" id="localeRemovalModal" tabindex="-1" aria-labelledby="localeRemovalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="localeRemovalTitle"><i class="mdi mdi-alert-outline text-warning" aria-hidden="true"></i> Remove content locale?</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="localeRemovalBody"></div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-warning" id="localeRemovalConfirm">Proceed</button>
+        </div>
+    </div>
+    </div>
+</div>
+<script>
+(function () {
+  // Disabling a content locale never deletes anything, but pages/assets at that locale become hard to
+  // find. Before saving, if any locale is being un-ticked while it still has content, confirm first.
+  var form = document.querySelector('form[action="/a/settings/locale"]');
+  var modalEl = document.getElementById('localeRemovalModal');
+  var body = document.getElementById('localeRemovalBody');
+  var confirmBtn = document.getElementById('localeRemovalConfirm');
+  if (!form || !modalEl || !body || !confirmBtn || !window.bootstrap) return;
+  var modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+  var confirmed = false;
+
+  function removalsWithContent() {
+    var out = [];
+    form.querySelectorAll('input[name="siteLocales"]').forEach(function (cb) {
+      // defaultChecked = the enabled state at page load; un-ticking it now means "remove".
+      if (!cb.defaultChecked || cb.checked) return;
+      var pages = parseInt(cb.getAttribute('data-pages') || '0', 10);
+      var assets = parseInt(cb.getAttribute('data-assets') || '0', 10);
+      if (pages + assets > 0) out.push({ code: cb.value, pages: pages, assets: assets });
+    });
+    return out;
+  }
+
+  form.addEventListener('submit', function (e) {
+    if (confirmed) return;
+    var removals = removalsWithContent();
+    if (!removals.length) return;
+    e.preventDefault();
+    body.innerHTML = '';
+    removals.forEach(function (r) {
+      var p = document.createElement('p');
+      p.textContent = 'Locale ' + r.code + ' selected for removal contains ' + r.pages +
+        ' pages and ' + r.assets + ' assets. These items will remain live but will be difficult to find.';
+      body.appendChild(p);
+    });
+    var confirmP = document.createElement('p');
+    confirmP.className = 'mb-0 fw-semibold';
+    confirmP.textContent = 'Confirm that you wish to proceed.';
+    body.appendChild(confirmP);
+    modal.show();
+  });
+
+  confirmBtn.addEventListener('click', function () {
+    confirmed = true;
+    modal.hide();
+    form.requestSubmit();
+  });
+})();
+</script>
+{{{bodyHtml}}}</body>
+</html>

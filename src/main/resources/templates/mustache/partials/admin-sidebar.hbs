@@ -1,0 +1,84 @@
+{{! Administration console left nav. Grouped and permission-gated; the active item is flagged by the
+    page model (nav_<section> booleans from adminBaseModel, derived from the request path). On small
+    screens a toggle button reveals it as a drawer (mirrors the wiki sidebar). }}
+<button type="button" class="admin-nav-toggle" id="adminNavToggle" aria-controls="adminSidebar" aria-expanded="false"><i class="mdi mdi-menu" aria-hidden="true"></i> Admin menu</button>
+<aside class="admin-sidebar" id="adminSidebar">
+    {{#showSiteSwitcher}}
+    <div class="admin-site-switcher dropdown">
+        <button class="admin-site-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Site you're managing">
+            <i class="mdi mdi-web" aria-hidden="true"></i> <span class="admin-site-label">{{managedSiteName}}</span>
+        </button>
+        <ul class="dropdown-menu">
+            <li><h6 class="dropdown-header">Managing site</h6></li>
+            {{#switcherSites}}
+            <li><form method="post" action="/a/sites/select" class="m-0">{{{csrfField}}}<input type="hidden" name="siteId" value="{{id}}"><input type="hidden" name="return" value="{{switcherReturn}}"><button type="submit" class="dropdown-item{{#current}} active{{/current}}">{{name}}{{#current}} <i class="mdi mdi-check" aria-hidden="true"></i>{{/current}}</button></form></li>
+            {{/switcherSites}}
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/a/sites"><i class="mdi mdi-cog-outline" aria-hidden="true"></i> Manage sites…</a></li>
+        </ul>
+    </div>
+    {{/showSiteSwitcher}}
+    <nav>
+        {{#navSecDashboard}}<a class="admin-nav-link{{#nav_dashboard}} active{{/nav_dashboard}}" href="/a"><i class="mdi mdi-view-dashboard-outline" aria-hidden="true"></i> Dashboard</a>{{/navSecDashboard}}
+
+        {{#navShowSite}}
+        <p class="admin-nav-heading">Site</p>
+        {{#navSecSite}}
+        <a class="admin-nav-link{{#nav_general}} active{{/nav_general}}" href="/a/settings"><i class="mdi mdi-tune" aria-hidden="true"></i> General</a>
+        <a class="admin-nav-link{{#nav_appearance}} active{{/nav_appearance}}" href="/a/settings/appearance"><i class="mdi mdi-palette-outline" aria-hidden="true"></i> Appearance</a>
+        <a class="admin-nav-link{{#nav_locale}} active{{/nav_locale}}" href="/a/settings/locale"><i class="mdi mdi-translate" aria-hidden="true"></i> Locale</a>
+        <a class="admin-nav-link{{#nav_rendering}} active{{/nav_rendering}}" href="/a/settings/rendering"><i class="mdi mdi-code-tags" aria-hidden="true"></i> Rendering</a>
+        {{/navSecSite}}
+        {{#navSecNav}}<a class="admin-nav-link{{#nav_navigation}} active{{/nav_navigation}}" href="/a/navigation"><i class="mdi mdi-navigation-variant-outline" aria-hidden="true"></i> Navigation</a>{{/navSecNav}}
+        {{/navShowSite}}
+
+        {{#navSecContent}}
+        <p class="admin-nav-heading">Content</p>
+        <a class="admin-nav-link{{#nav_pages}} active{{/nav_pages}}" href="/a/pages"><i class="mdi mdi-file-document-outline" aria-hidden="true"></i> Pages</a>
+        <a class="admin-nav-link{{#nav_fragments}} active{{/nav_fragments}}" href="/a/fragments"><i class="mdi mdi-puzzle-outline" aria-hidden="true"></i> Fragments</a>
+        <a class="admin-nav-link{{#nav_infoboxes}} active{{/nav_infoboxes}}" href="/a/infoboxes"><i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Infoboxes</a>
+        {{/navSecContent}}
+
+        {{#navSecAuth}}
+        <p class="admin-nav-heading">Authentication</p>
+        {{#navSecUsers}}<a class="admin-nav-link{{#nav_users}} active{{/nav_users}}" href="/a/users"><i class="mdi mdi-account-outline" aria-hidden="true"></i> Users</a>{{/navSecUsers}}
+        {{#navSecGroups}}<a class="admin-nav-link{{#nav_groups}} active{{/nav_groups}}" href="/a/groups"><i class="mdi mdi-account-group-outline" aria-hidden="true"></i> Groups</a>{{/navSecGroups}}
+        {{#navSecUsers}}<a class="admin-nav-link{{#nav_apikeys}} active{{/nav_apikeys}}" href="/a/api-keys"><i class="mdi mdi-key-variant" aria-hidden="true"></i> API keys</a>{{/navSecUsers}}
+        {{#navSecGroups}}<a class="admin-nav-link{{#nav_registration}} active{{/nav_registration}}" href="/a/registration"><i class="mdi mdi-account-plus-outline" aria-hidden="true"></i> Registration</a>{{/navSecGroups}}
+        {{/navSecAuth}}
+
+        {{#navSecSite}}
+        <p class="admin-nav-heading">System</p>
+        <a class="admin-nav-link{{#nav_sites}} active{{/nav_sites}}" href="/a/sites"><i class="mdi mdi-sitemap-outline" aria-hidden="true"></i> Sites</a>
+        <a class="admin-nav-link{{#nav_storage}} active{{/nav_storage}}" href="/a/storage"><i class="mdi mdi-database-outline" aria-hidden="true"></i> Storage and backup</a>
+        <a class="admin-nav-link{{#nav_security}} active{{/nav_security}}" href="/a/security"><i class="mdi mdi-shield-lock-outline" aria-hidden="true"></i> Security</a>
+        <a class="admin-nav-link{{#nav_mail}} active{{/nav_mail}}" href="/a/mail"><i class="mdi mdi-email-outline" aria-hidden="true"></i> Mail</a>
+        {{/navSecSite}}
+    </nav>
+</aside>
+<script>
+(function () {
+  var t = document.getElementById('adminNavToggle');
+  var s = document.getElementById('adminSidebar');
+  if (!t || !s) return;
+  t.addEventListener('click', function () {
+    var open = s.classList.toggle('is-open');
+    t.setAttribute('aria-expanded', String(open));
+  });
+})();
+// Unsaved-changes guard: if an admin edit form has been touched, warn before navigating away —
+// including switching sites, which discards the edits and re-renders for the newly-managed site.
+(function () {
+  var dirty = false;
+  function inEditForm(el) { return el && el.closest && el.closest('.admin-main form.edit-form'); }
+  document.addEventListener('input', function (e) { if (inEditForm(e.target)) dirty = true; }, true);
+  document.addEventListener('change', function (e) { if (inEditForm(e.target)) dirty = true; }, true);
+  // Submitting the edit form is a save — those changes are no longer "unsaved".
+  document.addEventListener('submit', function (e) {
+    if (e.target && e.target.matches && e.target.matches('.admin-main form.edit-form')) dirty = false;
+  }, true);
+  window.addEventListener('beforeunload', function (e) {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>

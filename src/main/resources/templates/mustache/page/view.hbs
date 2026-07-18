@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}} | {{siteName}}</title>
+    {{#hasMetaDescription}}<meta name="description" content="{{metaDescription}}">{{/hasMetaDescription}}
+    <meta name="robots" content="{{metaRobots}}">
+    {{>partials/head-deps.hbs}}
+    <link rel="stylesheet" href="/static/vendor/highlight/github.min.css">
+    {{>partials/head-styles.hbs}}
+    {{! Per-page custom code (Page Info → Custom Code), injected on view only. Set exclusively by users
+        with manage:theme and stored unsanitized: CSS is wrapped in a <style> tag here; JS is emitted
+        verbatim (the author supplied their own <script> tags). Triple-stache = raw, not HTML-escaped. }}
+    {{#pageCustomCss}}<style>{{{pageCustomCss}}}</style>{{/pageCustomCss}}
+    {{#pageCustomJs}}{{{pageCustomJs}}}{{/pageCustomJs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+{{! Breadcrumb band: a full-width gray strip under the header, hidden on the home
+    page. Its inner .container mirrors .wiki-layout's centering/offset so the crumbs align with the
+    article's left edge. }}
+{{#showBreadcrumbs}}
+<nav class="wk-crumbbar" aria-label="breadcrumb">
+    <div class="container">
+        <ol class="breadcrumb">
+            {{#breadcrumbs}}
+            <li class="breadcrumb-item{{#isCurrent}} active{{/isCurrent}}"{{#isCurrent}} aria-current="page"{{/isCurrent}}>{{#isHome}}<a href="{{url}}" aria-label="Home" title="Home"><i class="mdi mdi-home" aria-hidden="true"></i></a>{{/isHome}}{{^isHome}}{{#isCurrent}}{{label}}{{/isCurrent}}{{^isCurrent}}{{#hasUrl}}<a href="{{url}}">{{label}}</a>{{/hasUrl}}{{^hasUrl}}{{label}}{{/hasUrl}}{{/isCurrent}}{{/isHome}}</li>
+            {{/breadcrumbs}}
+        </ol>
+    </div>
+</nav>
+{{/showBreadcrumbs}}
+<div class="container wiki-layout">
+    {{>partials/sidebar.hbs}}
+    <main class="wiki-main page-view">
+        {{^published}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-eye-off-outline" aria-hidden="true"></i>DRAFT: Page is not published</div>{{/published}}
+        {{#previewingStaged}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-eye-check-outline" aria-hidden="true"></i> Previewing staged version. <a href="{{viewUrl}}" class="alert-link">Switch to live view.</a></div>{{/previewingStaged}}
+        {{#canEdit}}{{#hasStaged}}{{^previewingStaged}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-edit-outline" aria-hidden="true"></i> A staged update {{#stagedScheduled}}is scheduled for {{stagedScheduledAt}}{{/stagedScheduled}}{{^stagedScheduled}}is saved (no schedule){{/stagedScheduled}} — <a href="{{stagedPreviewUrl}}" class="alert-link">Preview</a> · <a href="{{editUrl}}" class="alert-link">Edit</a></div>{{/previewingStaged}}{{/hasStaged}}{{/canEdit}}
+        {{! Name is set off with colon rather than run into "a/an <name> infobox", which reads
+            awkwardly and can wrap oddly for longer names — same reasoning as the editor's General tab. }}
+        {{! The sentence is wrapped in one <span> (not left as loose text + <strong> + <a> siblings) so it's
+            a SINGLE flex item next to the icon — otherwise Bootstrap's flex "gap-2" inserts its gap between
+            EVERY direct child of the flex container, including between "Integration" and the following
+            period and between "Add it" and its period, showing as unwanted extra spaces before both. }}
+        {{#infoboxMissing}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-card-text-outline" aria-hidden="true"></i><span>This page is specified for but missing {{infoboxMissingNoun}}: <strong>{{infoboxMissingNames}}</strong>. <a href="{{editUrl}}" class="alert-link">Add {{infoboxMissingPronoun}}</a>.</span></div>{{/infoboxMissing}}
+        <article class="wiki-content">
+            <header>
+            <h1>{{title}}</h1>
+            {{#hasDescription}}<p>{{description}}</p>{{/hasDescription}}
+            </header>
+            {{! Infobox: on desktop each card floats to the right edge of the article and the body text
+                wraps around it (Wikipedia-style), stacking if the page has more than one; on compact
+                screens each is a full-width block here at the top, under the TOC (relocated just above
+                by the script). infoboxHtml already carries its own complete <aside> wrapper(s) — see
+                InfoboxService.renderOneCard — so this is a direct passthrough, not wrapped again here. }}
+            {{#hasInfobox}}{{{infoboxHtml}}}{{/hasInfobox}}
+            {{{htmlContent}}}
+        </article>
+    </main>
+    <aside class="page-aside {{asideClass}}">
+        {{#tocEnabled}}
+        {{! On compact screens the JS below moves this card under the page title and the title row
+            becomes a collapse toggle (collapsed by default); on desktop it stays here, expanded,
+            and the toggle is inert (CSS always shows the list). }}
+        <nav class="page-toc page-card" id="pageToc" aria-label="Table of contents" hidden>
+            <button type="button" class="page-toc-toggle" id="pageTocToggle" aria-expanded="false" aria-controls="pageTocList">
+                <span class="page-toc-title">On This Page</span>
+                <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
+            </button>
+            <ul class="page-toc-list" id="pageTocList"></ul>
+        </nav>
+        {{/tocEnabled}}
+        {{#hasTags}}
+        <div class="page-card">
+            <p class="page-toc-title">Tags</p>
+            <div class="d-flex flex-wrap gap-2">
+                {{#tags}}<a class="badge rounded-pill text-bg-light border text-decoration-none" href="{{url}}"><i class="mdi mdi-tag-outline" aria-hidden="true"></i> {{name}}</a>{{/tags}}
+            </div>
+        </div>
+        {{/hasTags}}
+        <div class="page-meta-box page-card">
+            <p class="page-toc-title">Page details</p>
+            <p class="page-meta-row"><span class="page-meta-label">Last modified by</span> {{#hasUpdatedBy}}{{updatedByName}}{{/hasUpdatedBy}}{{^hasUpdatedBy}}—{{/hasUpdatedBy}}</p>
+            <p class="page-meta-row"><span class="page-meta-label">Last modified on</span> {{updatedAt}}</p>
+            {{#canViewHistory}}<p class="page-meta-row"><a href="{{historyUrl}}"><i class="mdi mdi-history" aria-hidden="true"></i> View history</a></p>{{/canViewHistory}}
+        </div>
+        <div class="page-card">
+            <div class="d-flex justify-content-center gap-2">
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="mdi mdi-share-variant" aria-hidden="true"></i> Share</button>
+                    <ul class="dropdown-menu">
+                        <li><button type="button" class="dropdown-item" id="shareCopyUrl"><i class="mdi mdi-link-variant" aria-hidden="true"></i> Copy URL</button></li>
+                        <li><a class="dropdown-item" id="shareEmail" href="mailto:"><i class="mdi mdi-email-outline" aria-hidden="true"></i> E-mail</a></li>
+                    </ul>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="printPage" title="Print"><i class="mdi mdi-printer" aria-hidden="true"></i><span class="visually-hidden">Print</span></button>
+            </div>
+        </div>
+    </aside>
+</div>
+
+{{#canEdit}}
+{{! Page actions → Convert. Markdown→HTML renders the stored content through the pipeline and re-saves
+    as HTML (server-side). HTML→Markdown isn't supported (no html-to-markdown lib), so we just explain. }}
+<div class="modal fade" id="convertPageModal" tabindex="-1" aria-labelledby="convertPageTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="convertPageTitle"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Convert format</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        {{#isMarkdown}}
+        <form method="post" action="{{editUrl}}">
+            {{{csrfField}}}
+            <input type="hidden" name="convertFormat" value="HTML">
+            <div class="modal-body">
+                <p>This page is written in <strong>Markdown</strong>. Convert it to <strong>HTML</strong>?</p>
+                <p class="text-secondary mb-0">The Markdown is rendered to HTML once and the page is saved as HTML (a revision is kept). This can’t be automatically reversed.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-primary"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Convert to HTML</button>
+            </div>
+        </form>
+        {{/isMarkdown}}
+        {{^isMarkdown}}
+        <div class="modal-body">
+            <p>This page is written in <strong>HTML</strong>. Converting HTML back to <strong>Markdown</strong> isn’t supported yet.</p>
+            <p class="text-secondary mb-0">Your content is left unchanged. To move to Markdown, re-create the page content in Markdown by hand, then it will round-trip cleanly.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+        {{/isMarkdown}}
+    </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deletePageModal" tabindex="-1" aria-labelledby="deletePageTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+    <form method="post" action="{{editUrl}}">
+        {{{csrfField}}}
+        <input type="hidden" name="deletePage" value="1">
+        <div class="modal-header">
+            <h5 class="modal-title text-danger" id="deletePageTitle"><i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> Delete page</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+            <p>Permanently delete <strong>{{title}}</strong> at <code>{{locale}}/{{pagePath}}</code>?</p>
+            <p class="text-secondary mb-0">This removes the page and its full revision history, with no redirect left behind. This cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger"><i class="mdi mdi-trash-can-outline" aria-hidden="true"></i> Delete permanently</button>
+        </div>
+    </form>
+    </div>
+    </div>
+</div>
+{{/canEdit}}
+
+{{>partials/footer.hbs}}
+{{#tocEnabled}}
+<script>
+(function () {
+  var toc = document.getElementById('pageToc');
+  var content = document.querySelector('.wiki-content');
+  if (!toc || !content) return;
+  var list = toc.querySelector('.page-toc-list');
+  var used = Object.create(null);
+  var count = 0;
+  // Heading anchor slugs follow Wiki.js (uslug): keep letters/numbers/marks and - _ ~, turn
+  // separators into spaces, and DROP every other punctuation mark (so "can't" -> "cant", not
+  // "can-t"). Then collapse runs of space/hyphen to a single hyphen and lower-case. Unicode
+  // property escapes stand in for uslug's code-point tables, so non-ASCII headings slug sanely too.
+  function slugify(text) {
+    var s = text;
+    try { s = s.normalize('NFKC'); } catch (e) { /* old engines: skip normalization */ }
+    s = s
+      .replace(/\p{Z}/gu, ' ')                  // unicode separators -> space
+      .replace(/[^\p{L}\p{N}\p{M}\s\-_~]/gu, '') // drop punctuation/symbols (apostrophes, commas, ...)
+      .replace(/^\s+|\s+$/g, '')                 // trim
+      .replace(/[\s\-]+/g, '-')                  // collapse space/hyphen runs to one hyphen
+      .toLowerCase();
+    // CSS ids can't start with a digit; Wiki.js prefixes such slugs with "h-".
+    if (/^[0-9]/.test(s)) s = 'h-' + s;
+    return s || 'section';
+  }
+  // Headings are demoted one level on render (the page title is the sole h1), so the content's top
+  // two levels are h2/h3. Scanning these also excludes the title h1 from the table of contents.
+  content.querySelectorAll('h2, h3').forEach(function (h) {
+    var text = (h.textContent || '').trim();
+    if (!text) return;
+    var id = h.id;
+    if (!id) {
+      var base = slugify(text);
+      id = base;
+      while (used[id] || document.getElementById(id)) { id = base + '-' + (used[base] = (used[base] || 1) + 1); }
+      h.id = id;
+    }
+    used[id] = (used[id] || 0) + 1;
+    var li = document.createElement('li');
+    li.className = 'toc-' + h.tagName.toLowerCase();
+    var a = document.createElement('a');
+    a.href = '#' + id;
+    a.textContent = text;
+    li.appendChild(a);
+    list.appendChild(li);
+    count++;
+  });
+  if (count > 0) toc.hidden = false;
+
+  // Collapse toggle — only interactive on compact screens (CSS makes it inert on desktop, where
+  // the list is always shown).
+  var toggleBtn = document.getElementById('pageTocToggle');
+  toggleBtn.addEventListener('click', function () {
+    var open = toc.classList.toggle('is-open');
+    toggleBtn.setAttribute('aria-expanded', String(open));
+  });
+
+  // Compact screens: move the TOC under the page title (it reads as part of the article there);
+  // desktop: back to the top of the side column. Collapse state resets to the breakpoint default
+  // (mobile collapsed, desktop expanded).
+  var aside = document.querySelector('.page-aside');
+  var articleHeader = document.querySelector('.wiki-content > header');
+  // Below 1200px — NOT the 768px single-column point — because with the side column in the row,
+  // mid-width screens squeezed the article between the nav and the TOC. Must match the CSS blocks.
+  var mq = window.matchMedia('(max-width: 1199.98px)');
+  function place() {
+    var compact = mq.matches && articleHeader;
+    if (compact) articleHeader.after(toc);
+    else aside.insertBefore(toc, aside.firstChild);
+    toc.classList.toggle('is-open', !compact);
+    toggleBtn.setAttribute('aria-expanded', String(!compact));
+  }
+  if (mq.addEventListener) mq.addEventListener('change', place); else mq.addListener(place);
+  place();
+})();
+</script>
+{{/tocEnabled}}
+<script>
+(function () {
+  // Share box: e-mail (mailto with the page title + URL), copy-to-clipboard, and print.
+  var url = window.location.href;
+  var emailLink = document.getElementById('shareEmail');
+  if (emailLink) {
+    emailLink.href = 'mailto:?subject=' + encodeURIComponent(document.title) +
+      '&body=' + encodeURIComponent(url);
+  }
+  var copyBtn = document.getElementById('shareCopyUrl');
+  if (copyBtn) {
+    var flash = function () {
+      var orig = copyBtn.innerHTML;
+      copyBtn.innerHTML = '<i class="mdi mdi-check"></i> Copied!';
+      setTimeout(function () { copyBtn.innerHTML = orig; }, 1500);
+    };
+    var fallbackCopy = function () {
+      var ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand('copy'); flash(); } catch (e) { /* no-op */ }
+      document.body.removeChild(ta);
+    };
+    copyBtn.addEventListener('click', function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(flash, fallbackCopy);
+      } else { fallbackCopy(); }
+    });
+  }
+  var printBtn = document.getElementById('printPage');
+  if (printBtn) printBtn.addEventListener('click', function () { window.print(); });
+})();
+</script>
+<script src="/static/vendor/highlight/highlight.min.js"></script>
+<script src="/static/vendor/highlight/groovy.min.js"></script>
+<script>if (window.hljs) hljs.highlightAll();</script>
+<script src="/static/code-copy.js"></script>
+{{{bodyHtml}}}</body>
+</html>

@@ -1,0 +1,19 @@
+# Local development PostgreSQL only (the app itself runs via `./gradlew runPostgres`).
+# Started by `./gradlew databaseInstance` (docker compose up -d).
+# The full production stack (app + PostgreSQL + Caddy HTTPS) is docker-compose.prod.yml.
+# This file is used by Gradle Tasks or IDE and is unlikely to be what you are looking for as a human.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: wikikt
+      POSTGRES_USER: wikikt
+      POSTGRES_PASSWORD: wikikt
+    ports:
+      - "5432:5432"
+    volumes:
+      # PG18+ stores data in a version subdir: mount the parent, not /var/lib/postgresql/data.
+      - wikikt_pgdata:/var/lib/postgresql
+
+volumes:
+  wikikt_pgdata:
