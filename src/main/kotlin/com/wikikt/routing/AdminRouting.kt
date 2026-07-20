@@ -214,6 +214,8 @@ fun Route.configureAdminRouting() {
             ctx.settings.set(siteId, s.SITE_BRAND_COLOR, if (color.matches(HEX_COLOR)) color else "")
             val headerColor = params["siteHeaderColor"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_HEADER_COLOR, if (headerColor.matches(HEX_COLOR)) headerColor else "")
+            val headerColorDark = params["siteHeaderColorDark"].orEmpty().trim()
+            ctx.settings.set(siteId, s.SITE_HEADER_COLOR_DARK, if (headerColorDark.matches(HEX_COLOR)) headerColorDark else "")
             val sidebarColor = params["siteSidebarColor"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_SIDEBAR_COLOR, if (sidebarColor.matches(HEX_COLOR)) sidebarColor else "")
             val sidebarColorDark = params["siteSidebarColorDark"].orEmpty().trim()
@@ -421,6 +423,23 @@ fun Route.configureAdminRouting() {
             ctx.settings.set(siteId, s.HISTORY_MAX_PAGE_REVISIONS, pageLimit.toString())
             ctx.settings.set(siteId, s.HISTORY_MAX_ASSET_REVISIONS, assetLimit.toString())
             call.respond(MustacheContent("admin/storage.hbs", call.storageModel(historySaved = true)))
+        }
+
+        // Per-site max files per upload (governs the /f form and the editor's picker upload).
+        post("/storage/uploads") {
+            if (!call.requireManageGroups()) {
+                call.respondForbidden()
+                return@post
+            }
+            val params = call.receiveParameters()
+            if (!call.validateFormCsrf(params)) return@post
+            val siteId = call.adminSiteId()
+            val ctx = call.appContext
+            val s = com.wikikt.service.SettingsService
+            val limit = (params["maxUploadFiles"]?.trim()?.toIntOrNull() ?: ctx.config.assets.maxFilesPerUpload)
+                .coerceIn(1, s.MAX_UPLOAD_FILE_LIMIT)
+            ctx.settings.set(siteId, s.ASSETS_MAX_FILES_PER_UPLOAD, limit.toString())
+            call.respond(MustacheContent("admin/storage.hbs", call.storageModel(uploadsSaved = true)))
         }
 
         // One-time purge of content history older than a chosen age (or all of it). Live pages/assets
@@ -2034,7 +2053,7 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
     val currentTocSide = settings.get(siteId, s.SITE_TOC_SIDE)?.ifBlank { null } ?: s.DEFAULT_TOC_SIDE
     val tocSideOptions = s.TOC_SIDE_OPTIONS.map { mapOf("value" to it, "label" to tocSideLabels[it], "selected" to (it == currentTocSide)) }
     // Theme: site default color mode.
-    val themeLabels = mapOf("light" to "Light", "dark" to "Dark", "auto" to "Auto (match visitor's device)")
+    val themeLabels = mapOf("light" to "Light", "dark" to "Dark", "auto" to "Auto (match user's device)")
     val currentTheme = settings.get(siteId, s.APPEARANCE_THEME)?.ifBlank { null } ?: s.DEFAULT_THEME
     val themeOptions = s.THEME_OPTIONS.map { mapOf("value" to it, "label" to themeLabels[it], "selected" to (it == currentTheme)) }
     // Typography: body/heading font preset selects (+ whether the current pick is "custom").
@@ -2094,6 +2113,7 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         },
         "siteBrandColorValue" to settings.get(siteId, s.SITE_BRAND_COLOR).orEmpty(),
         "siteHeaderColorValue" to settings.get(siteId, s.SITE_HEADER_COLOR).orEmpty(),
+        "siteHeaderColorDarkValue" to settings.get(siteId, s.SITE_HEADER_COLOR_DARK).orEmpty(),
         "siteSidebarColorValue" to settings.get(siteId, s.SITE_SIDEBAR_COLOR).orEmpty(),
         "siteSidebarColorDarkValue" to settings.get(siteId, s.SITE_SIDEBAR_COLOR_DARK).orEmpty(),
         "siteHeadingLineColorValue" to settings.get(siteId, s.SITE_HEADING_LINE_COLOR).orEmpty(),
@@ -2226,11 +2246,17 @@ internal suspend fun io.ktor.server.application.ApplicationCall.storageModel(
     restored: String? = null,
     error: String? = null,
     historySaved: Boolean = false,
+    uploadsSaved: Boolean = false,
     purgeMessage: String? = null,
 ): Map<String, Any?> {
     val siteId = adminSiteId()
     val s = com.wikikt.service.SettingsService
     val settings = appContext.settings
+    // Max files per upload: current effective value + the preset dropdown (config default and any custom
+    // stored value are merged in so the current selection is always present, even if off the preset list).
+    val maxUploadFiles = settings.uploadFileLimit(siteId, appContext.config.assets.maxFilesPerUpload)
+    val uploadFileOptions = (s.UPLOAD_FILE_LIMIT_OPTIONS + appContext.config.assets.maxFilesPerUpload + maxUploadFiles)
+        .distinct().sorted().map { mapOf("value" to it, "selected" to (it == maxUploadFiles)) }
     return gitSyncModel(saved) + mapOf(
         "restored" to restored,
         "error" to error,
@@ -2238,9 +2264,12 @@ internal suspend fun io.ktor.server.application.ApplicationCall.storageModel(
         // those controls from a delegated manage:groups admin (the server enforces it regardless).
         "isRoot" to appContext.permissions.isRoot(currentUserId()),
         "historySaved" to historySaved,
+        "uploadsSaved" to uploadsSaved,
         "purgeMessage" to purgeMessage,
         "maxPageRevisions" to settings.getHistoryLimit(siteId, s.HISTORY_MAX_PAGE_REVISIONS, s.DEFAULT_MAX_PAGE_REVISIONS),
         "maxAssetRevisions" to settings.getHistoryLimit(siteId, s.HISTORY_MAX_ASSET_REVISIONS, appContext.config.assets.maxAssetVersions),
+        "maxUploadFiles" to maxUploadFiles,
+        "uploadFileOptions" to uploadFileOptions,
     )
 }
 

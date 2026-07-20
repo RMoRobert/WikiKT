@@ -19,6 +19,7 @@
     {{#restored}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> {{restored}}</div>{{/restored}}
     {{#error}}<div class="alert alert-danger" role="alert"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i> {{error}}</div>{{/error}}
     {{#historySaved}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> History retention saved.</div>{{/historySaved}}
+    {{#uploadsSaved}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i> Upload settings saved.</div>{{/uploadsSaved}}
     {{#purgeMessage}}<div class="alert alert-success" role="alert"><i class="mdi mdi-broom" aria-hidden="true"></i> {{purgeMessage}}</div>{{/purgeMessage}}
 
     <h2><i class="mdi mdi-git" aria-hidden="true"></i> Git sync</h2>
@@ -163,6 +164,23 @@
             </div>
             <button type="submit" class="btn btn-outline-danger"><i class="mdi mdi-broom" aria-hidden="true"></i> Purge history</button>
         </div>
+    </form>
+
+    <hr class="my-4">
+
+    <h2><i class="mdi mdi-tray-arrow-up" aria-hidden="true"></i> Uploads</h2>
+    <p class="text-secondary">The most files that can be sent in a single upload — this applies both to the
+        asset manager's upload box and to the editor's multi-file <em>Upload</em>. Individual file size and
+        allowed types are set in server configuration.</p>
+    <form method="post" action="/a/storage/uploads" class="edit-form">
+        {{{csrfField}}}
+        <div style="max-width:20rem">
+            <label class="form-label" for="maxUploadFiles">Maximum files per upload</label>
+            <select class="form-select" id="maxUploadFiles" name="maxUploadFiles">
+                {{#uploadFileOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{value}}</option>{{/uploadFileOptions}}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary mt-3"><i class="mdi mdi-content-save-outline" aria-hidden="true"></i> Save upload settings</button>
     </form>
 
     <hr class="my-4">

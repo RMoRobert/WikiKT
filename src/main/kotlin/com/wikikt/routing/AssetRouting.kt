@@ -82,6 +82,17 @@ fun Route.configureAssetRouting() {
             call.handleAssetUpload()
         }
 
+        // Cleanup aid (linked from the manager's Tools section): every asset, in every folder, that no
+        // page or fragment links and that isn't the site logo/favicon. A constant path segment, so Ktor
+        // matches it ahead of the "/{id}" detail route below.
+        get("/unused") {
+            if (!call.canUploadAssetsHere()) {
+                call.respondForbidden()
+                return@get
+            }
+            call.respond(MustacheContent("assets/unused.hbs", call.unusedAssetsModel()))
+        }
+
         get("/{id}") {
             val asset = call.manageableAsset() ?: return@get
             call.respond(MustacheContent("assets/detail.hbs", call.assetDetailModel(asset)))
@@ -123,6 +134,32 @@ fun Route.configureAssetRouting() {
             if (!call.validateFormCsrf(call.receiveParameters())) return@post
             call.appContext.assets.discardPending(asset.id)
             call.respondRedirect("/f/${asset.id}")
+        }
+
+        // Serves an archived revision's bytes inline — opened by the History tab's "View" (new tab).
+        // Gated by manage:assets on the asset's own site/path (via manageableAsset), like every /f action.
+        get("/{id}/revision/{revId}") {
+            val asset = call.manageableAsset() ?: return@get
+            val revId = call.parameters["revId"]?.toUIntOrNull() ?: run {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+            // Confirm the revision belongs to THIS asset before serving its bytes (revId is path-scoped).
+            val rev = call.appContext.assets.revisions(asset.id).find { it.id == revId } ?: run {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            val file = call.appContext.assets.revFileForId(revId).toFile()
+            if (!file.exists()) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            call.response.headers.append(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Inline.withParameter(ContentDisposition.Parameters.FileName, rev.originalFilename).toString(),
+            )
+            call.response.headers.append(HttpHeaders.CacheControl, "private, no-cache")
+            call.respond(LocalFileContent(file, contentType = ContentType.parse(rev.mime)))
         }
     }
 }
@@ -171,8 +208,10 @@ private suspend fun ApplicationCall.handleAssetUpload() {
     val ctx = appContext
     val siteId = siteId()
     val cfg = ctx.config.assets
+    // Per-site cap (admin-set, falling back to config); governs both this form and the editor's picker upload.
+    val maxFiles = ctx.settings.uploadFileLimit(siteId, cfg.maxFilesPerUpload)
     val contentLength = request.contentLength()
-    if (contentLength != null && contentLength > cfg.maxFilesPerUpload.toLong() * cfg.maxUploadSizeBytes + 1_048_576L) {
+    if (contentLength != null && contentLength > maxFiles.toLong() * cfg.maxUploadSizeBytes + 1_048_576L) {
         respond(HttpStatusCode.PayloadTooLarge, MustacheContent("error.hbs", errorModel("Upload too large", 413)))
         return
     }
@@ -201,8 +240,8 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                         if (csrfFailed) return@forEachPart
                         fileCount++
                         val original = part.originalFileName?.takeIf { it.isNotBlank() } ?: "file"
-                        if (fileCount > cfg.maxFilesPerUpload) {
-                            errors.add("$original: too many files (max ${cfg.maxFilesPerUpload})")
+                        if (fileCount > maxFiles) {
+                            errors.add("$original: too many files (max $maxFiles)")
                             return@forEachPart
                         }
                         val temp = ctx.assets.newTempFile()
@@ -301,7 +340,7 @@ private suspend fun streamToTemp(channel: ByteReadChannel, temp: Path, maxBytes:
 private suspend fun ApplicationCall.assetListModel(message: String?): Map<String, Any?> {
     val ctx = appContext
     val siteId = siteId()
-    val counts = assetUsageCounts()
+    val usages = assetUsageIndex()
     // The manager gate (canUploadAssetsHere) only proves write:assets somewhere; filter per-asset so a
     // read:assets DENY on a subtree hides those assets' metadata from the list, not just their bytes.
     val assets = ctx.permissions.readableAssets(currentUserId(), siteId, ctx.assets.list(siteId)).map {
@@ -313,7 +352,8 @@ private suspend fun ApplicationCall.assetListModel(message: String?): Map<String
             mime = it.mime,
             sizeBytes = it.sizeBytes,
             createdAt = it.createdAt,
-            usedBy = counts[AssetRef(it.locale, it.path)] ?: 0,
+            updatedAt = it.updatedAt,
+            usedBy = usages[AssetRef(it.locale, it.path)]?.size ?: 0,
             description = it.description.orEmpty(),
         )
     }
@@ -330,7 +370,7 @@ private suspend fun ApplicationCall.assetListModel(message: String?): Map<String
         "message" to message,
         "defaultLocale" to ctx.config.defaultLocale,
         "localeOptions" to localeSelectOptions(ctx.settings.enabledLocales(siteId, ctx.config.defaultLocale), ctx.config.defaultLocale),
-        "maxFiles" to ctx.config.assets.maxFilesPerUpload,
+        "maxFiles" to ctx.settings.uploadFileLimit(siteId, ctx.config.assets.maxFilesPerUpload),
         "maxMb" to ctx.config.assets.maxUploadSizeBytes / 1024 / 1024,
     )
 }
@@ -339,7 +379,8 @@ private suspend fun ApplicationCall.assetDetailModel(asset: AssetRecord, message
     val ctx = appContext
     val formats = displayFormats()
     val url = wikiViewUrl(asset.locale, asset.path)
-    val usages = assetUsages(asset)
+    val usages = assetUsageIndex().usagesFor(asset)
+    val brandingUses = brandingUsageByRef()[AssetRef(asset.locale, asset.path)].orEmpty()
     val pending = ctx.assets.pendingFor(asset.id)
     val revisions = ctx.assets.revisions(asset.id).map {
         mapOf(
@@ -367,10 +408,17 @@ private suspend fun ApplicationCall.assetDetailModel(asset: AssetRecord, message
         "mime" to asset.mime,
         "sizeKb" to (asset.sizeBytes / 1024).coerceAtLeast(1),
         "originalFilename" to asset.originalFilename,
+        // First upload vs. last time the file bytes changed (upload/replace/restore) — shown on the File tab.
+        "uploadedAt" to DateDisplay.format(asset.createdAt, formats),
+        "modifiedAt" to DateDisplay.format(asset.updatedAt, formats),
         "message" to message,
         "usages" to usages,
         "hasUsages" to usages.isNotEmpty(),
         "usageCount" to usages.size,
+        // Branding (logo/favicon) uses of this asset, shown alongside the page/fragment list so an
+        // asset that appears "used" but is referenced by no page is explained.
+        "brandingUses" to brandingUses,
+        "hasBrandingUses" to brandingUses.isNotEmpty(),
         "revisions" to revisions,
         "hasRevisions" to revisions.isNotEmpty(),
         "maxVersions" to ctx.config.assets.maxAssetVersions,
@@ -480,50 +528,156 @@ private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
     respondRedirect("/f/${asset.id}")
 }
 
-/** Pages and fragments that reference [asset] (by its locale+path). */
-private suspend fun ApplicationCall.assetUsages(asset: AssetRecord): List<Map<String, Any?>> {
+/** One place an asset is referenced from. [locale] is blank for site-wide sources (settings, nav). */
+private data class AssetUsage(val type: String, val label: String, val locale: String, val url: String)
+
+/**
+ * Every reference to every asset on this site, keyed by the asset's (locale, path). One index feeds
+ * the manager's "Used by" count, the detail page's usage list, and `/f/unused`, so those three can't
+ * disagree about what "used" means.
+ *
+ * Covers the surfaces WikiKT itself renders content from:
+ *  - page bodies **and infobox values** (infobox fields are Markdown-rendered, so they can embed images)
+ *  - fragments
+ *  - staged (not-yet-published) versions — without these an asset looks unused right up until the
+ *    scheduled publish goes out with a broken image
+ *  - the Markdown footer override
+ *  - navigation item targets (item *icons* are MDI class names, never asset URLs, so they're skipped)
+ *
+ * Deliberately NOT covered, and called out on the /f/unused page: page revision history (counting it
+ * would keep an asset "used" until history rotates out, defeating the point of the tool) and the
+ * admin escape hatches — custom CSS and injected head/body HTML.
+ */
+private suspend fun ApplicationCall.assetUsageIndex(): Map<AssetRef, List<AssetUsage>> {
     val ctx = appContext
     val siteId = siteId()
-    val target = AssetRef(asset.locale, asset.path)
-    val out = mutableListOf<Map<String, Any?>>()
-    for (page in ctx.pages.list(siteId)) {
-        if (target in ctx.assets.referencedAssetPaths(page.content, ctx.config.defaultLocale)) {
-            out.add(
-                mapOf(
-                    "type" to "page",
-                    "label" to page.path,
-                    "locale" to page.locale,
-                    "url" to wikiViewUrl(page.locale, page.path),
-                ),
-            )
+    val default = ctx.config.defaultLocale
+    val out = mutableMapOf<AssetRef, MutableList<AssetUsage>>()
+
+    // Records [usage] against every asset referenced from [content]. A single source can mention the
+    // same asset more than once (body *and* infobox), so it's only counted once per source.
+    fun tally(content: String?, usage: AssetUsage) {
+        if (content.isNullOrBlank()) return
+        for (ref in ctx.assets.referencedAssetPaths(content, default)) {
+            val list = out.getOrPut(ref) { mutableListOf() }
+            if (list.none { it.type == usage.type && it.label == usage.label && it.locale == usage.locale }) {
+                list.add(usage)
+            }
         }
     }
+
+    val pages = ctx.pages.list(siteId)
+    for (page in pages) {
+        val usage = AssetUsage("page", page.path, page.locale, wikiViewUrl(page.locale, page.path))
+        tally(page.content, usage)
+        tally(page.infobox, usage)
+    }
     for (fragment in ctx.fragments.list(siteId)) {
-        if (target in ctx.assets.referencedAssetPaths(fragment.content, ctx.config.defaultLocale)) {
-            out.add(
-                mapOf(
-                    "type" to "fragment",
-                    "label" to fragment.key,
-                    "locale" to fragment.locale,
-                    "url" to "/a/fragments/${fragment.id}/edit",
-                ),
-            )
+        tally(fragment.content, AssetUsage("fragment", fragment.key, fragment.locale, "/a/fragments/${fragment.id}/edit"))
+    }
+    val pagesById = pages.associateBy { it.id }
+    for (staged in ctx.pages.listStaged(pages.map { it.id })) {
+        val page = pagesById[staged.pageId] ?: continue
+        val usage = AssetUsage("scheduled draft", page.path, page.locale, wikiViewUrl(page.locale, page.path))
+        tally(staged.content, usage)
+        tally(staged.infobox, usage)
+    }
+    tally(
+        ctx.settings.get(siteId, com.wikikt.service.SettingsService.SITE_FOOTER_OVERRIDE),
+        AssetUsage("setting", "Footer override", "", "/a/settings"),
+    )
+    // A nav target is a bare URL rather than Markdown, so resolve it directly.
+    for (menu in ctx.nav.listMenus(siteId)) {
+        for (item in ctx.nav.items(menu.id)) {
+            val target = item.target?.takeIf { it.isNotBlank() } ?: continue
+            val ref = ctx.assets.resolveLocalAssetUrl(target, default) ?: continue
+            out.getOrPut(ref) { mutableListOf() }
+                .add(AssetUsage("navigation", item.label, "", "/a/navigation"))
         }
     }
     return out
 }
 
-/** Reference counts per asset (locale+path) across all pages and fragments, for the list view. */
-private suspend fun ApplicationCall.assetUsageCounts(): Map<AssetRef, Int> {
+/** The places referencing [asset], shaped for the detail template. */
+private fun Map<AssetRef, List<AssetUsage>>.usagesFor(asset: AssetRecord): List<Map<String, Any?>> =
+    this[AssetRef(asset.locale, asset.path)].orEmpty().map {
+        mapOf(
+            "type" to it.type,
+            "label" to it.label,
+            "locale" to it.locale,
+            "hasLocale" to it.locale.isNotBlank(),
+            "url" to it.url,
+        )
+    }
+
+/**
+ * Model for `/f/unused`: every asset on this site, across all folders and locales, that nothing in
+ * [assetUsageIndex] references and that isn't the site logo or favicon. Reuses the same index as the
+ * manager's "Used by" column, so "unused here" means exactly "Used by 0, and not branding".
+ *
+ * See [assetUsageIndex] for what is and isn't scanned; the deliberate omissions (revision history,
+ * custom CSS, injected HTML) are why the page carries a "check before deleting" note.
+ */
+private suspend fun ApplicationCall.unusedAssetsModel(): Map<String, Any?> {
     val ctx = appContext
     val siteId = siteId()
-    val counts = mutableMapOf<AssetRef, Int>()
-    fun tally(content: String) {
-        for (ref in ctx.assets.referencedAssetPaths(content, ctx.config.defaultLocale)) {
-            counts[ref] = (counts[ref] ?: 0) + 1
+    val formats = displayFormats()
+    val usages = assetUsageIndex()
+    val branding = brandingUsageByRef()
+    // Same per-asset read filter as the list: a read:assets DENY on a subtree hides those assets here too.
+    val unused = ctx.permissions.readableAssets(currentUserId(), siteId, ctx.assets.list(siteId))
+        .filter { asset ->
+            val ref = AssetRef(asset.locale, asset.path)
+            usages[ref].isNullOrEmpty() && !branding.containsKey(ref)
         }
-    }
-    for (page in ctx.pages.list(siteId)) tally(page.content)
-    for (fragment in ctx.fragments.list(siteId)) tally(fragment.content)
-    return counts
+        .map {
+            mapOf(
+                "id" to it.id.toString(),
+                "locale" to it.locale,
+                "path" to it.path,
+                "url" to wikiViewUrl(it.locale, it.path),
+                "isImage" to it.mime.startsWith("image/"),
+                "mime" to it.mime,
+                "sizeKb" to (it.sizeBytes / 1024).coerceAtLeast(1),
+                "uploadedAt" to DateDisplay.format(it.createdAt, formats),
+                "modifiedAt" to DateDisplay.format(it.updatedAt, formats),
+                // Raw values behind the formatted cells, for click-to-sort: the displayed text sorts
+                // wrong ("10 KB" < "2 KB" as a string, and a localized date isn't lexicographic).
+                "sizeBytes" to it.sizeBytes,
+                "createdAtMillis" to it.createdAt,
+                "updatedAtMillis" to it.updatedAt,
+            )
+        }
+    return adminBaseModel() + mapOf(
+        // Standalone tool like the rest of /f: reachable with only write:assets, so offer the
+        // Administration gear only when this user can actually reach it.
+        "adminArea" to false,
+        "canAdmin" to ctx.permissions.canAccessAdmin(currentUserId()),
+        "unused" to unused,
+        "hasUnused" to unused.isNotEmpty(),
+        "unusedCount" to unused.size,
+    )
 }
+
+/**
+ * Assets (by locale+path) currently selected as the site logo and/or favicon, each mapped to the
+ * label(s) describing how it's used ("Site logo", "Favicon"). Such an asset counts as "used" even
+ * when no page or fragment links it, so it isn't flagged as unused (and its detail page can say why).
+ * The stored setting is a canonical asset URL (blank when it's the bundled default), resolved back to
+ * an [AssetRef] the same way page/fragment references are.
+ */
+private suspend fun ApplicationCall.brandingUsageByRef(): Map<AssetRef, List<String>> {
+    val ctx = appContext
+    val siteId = siteId()
+    val default = ctx.config.defaultLocale
+    val out = mutableMapOf<AssetRef, MutableList<String>>()
+    suspend fun add(key: String, label: String) {
+        val ref = ctx.settings.get(siteId, key)?.ifBlank { null }
+            ?.let { ctx.assets.resolveLocalAssetUrl(it, default) } ?: return
+        out.getOrPut(ref) { mutableListOf() }.add(label)
+    }
+    add(com.wikikt.service.SettingsService.SITE_LOGO_URL, "Site logo")
+    add(com.wikikt.service.SettingsService.SITE_FAVICON_URL, "Favicon")
+    return out
+}
+

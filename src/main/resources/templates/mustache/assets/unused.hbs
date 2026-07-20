@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unused assets | Assets</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<main class="container">
+    <div class="page-meta">
+        <h1><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Unused assets</h1>
+        <a class="btn btn-secondary" href="/f">Back to All Assets</a>
+    </div>
+
+    <p class="text-secondary">
+        Assets below exist but are not linked to from any page or fragment, used as site
+        logo or favicon, or included as part of infobox value, scheduled draft, custom footer,
+        or navigation targets.
+    </p>
+    {{! Keep this list accurate -- it's what an editor relies on before deleting. Navigation *icons* are
+        deliberately absent: they render as MDI class names, never asset URLs, so they can't reference
+        an asset. Revision history is scanned-by-omission on purpose (see assetUsageIndex). }}
+    <div class="alert alert-warning py-2">
+        <i class="mdi mdi-alert-outline" aria-hidden="true"></i>
+        Verify before deleting, in particular for references the built-in scan can't detect: custom CSS,
+        injected head/body HTML, links from outside the wiki, or reference in page history (asset history is stored
+        separately and only current page data is scanned).
+    </div>
+
+    {{#hasUnused}}
+        <h2>Found <span class="text-secondary fs-6">({{unusedCount}})</span></h2>
+        <div class="table-responsive">
+            {{! data-sort-type marks a column click-to-sort (see WkBrowserCore.enableTableSort); the
+                thumbnail and Edit columns deliberately carry none. Cells whose text doesn't sort
+                correctly (size, dates) supply a raw data-sort value. }}
+            <table class="table table-hover align-middle" id="unusedTable">
+                <thead><tr>
+                    <th></th>
+                    <th data-sort-type="text">Path</th>
+                    <th data-sort-type="text">Locale</th>
+                    <th data-sort-type="text">Type</th>
+                    <th data-sort-type="number">Size</th>
+                    <th data-sort-type="number">Uploaded</th>
+                    <th data-sort-type="number">Last modified</th>
+                    <th></th>
+                </tr></thead>
+                <tbody>
+                {{#unused}}
+                    <tr>
+                        <td>
+                            {{#isImage}}<a href="{{url}}" target="_blank" rel="noopener" title="Open image in new window"><img src="{{url}}" alt="" loading="lazy" style="width:32px;height:32px;object-fit:cover;border-radius:.2rem"></a>{{/isImage}}
+                            {{^isImage}}<i class="mdi mdi-file-outline" aria-hidden="true"></i>{{/isImage}}
+                        </td>
+                        <td>{{path}}</td>
+                        <td>{{locale}}</td>
+                        <td>{{mime}}</td>
+                        <td data-sort="{{sizeBytes}}">{{sizeKb}} KB</td>
+                        <td data-sort="{{createdAtMillis}}">{{uploadedAt}}</td>
+                        <td data-sort="{{updatedAtMillis}}">{{modifiedAt}}</td>
+                        {{! Opens the shared asset detail modal (see the script below); the href is the
+                            no-JS fallback. Either way it's the normal detail surface, where Delete and
+                            its confirm already live — no separate delete action to gate here. }}
+                        <td class="text-end"><a href="/f/{{id}}" data-asset-edit="{{id}}">Edit</a></td>
+                    </tr>
+                {{/unused}}
+                </tbody>
+            </table>
+        </div>
+    {{/hasUnused}}
+    {{^hasUnused}}
+        <p class="text-secondary">No unused assets — every asset is linked from a page or fragment, or used as the site logo or favicon.</p>
+    {{/hasUnused}}
+</main>
+{{! wk-browser.js supplies WikiKtAssetDetail — the same detail/edit modal the /f manager opens, which
+    fetches this asset's /f/{id} body and AJAX-submits its forms (each carries its own CSRF field). }}
+<script src="/static/wk-browser.js"></script>
+<script>
+  // Open the asset in a modal rather than navigating, so the list — and the reader's place in it —
+  // survives an edit or delete. Delegated so it needs no per-row wiring. If the bundle failed to load
+  // the listener never intercepts and the link falls back to the plain /f/{id} page.
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var link = t.closest('a[data-asset-edit]');
+    if (!link || !window.WikiKtAssetDetail) return;
+    e.preventDefault();
+    // A delete (or replace) changes what counts as unused, so re-run the scan rather than trying to
+    // patch the row out client-side.
+    window.WikiKtAssetDetail.open(link.getAttribute('data-asset-edit'), {
+      onChange: function () { window.location.reload(); },
+    });
+  });
+
+  // Click-to-sort, and drag-to-resize on desktop (enableColumnResize no-ops on touch/narrow screens,
+  // and both no-op entirely if the table isn't on the page).
+  (function () {
+    var table = document.getElementById('unusedTable');
+    if (!table || !window.WkBrowserCore) return;
+    window.WkBrowserCore.ensureStyle();
+    window.WkBrowserCore.enableTableSort(table, 'unusedAssets');
+    window.WkBrowserCore.enableColumnResize(table, 'unusedAssets');
+  })();
+</script>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

@@ -33,9 +33,11 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val SITE_LOGO_URL = "site.logoUrl"
         const val DEFAULT_LOGO_URL = "/logo.svg"
         const val SITE_BRAND_COLOR = "site.brandColor"
-        // Optional background color for the top header bar. When unset, a subtly tinted default is used
-        // (see site.css). Foreground text/borders are auto-chosen for contrast from the color's luminance.
+        // Optional background colors for the top header bar, one per color mode (light / dark). When
+        // unset, a subtly tinted default is used (see site.css). Foreground text/borders are auto-chosen
+        // for contrast from each color's luminance (partials/brand-style.hbs).
         const val SITE_HEADER_COLOR = "site.headerColor"
+        const val SITE_HEADER_COLOR_DARK = "site.headerColorDark"
         // Optional background colors for the wiki nav sidebar, one per color mode (light / dark). When
         // unset, site.css defaults apply (blue in light mode, dark surface in dark mode). Foreground
         // tints are auto-chosen for contrast from the color's luminance (partials/brand-style.hbs).
@@ -224,6 +226,15 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val MAX_HISTORY_LIMIT = 500 // sanity ceiling for the UI-entered values
 
         /**
+         * How many files one asset upload may carry (per site), governing both the /f upload form and the
+         * editor's multi-file "Upload". Unset falls back to the `wikikt.assets.maxFilesPerUpload` config/env
+         * (see call sites). Offered in the admin UI as a dropdown of [UPLOAD_FILE_LIMIT_OPTIONS] presets.
+         */
+        const val ASSETS_MAX_FILES_PER_UPLOAD = "assets.maxFilesPerUpload"
+        const val MAX_UPLOAD_FILE_LIMIT = 500 // sanity ceiling
+        val UPLOAD_FILE_LIMIT_OPTIONS = listOf(5, 10, 20, 30, 50, 100)
+
+        /**
          * Common content locales offered as a checklist in Settings (code -> display name). Curated, not
          * exhaustive; any code already configured but not listed here is merged in so it's never lost.
          */
@@ -385,6 +396,10 @@ class SettingsService(private val database: R2dbcDatabase) {
     suspend fun getHistoryLimit(siteId: UInt, key: String, default: Int): Int =
         (get(siteId, key)?.toIntOrNull() ?: default).coerceIn(1, MAX_HISTORY_LIMIT)
 
+    /** The per-upload file-count limit, clamped to 1..[MAX_UPLOAD_FILE_LIMIT]; [default] (also clamped) if unset/invalid. */
+    suspend fun uploadFileLimit(siteId: UInt, default: Int): Int =
+        (get(siteId, ASSETS_MAX_FILES_PER_UPLOAD)?.toIntOrNull() ?: default).coerceIn(1, MAX_UPLOAD_FILE_LIMIT)
+
     /** The site's wiki-sidebar navigation mode (one of [NAV_MODE_OPTIONS]); [DEFAULT_NAV_MODE] if unset/invalid. */
     suspend fun navMode(siteId: UInt): String =
         get(siteId, NAV_MODE)?.ifBlank { null }?.takeIf { it in NAV_MODE_OPTIONS } ?: DEFAULT_NAV_MODE
@@ -494,8 +509,12 @@ class SettingsService(private val database: R2dbcDatabase) {
             "siteName" to (s[SITE_NAME]?.ifBlank { null } ?: DEFAULT_SITE_NAME),
             "siteLogoUrl" to (s[SITE_LOGO_URL]?.ifBlank { null } ?: DEFAULT_LOGO_URL),
             "siteBrandColor" to s[SITE_BRAND_COLOR]?.ifBlank { null },
+            // Header colors per color mode; the *IsDark flags pick light vs dark navbar foregrounds
+            // (unused unless the matching color is set).
             "siteHeaderColor" to (s[SITE_HEADER_COLOR]?.ifBlank { null }),
-            "siteHeaderDark" to (s[SITE_HEADER_COLOR]?.ifBlank { null }?.let { isDarkColor(it) } ?: false),
+            "siteHeaderColorIsDark" to (s[SITE_HEADER_COLOR]?.ifBlank { null }?.let { isDarkColor(it) } ?: true),
+            "siteHeaderColorDark" to (s[SITE_HEADER_COLOR_DARK]?.ifBlank { null }),
+            "siteHeaderColorDarkIsDark" to (s[SITE_HEADER_COLOR_DARK]?.ifBlank { null }?.let { isDarkColor(it) } ?: true),
             // Sidebar colors per color mode; the *IsDark flags pick white vs black foreground tints
             // (default true — unused unless the matching color is set).
             "siteSidebarColor" to (s[SITE_SIDEBAR_COLOR]?.ifBlank { null }),

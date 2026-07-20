@@ -130,7 +130,30 @@ fun Route.configureApiRouting() {
                         mime = it.mime,
                         sizeBytes = it.sizeBytes,
                         createdAt = it.createdAt,
+                        updatedAt = it.updatedAt,
                         hasAlt = !it.altText.isNullOrBlank(),
+                    )
+                },
+            )
+        }
+
+        // Lightweight fragment list powering the editor's fragment-include affordance (the icon after
+        // each {{fragment:key}} that opens it in its editor). Gated by manage:pages — the same baseline
+        // that guards the fragment admin editor those icons link to, so non-managers see no icons.
+        get("/fragments") {
+            val ctx = call.appContext
+            val userId = call.currentUserId()
+            if (!ctx.permissions.canManagePages(userId)) {
+                call.respond(HttpStatusCode.Forbidden)
+                return@get
+            }
+            call.respond(
+                ctx.fragments.list(call.siteId()).map {
+                    com.wikikt.model.FragmentPickerDto(
+                        id = it.id.toString(),
+                        locale = it.locale,
+                        key = it.key,
+                        title = it.title,
                     )
                 },
             )

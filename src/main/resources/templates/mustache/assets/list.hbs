@@ -25,19 +25,37 @@
         <div class="mb-3">
             <label class="form-label">Folder</label>
             <input type="text" id="uploadFolder" name="folder" placeholder="(root)" class="form-control">
-            <p class="form-text">Upload will :go to <code id="uploadTarget">/ (root)</code>.<br>Browse to a folder above or type a new path name to upload to other location.</p>
+            <p class="form-text">Upload will go to <code id="uploadTarget">/ (root)</code>.<br>Browse to a folder above or type a new path name to upload to other location.</p>
         </div>
         <div class="mb-3"><label class="form-label">Locale</label>
             <select name="locale" class="form-select">
                 {{#localeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/localeOptions}}
             </select>
         </div>
+        {{! Must precede the file input: the streaming upload handler reads form fields as parts arrive,
+            so `overwrite` has to reach it before the files (same field-before-files ordering it already
+            relies on for folder/locale). Checked by default — a same-path upload replaces the existing
+            asset, archiving the previous version to history. Unchecked sends nothing, so the handler
+            reports those paths as conflicts and skips them. }}
+        <div class="mb-3 form-check">
+            <input type="checkbox" name="overwrite" value="1" id="uploadOverwrite" class="form-check-input" checked>
+            <label class="form-check-label" for="uploadOverwrite">Overwrite files with the same name</label>
+            <p class="form-text mb-0">On by default: a file whose path already exists replaces it (the previous version is kept in history). Uncheck to skip existing files instead.</p>
+        </div>
         <div class="mb-3"><label class="form-label">Files</label><input type="file" name="file" multiple accept="image/png,image/jpeg,image/gif,image/webp" class="form-control"></div>
         <p class="text-secondary">Images only (png, jpeg, gif, webp). Up to {{maxFiles}} files, {{maxMb}} MB each. Full path becomes the above upload path plus the filename.</p>
         <button type="submit" class="btn btn-primary">Upload</button>
     </form>
+
+    {{! Occasional-use maintenance links — deliberately at the bottom, out of the way of the day-to-day
+        browse/upload flow. }}
+    <h2 class="mt-4">Tools</h2>
+    <p class="mb-0">
+        <a href="/f/unused"><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Find unused assets</a>
+        <span class="text-secondary">- will list assets that are not referred to on any page, fragment, or setting on this site</span>
+    </p>
 </main>
-<script>window.__WK_ASSETS__ = {{{assetsJson}}};</script>
+<script>window.__WK_ASSETS__ = {{{assetsJson}}}; window.__WK_UPLOAD_MAX__ = {{maxFiles}};</script>
 <script src="/static/wk-browser.js"></script>
 <script src="/static/asset-manager.js"></script>
 {{>partials/footer.hbs}}

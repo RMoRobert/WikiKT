@@ -44,7 +44,7 @@
         <div class="row g-3">
             <div class="col-sm-6">
                 <label class="form-label" for="smtpUsername">Username</label>
-                <input class="form-control" type="text" id="smtpUsername" name="smtpUsername" value="{{smtpUsername}}" maxlength="255" autocomplete="off" placeholder="(none — no authentication)">
+                <input class="form-control" type="text" id="smtpUsername" name="smtpUsername" value="{{smtpUsername}}" maxlength="255" autocomplete="off" placeholder="(leave blank for none)">
             </div>
             <div class="col-sm-6">
                 <label class="form-label" for="smtpPassword">Password</label>
@@ -86,7 +86,7 @@
     {{/hasLastRun}}
 
     <h2 class="mt-4"><i class="mdi mdi-send-check-outline" aria-hidden="true"></i> Send a test email</h2>
-    <p class="text-secondary">Sends a test message immediately using the saved settings, so you can confirm they work.</p>
+    <p class="text-secondary">Sends a test message now using the saved settings.</p>
     <form method="post" action="/a/mail/test" class="edit-form">
         {{{csrfField}}}
         <div class="input-group" style="max-width:32rem">

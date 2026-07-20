@@ -12,20 +12,46 @@
     <div class="page-meta"><h1><i class="mdi mdi-puzzle-outline" aria-hidden="true"></i> Fragments</h1><a class="btn btn-primary" href="/a/fragments/new">New fragment</a></div>
     {{#otherSite}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-information-outline" aria-hidden="true"></i> That fragment belongs to a different site. Showing <strong>{{managedSiteName}}</strong>'s fragments instead.</div>{{/otherSite}}
     <p class="text-secondary">Reusable content included in pages with <code>&#123;&#123;fragment:key&#125;&#125;</code>. Resolved for the page's locale, falling back to the default locale.</p>
-    <table class="table table-hover align-middle">
-        <thead><tr><th>Key</th><th>Locale</th><th>Title</th><th>Used by</th><th></th></tr></thead>
+    {{! data-sort-type marks a column click-to-sort (see WkBrowserCore.enableTableSort); the Edit column
+        deliberately carries none. "Used by" sorts on the raw count, not its "N page(s)" text. }}
+    {{! table-responsive: enableColumnResize switches the table to a fixed layout that can end up wider
+        than the admin content column, so the overflow has to scroll here rather than in the page body. }}
+    <div class="table-responsive">
+    <table class="table table-hover align-middle" id="fragmentsTable">
+        <thead><tr>
+            <th data-sort-type="text">Key</th>
+            <th data-sort-type="text">Locale</th>
+            <th data-sort-type="text">Title</th>
+            <th data-sort-type="number">Used by</th>
+            <th></th>
+        </tr></thead>
         <tbody>
         {{#fragments}}
         <tr>
-            <td><code>{{key}}</code></td>
+            {{! data-sort pins the sort to the key alone — the copy button contributes no text today,
+                but the cell's own value is the honest thing to sort on. copy-inline.js (site-wide)
+                handles the click. }}
+            <td data-sort="{{key}}">{{key}}<button type="button" class="copy-inline-btn" data-copy="{{key}}" title="Copy key" aria-label="Copy key {{key}} to clipboard"><i class="mdi mdi-content-copy" aria-hidden="true"></i></button></td>
             <td>{{locale}}</td>
             <td>{{title}}</td>
-            <td>{{usedBy}} page(s)</td>
+            <td data-sort="{{usedBy}}">{{usedBy}} page(s)</td>
             <td><a class="btn btn-sm btn-primary" href="/a/fragments/{{id}}/edit">Edit</a></td>
         </tr>
         {{/fragments}}
         </tbody>
     </table>
+    </div>
+    {{! Click-to-sort, plus drag-to-resize on desktop (enableColumnResize no-ops on touch/narrow screens). }}
+    <script src="/static/wk-browser.js"></script>
+    <script>
+      (function () {
+        var table = document.getElementById('fragmentsTable');
+        if (!table || !window.WkBrowserCore) return;
+        window.WkBrowserCore.ensureStyle();
+        window.WkBrowserCore.enableTableSort(table, 'fragments');
+        window.WkBrowserCore.enableColumnResize(table, 'fragments');
+      })();
+    </script>
 {{>partials/admin-shell-end.hbs}}
 {{{bodyHtml}}}</body>
 </html>

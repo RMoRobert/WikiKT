@@ -512,6 +512,20 @@ class PageService(private val database: R2dbcDatabase) {
             .map { it.toPageStagedRecord() }.singleOrNull()
     }
 
+    /**
+     * Every staged (future) version belonging to [pageIds]. Used by the asset usage scan, which must
+     * see references that exist only in not-yet-published content. The table holds at most one row per
+     * page, so it's read whole and filtered in memory rather than building an id-list query.
+     */
+    suspend fun listStaged(pageIds: Collection<UInt>): List<PageStagedRecord> {
+        if (pageIds.isEmpty()) return emptyList()
+        val wanted = pageIds.toSet()
+        return suspendTransaction(database) {
+            PageStagedTable.selectAll().map { it.toPageStagedRecord() }.toList()
+                .filter { it.pageId in wanted }
+        }
+    }
+
     suspend fun upsertStaged(
         pageId: UInt,
         title: String,

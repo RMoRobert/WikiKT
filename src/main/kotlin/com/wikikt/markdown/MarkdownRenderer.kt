@@ -40,7 +40,7 @@ class MarkdownRenderer {
 
     // Renderers differ only in soft-break handling (single newline -> space vs <br>). Escaping raw HTML
     // is deliberately NOT toggled here: our post-processors emit HtmlInline (<sub>, <i class=mdi>) that
-    // escapeHtml would break — the sanitizer is the security boundary for author HTML instead.
+    // escapeHtml would break -- the sanitizer is the security boundary for author HTML instead.
     private val renderer = buildRenderer(hardBreaks = false)
     private val hardBreakRenderer = buildRenderer(hardBreaks = true)
 
@@ -78,26 +78,36 @@ class MarkdownRenderer {
 
     companion object {
         // Image sizing: `![alt](url =WIDTHxHEIGHT)` (either dimension optional, e.g.
-        // `=350x`, `=x200`, `=350x200`). The trailing ` =WxH` is invalid CommonMark — a space isn't allowed
-        // in a link destination — so the whole image renders as literal text. We rewrite it into the image
-        // title (`![alt](url "wk-img-size:WxH")`), which parses cleanly; [ImageSizeAttributeProvider] then
-        // turns that title into real `width`/`height` attributes on the `<img>` (both allowed by the sanitizer).
-        private val IMAGE_SIZE = Regex("""(!\[[^]]*]\([^()\s]+)\s+=(\d*)x(\d*)\)""")
-        private val SIZE_TITLE = Regex("""wk-img-size:(\d*)x(\d*)""")
+        // `=350x`, `=x200`, `=350x200`), optionally with a title in front (`![alt](url "title" =WxH)`).
+        // The trailing ` =WxH` is invalid CommonMark -- a space isn't allowed in a link destination -- so the
+        // whole image renders as literal text if following that strictly. We rewrite it into the image title,
+        // appending a `wk-img-size:WxH` marker to any existing title (`![alt](url "title wk-img-size:WxH")`),
+        // which parses cleanly; [ImageSizeAttributeProvider] then splits that marker back out into real `width`/`height` attributes
+        // on the `<img>` (both allowed by the sanitizer), leaving any author title intact. Ensures compatibiltiy with
+        // WKJS-flavored Markdown.
+        private val IMAGE_SIZE = Regex("""(!\[[^]]*]\([^()\s]+)(?:\s+"([^"]*)")?\s+=(\d*)x(\d*)\)""")
+        // The marker as planted in the title: at the end, optionally preceded by the real title + a space.
+        private val SIZE_TITLE = Regex("""(?:^|\s)wk-img-size:(\d*)x(\d*)$""")
         // A fenced-code opening/closing line: up to 3 spaces of indent then a run of >= 3 backticks or tildes.
         private val CODE_FENCE = Regex("""^ {0,3}(`{3,}|~{3,})""")
 
         private fun sizeReplacement(m: MatchResult): String {
-            val (head, w, h) = m.destructured
-            // A bare `=x` carries no dimensions — leave the original text untouched.
-            return if (w.isEmpty() && h.isEmpty()) m.value else "$head \"wk-img-size:${w}x${h}\")"
+            val head = m.groupValues[1]
+            val title = m.groupValues[2] // "" when no title was present
+            val w = m.groupValues[3]
+            val h = m.groupValues[4]
+            // A bare `=x` carries no dimensions; leave the original text untouched.
+            if (w.isEmpty() && h.isEmpty()) return m.value
+            val marker = "wk-img-size:${w}x${h}"
+            val newTitle = if (title.isEmpty()) marker else "$title $marker"
+            return "$head \"$newTitle\")"
         }
 
         /**
          * Rewrites `![alt](url =WxH)` image sizing everywhere EXCEPT inside code, so a literal example of the
          * syntax shown in a fenced block or an inline `code` span is left verbatim. Fenced blocks are tracked
          * line-by-line; inline spans are skipped within each remaining line. (Indented 4-space code blocks are
-         * not detected — showing image syntax that way is rare, and misfiring there only mangles an example.)
+         * not detected; showing image syntax that way is rare, and misfiring there only mangles an example.)
          */
         private fun liftImageSizes(content: String): String {
             if (!content.contains("=") || !content.contains("![")) return content // cheap skip
@@ -169,13 +179,17 @@ class MarkdownRenderer {
         }
     }
 
-    /** Converts the `wk-img-size:WxH` marker title (planted by [liftImageSizes]) into `<img>`
-     *  width/height attributes, dropping the marker. Stateless, so a single instance is reused. */
+    /** Splits the `wk-img-size:WxH` marker (planted by [liftImageSizes]) out of the `<img>` title into
+     *  real width/height attributes, restoring any author title that preceded it (or dropping the title
+     *  entirely when the marker was the whole thing). Stateless, so a single instance is reused. */
     private object ImageSizeAttributeProvider : AttributeProvider {
         override fun setAttributes(node: Node, tagName: String, attributes: MutableMap<String, String>) {
             if (tagName != "img") return
-            val match = attributes["title"]?.let { SIZE_TITLE.matchEntire(it) } ?: return
-            attributes.remove("title")
+            val title = attributes["title"] ?: return
+            val match = SIZE_TITLE.find(title) ?: return
+            // Everything before the (whitespace-prefixed) marker is the author's real title, if any.
+            val rest = title.substring(0, match.range.first)
+            if (rest.isEmpty()) attributes.remove("title") else attributes["title"] = rest
             match.groupValues[1].takeIf { it.isNotEmpty() }?.let { attributes["width"] = it }
             match.groupValues[2].takeIf { it.isNotEmpty() }?.let { attributes["height"] = it }
         }

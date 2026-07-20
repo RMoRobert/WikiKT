@@ -10,7 +10,7 @@
     {{>partials/brand-style.hbs}}
 </head>
 <body>
-<form method="post" action="{{saveUrl}}" class="editor" data-plain-editor="{{plainEditor}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}">
+<form method="post" action="{{saveUrl}}" class="editor" data-plain-editor="{{plainEditor}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}" data-max-upload-files="{{maxUploadFiles}}">
     {{{csrfField}}}
     <header class="editor-bar">
         <a class="brand" href="/">{{#siteLogoUrl}}<img class="brand-logo" src="{{siteLogoUrl}}" alt="">{{/siteLogoUrl}}<span class="brand-name">{{siteName}}</span></a>
@@ -18,7 +18,7 @@
         <div class="editor-bar-actions">
             {{! Labels are in spans so compact screens can collapse the buttons to icon+tooltip. }}
             <button type="submit" class="bar-btn success" title="Save"><i class="mdi mdi-check" aria-hidden="true"></i><span class="bar-btn-label"> Save</span></button>
-            <button type="button" id="pageInfoToggle" class="bar-btn outline" data-bs-toggle="modal" data-bs-target="#pageInfo" title="Page Info"><i class="mdi mdi-information-outline" aria-hidden="true"></i><span class="bar-btn-label"> Page Info</span></button>
+            <button type="button" class="bar-btn primary" id="pageInfoToggle" data-bs-toggle="modal" data-bs-target="#pageInfo" title="Page Info"><i class="mdi mdi-tag-edit-outline" aria-hidden="true"></i><span class="bar-btn-label"> Page Info</span></button>
             <a class="bar-btn" href="{{viewUrl}}" title="Close"><i class="mdi mdi-close" aria-hidden="true"></i><span class="bar-btn-label"> Close</span></a>
             {{#loggedIn}}
             <a class="bar-btn icon-only" href="/a" title="Administration"><i class="mdi mdi-cog-outline" aria-hidden="true"></i></a>
@@ -85,17 +85,6 @@
             <label class="form-label">Short description</label>
             <textarea class="form-control" name="description" rows="2" maxlength="1000" placeholder="Short summary shown under the title and in link previews">{{description}}</textarea>
         </div>
-        <div class="mb-3">
-            <label class="form-label" for="tagInput">Tags</label>
-            {{! Chip editor backed by the hidden comma-separated "tags" field, so the form contract
-                (and parseTags on the server) is unchanged. Suggestions come from /u/v1/tags; typing
-                a tag that doesn't exist yet simply creates it on save. }}
-            <div class="tag-editor form-control" id="tagEditor">
-                <input type="text" id="tagInput" placeholder="Add a tag…" autocomplete="off" maxlength="100" aria-label="Add a tag">
-                <ul class="tag-suggest" id="tagSuggest" hidden></ul>
-            </div>
-            <input type="hidden" name="tags" id="tagsField" value="{{tagsText}}">
-        </div>
         {{! Content format is changed from the page's "Page actions → Convert" menu (server-side); this
             hidden field just carries the current format through an ordinary save. }}
         <input type="hidden" name="contentFormat" value="{{contentFormat}}">
@@ -113,6 +102,17 @@
             </div>
         </div>
         <p class="form-text">Changing the path or locale moves the page; ensure any links pointing to this page are updated.</p>
+        <div class="mb-3">
+            <label class="form-label" for="tagInput">Tags</label>
+            {{! Chip editor backed by the hidden comma-separated "tags" field, so the form contract
+                (and parseTags on the server) is unchanged. Suggestions come from /u/v1/tags; typing
+                a tag that doesn't exist yet simply creates it on save. }}
+            <div class="tag-editor form-control" id="tagEditor">
+                <input type="text" id="tagInput" placeholder="Add a tag…" autocomplete="off" maxlength="100" aria-label="Add a tag">
+                <ul class="tag-suggest" id="tagSuggest" hidden></ul>
+            </div>
+            <input type="hidden" name="tags" id="tagsField" value="{{tagsText}}">
+        </div>
         </div>{{! /#pi-general }}
 
         {{! Pages that link to this one (backlinks). Read-only list — moving/renaming this page does not
@@ -431,6 +431,11 @@
       mde("image", function (editor) {
         // Prefer the asset browser; fall back to EasyMDE's URL prompt if it failed to load.
         if (!window.WikiKtAssetBrowser) { EasyMDE.drawImage(editor); return; }
+        // Tell the picker how many files its "Upload" may send at once (admin setting; the server enforces
+        // the same cap regardless). Read from the editor form's data attribute rendered by editModel.
+        var edForm = document.querySelector("form.editor");
+        var maxUp = edForm && parseInt(edForm.dataset.maxUploadFiles, 10);
+        if (maxUp > 0) window.__WK_UPLOAD_MAX__ = maxUp;
         WikiKtAssetBrowser.open({ imagesOnly: true, title: "Insert Image", confirmLabel: "Insert" })
           .then(function (asset) {
             if (!asset) return;
@@ -519,6 +524,8 @@
   }
 
   setupLinkAutocomplete(cm, form);
+  setupAssetLinkAffordance(cm, form);
+  setupFragmentAffordance(cm, form);
 
   // "Browse…" beside the Path field (Page Info): pick a destination to move the page to.
   var browseMove = document.getElementById('browseMove');
@@ -564,6 +571,139 @@
   window.addEventListener('scroll', positionSidePreview, { passive: true });
   window.addEventListener('resize', positionSidePreview);
   cm.on('changes', positionSidePreview);
+
+  // After each Markdown image link that points at a known wiki asset, show a small "open in asset
+  // editor" icon in the source. These are CodeMirror bookmark WIDGETS — display only: they are never
+  // part of the document (they don't appear in cm.getValue() or the saved Markdown), so they can't
+  // corrupt the source. Clicking one opens that image's asset detail modal. Re-scans (debounced) on edit.
+  function setupAssetLinkAffordance(cm, form) {
+    if (!window.WikiKtAssetDetail) return;                       // needs the detail modal (wk-browser.js)
+    var pageLoc = (form && (form.dataset.pageLocale || form.dataset.defaultLocale)) || '';
+    var byUrl = null;                                            // asset.url -> asset (fetched once)
+    var marks = [];
+
+    // Resolve a Markdown image URL to a wiki asset, matching the two link shapes Insert Image authors:
+    // an explicit-locale "/en/foo.png" (equals asset.url) and a locale-omitted "/foo.png" (page locale).
+    function resolve(url) {
+      if (!byUrl || !url) return null;
+      if (byUrl[url]) return byUrl[url];
+      if (url.charAt(0) === '/' && pageLoc) return byUrl['/' + pageLoc + url] || null;
+      return null;
+    }
+
+    function makeIcon(asset) {
+      var span = document.createElement('span');
+      span.className = 'cm-asset-open';
+      span.title = 'Open “' + asset.path + '” in the asset editor';
+      span.setAttribute('role', 'button');
+      span.setAttribute('aria-label', span.title);
+      span.innerHTML = '<i class="mdi mdi-image-edit-outline" aria-hidden="true"></i>';
+      // Don't let the click reposition the editor caret — just open the asset detail modal.
+      span.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+      span.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        WikiKtAssetDetail.open(asset.id, {});
+      });
+      return span;
+    }
+
+    var IMG_RE = /!\[[^\]]*\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
+    function rescan() {
+      marks.forEach(function (m) { m.clear(); });
+      marks = [];
+      if (!byUrl) return;
+      for (var line = 0; line < cm.lineCount(); line++) {
+        var text = cm.getLine(line);
+        IMG_RE.lastIndex = 0;
+        var m;
+        while ((m = IMG_RE.exec(text)) !== null) {
+          var asset = resolve(m[1].replace(/^<|>$/g, ''));
+          if (!asset) continue;
+          marks.push(cm.setBookmark({ line: line, ch: m.index + m[0].length },
+            { widget: makeIcon(asset), insertLeft: false }));
+        }
+      }
+    }
+
+    var timer = null;
+    cm.on('changes', function () { if (timer) clearTimeout(timer); timer = setTimeout(rescan, 250); });
+
+    fetch('/u/v1/assets', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .catch(function () { return []; })
+      .then(function (assets) {
+        byUrl = {};
+        assets.forEach(function (a) { if (a.url) byUrl[a.url] = a; });
+        rescan();
+      });
+  }
+
+  // After each {{fragment:key}} reference that resolves to a known fragment, show a small "open in
+  // fragment editor" icon in the source — the fragment sibling of setupAssetLinkAffordance above. Same
+  // display-only CodeMirror bookmark WIDGETS: never part of the document (absent from cm.getValue() and
+  // the saved Markdown), so they can't corrupt the source. Clicking opens that fragment's admin editor
+  // in a NEW tab — a same-tab navigation would discard the unsaved page edits. Re-scans (debounced) on
+  // edit. Gated by manage:pages: /u/v1/fragments 403s for other users, so no icons appear for them.
+  function setupFragmentAffordance(cm, form) {
+    var pageLoc = (form && form.dataset.pageLocale) || '';
+    var defLoc = (form && form.dataset.defaultLocale) || '';
+    var byKey = null;                                           // "<locale> <key>" -> fragment (fetched once)
+    var marks = [];
+
+    // Resolve a reference key to the fragment {{fragment:key}} would render, mirroring
+    // FragmentService.expand: the page locale wins, else the default locale.
+    function resolve(key) {
+      if (!byKey) return null;
+      return byKey[pageLoc + ' ' + key] || byKey[defLoc + ' ' + key] || null;
+    }
+
+    function makeIcon(fragment) {
+      var span = document.createElement('span');
+      span.className = 'cm-asset-open';
+      span.title = 'Open the “' + fragment.key + '” fragment in the editor';
+      span.setAttribute('role', 'button');
+      span.setAttribute('aria-label', span.title);
+      span.innerHTML = '<i class="mdi mdi-puzzle-edit-outline" aria-hidden="true"></i>';
+      // Don't let the click reposition the editor caret — just open the fragment editor.
+      span.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+      span.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        window.open('/a/fragments/' + fragment.id + '/edit', '_blank', 'noopener');
+      });
+      return span;
+    }
+
+    // Matches FragmentService.REFERENCE ({{fragment:<key>}} with the same key charset).
+    var FRAG_RE = /\{\{fragment:([a-zA-Z0-9._/-]+)}}/g;
+    function rescan() {
+      marks.forEach(function (m) { m.clear(); });
+      marks = [];
+      if (!byKey) return;
+      for (var line = 0; line < cm.lineCount(); line++) {
+        var text = cm.getLine(line);
+        FRAG_RE.lastIndex = 0;
+        var m;
+        while ((m = FRAG_RE.exec(text)) !== null) {
+          var fragment = resolve(m[1]);
+          if (!fragment) continue;
+          marks.push(cm.setBookmark({ line: line, ch: m.index + m[0].length },
+            { widget: makeIcon(fragment), insertLeft: false }));
+        }
+      }
+    }
+
+    var timer = null;
+    cm.on('changes', function () { if (timer) clearTimeout(timer); timer = setTimeout(rescan, 250); });
+
+    fetch('/u/v1/fragments', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .catch(function () { return []; })
+      .then(function (fragments) {
+        byKey = {};
+        fragments.forEach(function (f) { byKey[f.locale + ' ' + f.key] = f; });
+        rescan();
+      });
+  }
 
   // Suggest existing page paths when typing a Markdown link target: "[text](<partial>".
   function setupLinkAutocomplete(cm, form) {
@@ -633,9 +773,11 @@
       if (suppress) { suppress = false; close(); return; }
       var cur = cm.getCursor();
       var before = cm.getLine(cur.line).slice(0, cur.ch);
-      var m = /\]\(([^)\s]*)$/.exec(before); // "](" + partial path, no closing ")" yet
-      if (!m) { close(); return; }
-      var partial = m[1];
+      // "[text](" or "![alt](" followed by a partial path, no closing ")" yet. The optional leading
+      // "!" distinguishes an image target from a link target -- necessary to not show for image Markdown, onyl links:
+      var m = /(!?)\[[^\]]*\]\(([^)\s]*)$/.exec(before);
+      if (!m || m[1] === '!') { close(); return; } // image target ("![alt](") gets no page-path hints
+      var partial = m[2];
       lineNo = cur.line; fromCh = cur.ch - partial.length; toCh = cur.ch;
       var q = partial.toLowerCase();
       loadPages().then(function (pages) {

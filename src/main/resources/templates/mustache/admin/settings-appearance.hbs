@@ -51,15 +51,21 @@
             </div>
             <p class="form-text">The browser-tab icon. Defaults to the bundled <code>/favicon.svg</code>; pick an uploaded image <a href="/f">asset</a> to override (a square SVG or PNG works best).</p>
         </div>
+        <h2>Colors</h2>
         <div class="mb-3">
-            <label class="form-label">Brand color <span class="text-secondary">(optional)</span></label>
+            <label class="form-label">Primary color <span class="text-secondary">(optional)</span></label>
             <input class="form-control" type="text" name="siteBrandColor" value="{{siteBrandColorValue}}" placeholder="#0172ad" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
-            <p class="form-text">A hex color (e.g. <code>#0172ad</code>) used as the accent for links and buttons. Leave blank for the default theme.</p>
+            <p class="form-text">A hex color (e.g. <code>#0172ad</code>) used as the accent for links and primary buttons (perhaps your brand color). Leave blank for the default primary color.</p>
         </div>
         <div class="mb-3">
             <label class="form-label">Header color <span class="text-secondary">(optional)</span></label>
             <input class="form-control" type="text" name="siteHeaderColor" value="{{siteHeaderColorValue}}" placeholder="#1f2933" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
-            <p class="form-text">A hex color for the top header bar (e.g. <code>#1f2933</code> for a dark bar). Text and buttons switch to light automatically on dark backgrounds. Leave blank for a subtly tinted default.</p>
+            <p class="form-text">A hex color for the top header bar in light mode (e.g. <code>#1f2933</code> for a dark bar). Leave blank for a subtly tinted default.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Header color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteHeaderColorDark" value="{{siteHeaderColorDarkValue}}" placeholder="#1f2933" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">The header bar color used when the site is in dark mode. Leave blank for the default dark bar.</p>
         </div>
         <div class="mb-3">
             <label class="form-label">Sidebar color <span class="text-secondary">(optional)</span></label>

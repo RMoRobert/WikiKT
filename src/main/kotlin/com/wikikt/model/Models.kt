@@ -330,7 +330,22 @@ data class AssetPickerDto(
     val mime: String,
     val sizeBytes: Long,
     val createdAt: Long,
+    // Last time the file bytes were uploaded/replaced (not metadata edits) — the "Last modified" column.
+    val updatedAt: Long,
     val hasAlt: Boolean = false,
+)
+
+/**
+ * Fragment row powering the editor's fragment-include affordance: the small icon shown after each
+ * `{{fragment:key}}` reference that opens that fragment in its admin editor. Just enough to resolve a
+ * reference (by locale + key) to the right fragment id — no content.
+ */
+@Serializable
+data class FragmentPickerDto(
+    val id: String,
+    val locale: String,
+    val key: String,
+    val title: String,
 )
 
 /** Result of an AJAX asset upload (from the picker): how many landed, which paths already existed. */
@@ -351,6 +366,8 @@ data class AssetAdminDto(
     val mime: String,
     val sizeBytes: Long,
     val createdAt: Long,
+    // Last time the file bytes were uploaded/replaced (not metadata edits) — the "Last modified" column.
+    val updatedAt: Long,
     val usedBy: Int,
     val description: String = "",
 )

@@ -986,6 +986,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.editModel(
         "plainEditor" to ctx.settings.getBool(siteId, com.wikikt.service.SettingsService.EDITOR_PLAIN_VIEW),
         // Used by the editor's link-path autocomplete to build canonical view URLs.
         "defaultLocale" to ctx.config.defaultLocale,
+        // Max files the Insert Image picker's "Upload" may send at once (admin setting; caps the client too).
+        "maxUploadFiles" to ctx.settings.uploadFileLimit(siteId, ctx.config.assets.maxFilesPerUpload),
         // Locale <select> for the Page Info (move) panel — enabled set plus this page's current locale.
         "localeOptions" to localeSelectOptions(ctx.settings.enabledLocales(siteId, ctx.config.defaultLocale), wikiPath.locale),
         // "Linked from" list (shown in Page Info, beside the move/path field).

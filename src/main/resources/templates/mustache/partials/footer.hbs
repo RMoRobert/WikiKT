@@ -2,3 +2,7 @@
     <div class="container">{{{footerHtml}}}</div>
 </footer>
 {{#assetsCdn}}<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>{{/assetsCdn}}{{^assetsCdn}}<script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>{{/assetsCdn}}
+{{! Site-wide: let a mouse drag any modal by its title bar (desktop only; no-op on touch/small screens). }}
+<script src="/static/modal-drag.js"></script>
+{{! Site-wide: <button data-copy="..."> copies its value to the clipboard. }}
+<script src="/static/copy-inline.js"></script>

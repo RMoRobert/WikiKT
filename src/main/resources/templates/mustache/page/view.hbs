@@ -190,6 +190,22 @@
   }
   // Headings are demoted one level on render (the page title is the sole h1), so the content's top
   // two levels are h2/h3. Scanning these also excludes the title h1 from the table of contents.
+  // H3s nest under the preceding H2; an H2 that gains children grows a chevron that expands/collapses
+  // its sub-list (created lazily on the first child so childless H2s stay plain).
+  var currentTop = null;      // current top-level <li> (an H2) that H3s attach to
+  var currentSublist = null;  // its child <ul>, created on the first H3
+  // Every entry gets the same chevron in a fixed-width gutter so titles line up; only sections that
+  // turn out to have children swap theirs for a real (clickable) toggle below.
+  function buildRow(a) {
+    var row = document.createElement('div');
+    row.className = 'toc-row';
+    var gutter = document.createElement('span');
+    gutter.className = 'toc-gutter';
+    gutter.innerHTML = '<i class="mdi mdi-chevron-right toc-bullet" aria-hidden="true"></i>';
+    row.appendChild(gutter);
+    row.appendChild(a);
+    return row;
+  }
   content.querySelectorAll('h2, h3').forEach(function (h) {
     var text = (h.textContent || '').trim();
     if (!text) return;
@@ -201,16 +217,52 @@
       h.id = id;
     }
     used[id] = (used[id] || 0) + 1;
-    var li = document.createElement('li');
-    li.className = 'toc-' + h.tagName.toLowerCase();
     var a = document.createElement('a');
     a.href = '#' + id;
     a.textContent = text;
-    li.appendChild(a);
-    list.appendChild(li);
+
+    if (h.tagName === 'H3' && currentTop) {
+      if (!currentSublist) {
+        // First child: swap the parent's static chevron for a toggle, and open a sub-list.
+        var toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'toc-toggle';
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.setAttribute('aria-label', 'Toggle subheadings');
+        toggle.innerHTML = '<i class="mdi mdi-chevron-right" aria-hidden="true"></i>';
+        currentTop.classList.add('toc-has-children', 'is-expanded');
+        var parentGutter = currentTop.querySelector('.toc-gutter');
+        parentGutter.innerHTML = '';
+        parentGutter.appendChild(toggle);
+        currentSublist = document.createElement('ul');
+        currentSublist.className = 'toc-sublist';
+        currentTop.appendChild(currentSublist);
+      }
+      var subLi = document.createElement('li');
+      subLi.className = 'toc-h3';
+      subLi.appendChild(buildRow(a));
+      currentSublist.appendChild(subLi);
+    } else {
+      // Top-level entry (an H2, or a stray H3 with no preceding H2).
+      var li = document.createElement('li');
+      li.className = 'toc-' + h.tagName.toLowerCase();
+      li.appendChild(buildRow(a));
+      list.appendChild(li);
+      currentTop = (h.tagName === 'H2') ? li : null;
+      currentSublist = null;
+    }
     count++;
   });
   if (count > 0) toc.hidden = false;
+
+  // A chevron click toggles its section (and only that — the title link still navigates).
+  list.addEventListener('click', function (e) {
+    var btn = e.target.closest('.toc-toggle');
+    if (!btn) return;
+    e.preventDefault();
+    var li = btn.closest('li');
+    btn.setAttribute('aria-expanded', String(li.classList.toggle('is-expanded')));
+  });
 
   // Collapse toggle — only interactive on compact screens (CSS makes it inert on desktop, where
   // the list is always shown).

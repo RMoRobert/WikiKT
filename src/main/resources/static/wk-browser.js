@@ -18,8 +18,40 @@
     // Picker chrome is a Bootstrap modal; these style the two-pane content inside its modal-body/footer.
     // The picker often opens stacked over another modal (e.g. Page Info) at the same modal-lg size, so
     // tint the picker's own full-viewport backdrop area to clearly darken whatever sits beneath it.
+    // (A stacked Bootstrap backdrop can't do this — it renders below the underlying modal, not above it.)
     '.wkab-modal{background-color:rgba(0,0,0,.4);}',
-    '.wkab-bsbody{padding:0;display:flex;flex-direction:column;}',
+    // Same trick for the asset-detail modal when it opens stacked on the picker (Edit-in-place): its own
+    // translucent layer darkens the picker beneath so the "modal over a modal" layering reads clearly.
+    // Added by WikiKtAssetDetail.open() only when actually stacked, so a standalone /f detail modal
+    // (single backdrop, nothing beneath) is left at normal brightness.
+    '.wkad-dim{background-color:rgba(0,0,0,.5);}',
+    '.wkab-bsbody{padding:0;display:flex;flex-direction:column;position:relative;}',
+    // Drag-and-drop upload overlay: hidden until image files are dragged over the browser body, then a
+    // dashed drop target covers the two panes. Gated to the asset browser via profile.dropUpload; the
+    // page picker never gets it. pointer-events:none so it never eats the drop it is signalling.
+    '.wkab-drop{position:absolute;inset:0;z-index:5;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(13,148,136,.10);border:2px dashed var(--bs-primary,#0d9488);border-radius:.4rem;color:var(--bs-primary,#0d9488);font-weight:600;font-size:1rem;}',
+    '.wkab-bsbody.wkab-dragover .wkab-drop{display:flex;}',
+    '.wkab-drop .mdi{font-size:1.8rem;margin-right:.5rem;}',
+    // "Modified" column: compact, muted, never wraps.
+    '.wkab-table .wkab-when{white-space:nowrap;color:var(--bs-secondary-color,#6c757d);font-size:.8rem;}',
+    // Resizable columns (desktop/mouse only — enableColumnResize adds .wkab-resizable). Fixed layout makes
+    // the per-column <col> widths authoritative; cells clip (name truncates with an ellipsis) rather than
+    // reflow. The grab handle is an absolutely-positioned strip on each header's right edge.
+    // Keyed off .wkab-resizable alone (added by enableColumnResize) so plain server-rendered tables
+    // like /f/unused can opt in too, not just the browser's own .wkab-table.
+    '.wkab-resizable{table-layout:fixed;}',
+    '.wkab-resizable td,.wkab-resizable th{overflow:hidden;}',
+    // The drag handle is absolutely positioned inside its <th>, which needs to be a containing block.
+    // .wkab-table already gets that from its sticky header; a plain table needs it stated. Scoped with
+    // :not() so it can never override that sticky positioning.
+    '.wkab-resizable:not(.wkab-table) th{position:relative;}',
+    '.wkab-table.wkab-resizable .wkab-name{overflow:hidden;}',
+    '.wkab-table.wkab-resizable .wkab-name>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '.wkab-col-resize{position:absolute;top:0;right:0;height:100%;width:9px;cursor:col-resize;z-index:1;}',
+    // A faint, thin divider at rest so columns read as resizable; no hover styling — the col-resize
+    // cursor over the handle is hint enough.
+    '.wkab-col-resize::after{content:"";position:absolute;top:15%;bottom:15%;right:4px;width:1px;background:var(--bs-secondary-color,#adb5bd);opacity:.35;}',
+    'body.wkab-col-resizing{cursor:col-resize;user-select:none;}',
     '.wkab-bsbody .wkab-body{min-height:min(72vh,620px);}',
     '.wkab-bsfoot{flex-wrap:nowrap;}',
     '.wkab-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;padding:.5rem .75rem;border-bottom:1px solid var(--bs-border-color,#dee2e6);background:var(--bs-tertiary-bg,#f8f9fa);}',
@@ -90,6 +122,184 @@
     return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
   }
 
+  // Compact relative time for the "Modified" column ("just now", "3d ago", "2mo ago"). Kept short so
+  // the column stays narrow; the exact local timestamp goes in the cell's title (see absTime).
+  function relTime(ms) {
+    if (!ms) return '';
+    let secs = Math.round((Date.now() - ms) / 1000);
+    const future = secs < 0;
+    secs = Math.abs(secs);
+    if (secs < 45) return 'just now';
+    const units = [['y', 31536000], ['mo', 2592000], ['w', 604800], ['d', 86400], ['h', 3600], ['m', 60]];
+    for (let i = 0; i < units.length; i++) {
+      const n = Math.floor(secs / units[i][1]);
+      if (n >= 1) return future ? `in ${n}${units[i][0]}` : `${n}${units[i][0]} ago`;
+    }
+    return 'just now';
+  }
+
+  // Full local date+time for tooltips. Falls back to the ISO string if toLocaleString is unavailable.
+  function absTime(ms) {
+    if (!ms) return '';
+    try { return new Date(ms).toLocaleString(); } catch (e) { return new Date(ms).toISOString(); }
+  }
+
+  // --- Resizable table columns (desktop/mouse only) --------------------------------------------------
+  // Drag a column's right edge to resize it. Gated to a fine pointer at >=576px (like modal-drag.js) so
+  // touch/phone layouts keep the natural auto-sized table untouched. Widths are frozen from the first
+  // render, then persisted per table (in-memory + localStorage) so they survive the frequent table
+  // rebuilds (sort/filter/navigate) and page reloads. Applied via a <colgroup> + table-layout:fixed so
+  // the chosen widths are authoritative; without a stored/measurable width the table is left as-is.
+  const RESIZE_STORE = {};                        // key -> number[] widths in px (this session's source of truth)
+  const canResizeCols = () => !!(window.matchMedia && window.matchMedia('(min-width: 576px) and (pointer: fine)').matches);
+
+  function loadColWidths(key, count) {
+    if (RESIZE_STORE[key] && RESIZE_STORE[key].length === count) return RESIZE_STORE[key].slice();
+    try {
+      const arr = JSON.parse(window.localStorage.getItem('wkab-colw:' + key) || 'null');
+      if (Array.isArray(arr) && arr.length === count && arr.every((w) => typeof w === 'number' && w >= 24)) {
+        RESIZE_STORE[key] = arr.slice();
+        return arr.slice();
+      }
+    } catch (e) { /* private mode / bad JSON — fall back to freezing current widths */ }
+    return null;
+  }
+  function saveColWidths(key, widths) {
+    RESIZE_STORE[key] = widths.slice();
+    try { window.localStorage.setItem('wkab-colw:' + key, JSON.stringify(widths)); } catch (e) { /* ignore */ }
+  }
+
+  // Make `table`'s columns drag-resizable, keying persistence off `key`. Call once per rebuilt table,
+  // after its <thead>/<tbody> are in the DOM. Widths are measured off the live table on first use, so the
+  // table must be laid out (visible) when this runs; if it measures ~0 (e.g. a modal still fading in) it
+  // no-ops and leaves the table untouched. Modal callers re-invoke it on `shown.bs.modal` (see openBrowser)
+  // to catch that case; a re-render while the modal is open then measures fine synchronously.
+  function enableColumnResize(table, key) {
+    if (!key || !canResizeCols()) return;
+    if (table.querySelector('colgroup')) return;            // already processed this table
+    const headRow = table.tHead && table.tHead.rows[0];
+    if (!headRow) return;
+    const ths = Array.prototype.slice.call(headRow.cells);
+    const n = ths.length;
+    if (n < 2) return;
+
+    let widths = loadColWidths(key, n);
+    if (!widths) {
+      // Floor rather than round: the frozen widths become the table's explicit width, so rounding a
+      // few columns up can total a pixel or two past the container and leave a permanent horizontal
+      // scrollbar on a table that actually fits. Flooring can only undershoot, and the last column
+      // stretches to absorb the slack.
+      widths = ths.map((th) => Math.floor(th.getBoundingClientRect().width));
+      if (widths.reduce((a, b) => a + b, 0) < 50) return;   // not laid out yet — a later call will apply it
+      saveColWidths(key, widths);
+    }
+
+    table.classList.add('wkab-resizable');
+    const colgroup = document.createElement('colgroup');
+    const cols = widths.map((w) => { const c = document.createElement('col'); c.style.width = w + 'px'; colgroup.appendChild(c); return c; });
+    table.insertBefore(colgroup, table.firstChild);
+    const applyTableWidth = () => { table.style.width = widths.reduce((a, b) => a + b, 0) + 'px'; };
+    applyTableWidth();
+
+    ths.forEach((th, i) => {
+      if (i === n - 1) return;                               // last column stretches; no right-edge handle
+      const handle = document.createElement('span');
+      handle.className = 'wkab-col-resize';
+      handle.setAttribute('aria-hidden', 'true');
+      th.appendChild(handle);                                // th is position:sticky → a valid containing block
+      // A plain click on the handle must not bubble to a sortable header's click-to-sort handler.
+      handle.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); });
+      handle.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation();              // don't start a text-selection or header interaction
+        const startX = e.clientX;
+        const startW = widths[i];
+        const onMove = (ev) => {
+          widths[i] = Math.max(40, startW + (ev.clientX - startX));
+          cols[i].style.width = widths[i] + 'px';
+          applyTableWidth();
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          document.body.classList.remove('wkab-col-resizing');
+          saveColWidths(key, widths);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.body.classList.add('wkab-col-resizing');
+      });
+    });
+  }
+
+  // --- Click-to-sort for server-rendered tables -----------------------------------------------------
+  // The /f manager sorts its own in-memory data before rendering; tables that arrive as finished HTML
+  // (e.g. /f/unused) reorder their existing rows instead. A <th> opts in with data-sort-type
+  // ("text" or "number"); a cell may carry data-sort to sort on a raw value (byte count, epoch millis)
+  // rather than its formatted text. Column + direction persist per `key`, like the manager's sort.
+  function enableTableSort(table, key) {
+    const tbody = table.tBodies[0];
+    const headRow = table.tHead && table.tHead.rows[0];
+    if (!tbody || !headRow) return;
+    const ths = Array.prototype.slice.call(headRow.cells);
+    const sortable = (th) => th.hasAttribute('data-sort-type');
+    if (!ths.some(sortable)) return;
+
+    const LS = 'wkab-tsort:' + key;
+    let sortIdx = -1;
+    let sortDir = 1;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(LS) || 'null');
+      if (saved && typeof saved.i === 'number') { sortIdx = saved.i; sortDir = saved.d === -1 ? -1 : 1; }
+    } catch (e) { /* private mode / bad JSON — fall back to the server's order */ }
+
+    function value(row, i, numeric) {
+      const cell = row.cells[i];
+      if (!cell) return numeric ? 0 : '';
+      const raw = cell.getAttribute('data-sort');
+      const text = (raw != null ? raw : cell.textContent).trim();
+      if (!numeric) return text.toLowerCase();
+      const n = parseFloat(text);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function apply(i, dir) {
+      const numeric = ths[i].getAttribute('data-sort-type') === 'number';
+      const rows = Array.prototype.slice.call(tbody.rows);
+      rows.sort((a, b) => {
+        const x = value(a, i, numeric);
+        const y = value(b, i, numeric);
+        return (numeric ? (x < y ? -1 : x > y ? 1 : 0) : x.localeCompare(y)) * dir;
+      });
+      rows.forEach((r) => tbody.appendChild(r));   // re-appending moves in place
+      ths.forEach((th, j) => {
+        if (!sortable(th)) return;
+        const caret = th.querySelector('.wkab-th-caret');
+        th.classList.toggle('active', j === i);
+        th.setAttribute('aria-sort', j === i ? (dir > 0 ? 'ascending' : 'descending') : 'none');
+        if (caret) caret.textContent = j === i ? (dir > 0 ? '▲' : '▼') : '';
+      });
+    }
+
+    ths.forEach((th, i) => {
+      if (!sortable(th)) return;
+      // Read the label before the caret is added, so it never leaks into the tooltip.
+      th.title = 'Sort by ' + th.textContent.trim();
+      th.classList.add('wkab-th-sort');
+      th.setAttribute('aria-sort', 'none');
+      const caret = document.createElement('span');
+      caret.className = 'wkab-th-caret';
+      th.appendChild(caret);
+      th.addEventListener('click', () => {
+        if (sortIdx === i) sortDir = -sortDir; else { sortIdx = i; sortDir = 1; }
+        try { window.localStorage.setItem(LS, JSON.stringify({ i: sortIdx, d: sortDir })); } catch (e) { /* ignore */ }
+        apply(sortIdx, sortDir);
+      });
+    });
+
+    if (sortIdx >= 0 && ths[sortIdx] && sortable(ths[sortIdx])) apply(sortIdx, sortDir);
+  }
+
   function leafOf(path) {
     const i = path.lastIndexOf('/');
     return i >= 0 ? path.slice(i + 1) : path;
@@ -149,17 +359,27 @@
       .catch(() => ({ uploaded: 0, conflicts: [], errors: ['Upload failed.'] }));
   }
 
-  // Upload each file into the browser's current folder; a same-name file prompts to overwrite (which
-  // archives the old as a revision). Reloads the browser afterward so the new/updated asset shows.
+  // Upload the selected files into the browser's current folder in a single request, overwriting any
+  // same-path asset by default (the previous version is archived as a revision). This mirrors the /f
+  // asset page, whose upload form defaults `overwrite` on, so a same-name upload behaves identically
+  // whether it comes from that page or this picker (no per-file prompt as previous iterations of this
+  // feawture had). Reloads afterward so the new/updated assets show.
+  // Cap a batch to the site's per-upload maximum (window.__WK_UPLOAD_MAX__, the admin "max files per
+  // upload" setting) so the picker matches the server, which enforces the same limit. Warns on truncation
+  // rather than silently dropping files.
+  function capToUploadMax(files) {
+    const max = parseInt(window.__WK_UPLOAD_MAX__, 10);
+    if (!(max > 0) || files.length <= max) return files;
+    window.alert(`You can upload at most ${max} file${max === 1 ? '' : 's'} at once. Only the first ${max} will be uploaded.`);
+    return files.slice(0, max);
+  }
+
   async function uploadFiles(files, api) {
+    files = capToUploadMax(files);
+    if (!files.length) return;
     const folder = api.getCurrent().path;
-    for (const file of files) {
-      let res = await postUpload([file], folder, false);
-      if (res.conflicts && res.conflicts.length && window.confirm(`"${res.conflicts[0]}" already exists here. Overwrite it?`)) {
-        res = await postUpload([file], folder, true);
-      }
-      if (res.errors && res.errors.length) window.alert(res.errors.join('\n'));
-    }
+    const res = await postUpload(files, folder, true);
+    if (res.errors && res.errors.length) window.alert(res.errors.join('\n'));
     await api.reload();
   }
 
@@ -399,6 +619,7 @@
 
         table.appendChild(tbody);
         main.appendChild(table);
+        if (profile.resizeKey) enableColumnResize(table, profile.resizeKey);
       }
 
       filter.addEventListener('input', renderMain);
@@ -424,6 +645,47 @@
         navigate(cur.children[name]);
       };
       if (profile.toolbarExtra) profile.toolbarExtra(toolbar, api);
+
+      // Drag-and-drop upload (asset browser only): dropping image files anywhere over the browser body
+      // uploads them into the current folder — the same result as the toolbar's Upload button. The dashed
+      // overlay shows only while files are dragged over the body, so the normal UI is untouched otherwise.
+      // A depth counter balances enter/leave across child elements so the overlay doesn't flicker; the
+      // overlay itself is pointer-events:none so it never steals the drop it is signalling.
+      if (profile.dropUpload) {
+        const overlay = el('div', 'wkab-drop');
+        overlay.innerHTML = '<span><i class="mdi mdi-tray-arrow-up" aria-hidden="true"></i>Drop image(s) to upload here</span>';
+        bodyWrap.appendChild(overlay);
+        const hasFiles = (e) => !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1);
+        let depth = 0;
+        bodyWrap.addEventListener('dragenter', (e) => {
+          if (!hasFiles(e)) return;
+          e.preventDefault(); depth++; bodyWrap.classList.add('wkab-dragover');
+        });
+        bodyWrap.addEventListener('dragover', (e) => {
+          if (!hasFiles(e)) return;
+          e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+        });
+        bodyWrap.addEventListener('dragleave', (e) => {
+          if (!hasFiles(e)) return;
+          if (--depth <= 0) { depth = 0; bodyWrap.classList.remove('wkab-dragover'); }
+        });
+        bodyWrap.addEventListener('drop', async (e) => {
+          if (!hasFiles(e)) return;
+          e.preventDefault(); depth = 0; bodyWrap.classList.remove('wkab-dragover');
+          const files = Array.prototype.filter.call(e.dataTransfer.files, (f) => /^image\//.test(f.type));
+          if (files.length) await uploadFiles(files, api);
+        });
+      }
+
+      // The first table is built while the modal is still fading in, when its columns measure ~0 and
+      // enableColumnResize no-ops. Re-run it once the open transition finishes and layout is final; any
+      // later re-render (sort/filter/navigate) then measures fine synchronously with the modal shown.
+      if (profile.resizeKey) {
+        wrap.addEventListener('shown.bs.modal', () => {
+          const t = main.querySelector('table.wkab-table');
+          if (t) enableColumnResize(t, profile.resizeKey);
+        });
+      }
 
       modal.show();
       profile.load().then((items) => {
@@ -458,7 +720,9 @@
         rootLabel: '/',
         treeRootLabel: '(root)',
         confirmOnDblClick: true,
-        headers: [{ label: 'Name' }, { label: 'Type' }, { label: 'Size', cls: 'wkab-num' }, { label: '', cls: 'wkab-actions' }],
+        dropUpload: true,
+        resizeKey: 'assetPicker',
+        headers: [{ label: 'Name' }, { label: 'Type' }, { label: 'Size', cls: 'wkab-num' }, { label: 'Modified', cls: 'wkab-when' }, { label: '', cls: 'wkab-actions' }],
         // Upload (to the current folder) + New folder controls, added to the browser toolbar.
         toolbarExtra: (toolbar, api) => {
           const fileInput = el('input');
@@ -468,7 +732,7 @@
           const uploadBtn = el('button', 'btn btn-outline-primary btn-sm');
           uploadBtn.type = 'button';
           uploadBtn.innerHTML = '<i class="mdi mdi-upload" aria-hidden="true"></i> Upload';
-          uploadBtn.title = 'Upload image(s) into the current folder';
+          uploadBtn.title = 'Upload image(s) into the current folder — replaces any with the same name';
           uploadBtn.addEventListener('click', () => fileInput.click());
           fileInput.addEventListener('change', async () => {
             if (!fileInput.files.length) return;
@@ -490,6 +754,7 @@
           { value: 'name', label: 'Name', cmp: (a, b) => a.leaf.localeCompare(b.leaf) },
           { value: 'size', label: 'Size', cmp: (a, b) => b.sizeBytes - a.sizeBytes },
           { value: 'newest', label: 'Newest', cmp: (a, b) => b.createdAt - a.createdAt },
+          { value: 'modified', label: 'Modified', cmp: (a, b) => b.updatedAt - a.updatedAt },
         ],
         emptyText: (filtered) => (filtered ? 'No matches in this folder.' : 'This folder is empty.'),
         load: () => fetch('/u/v1/assets', { credentials: 'same-origin' })
@@ -519,6 +784,8 @@
           const badge = document.createElement('span'); badge.className = 'wkab-badge'; badge.textContent = assetTypeLabel(a);
           typeTd.appendChild(badge);
           const sizeTd = document.createElement('td'); sizeTd.className = 'wkab-num'; sizeTd.textContent = formatSize(a.sizeBytes);
+          const whenTd = document.createElement('td'); whenTd.className = 'wkab-when';
+          whenTd.textContent = relTime(a.updatedAt); whenTd.title = absTime(a.updatedAt);
           // "Edit" opens the detail modal over the picker (both Bootstrap → stacks); reload on change.
           const actTd = document.createElement('td'); actTd.className = 'wkab-actions';
           const edit = document.createElement('a'); edit.href = '#'; edit.textContent = 'Edit';
@@ -527,7 +794,7 @@
             if (window.WikiKtAssetDetail) window.WikiKtAssetDetail.open(a.id, { onChange: () => api.reload() });
           });
           actTd.appendChild(edit);
-          return [nameTd, typeTd, sizeTd, actTd];
+          return [nameTd, typeTd, sizeTd, whenTd, actTd];
         },
         buildFooter: (slot, api) => {
           countEl = el('div', 'wkab-count', 'Loading…');
@@ -677,6 +944,7 @@
   window.WikiKtAssetDetail = {
     open(id, opts) {
       opts = opts || {};
+      ensureStyle();
       return new Promise((resolve) => {
         // Uses Bootstrap's Modal (focus trap, scroll-lock, ARIA) + Tab plugins. Falls back to the
         // standalone page if Bootstrap JS isn't present.
@@ -769,6 +1037,10 @@
           }
         });
 
+        // If we're opening stacked over another modal (e.g. the picker's per-row "Edit"), paint our own
+        // dim layer over it. A stacked Bootstrap backdrop sits below the underlying modal and can't
+        // darken it, so without this the picker beneath stays fully bright and the layering is unclear.
+        if (document.querySelector('.modal.show')) wrap.classList.add('wkad-dim');
         modal.show();
         load(`/f/${id}`, null, false);
       });
@@ -777,5 +1049,5 @@
 
   // Shared path-tree helpers + CSS injection, exposed so non-modal surfaces (the /f asset manager)
   // can reuse the same folder model and visual language without duplicating it.
-  window.WkBrowserCore = { el, formatSize, leafOf, buildTree, childFolders, findNode, ensureStyle };
+  window.WkBrowserCore = { el, formatSize, relTime, absTime, leafOf, buildTree, childFolders, findNode, ensureStyle, enableColumnResize, enableTableSort };
 })();

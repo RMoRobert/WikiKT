@@ -333,6 +333,28 @@ class MarkdownRendererTest {
     }
 
     @Test
+    fun `image sizing and a title can be combined`() {
+        // A title AND a size on the same image: both must survive (regression — used to fail together).
+        val both = renderer.render(
+            "![Screenshot of hub homepage (Main Menu)](/user-interface/home-page/main-menu.png \"Hubitat Home Page\" =900x)",
+            ContentFormat.MARKDOWN,
+        )
+        assertTrue(both.contains("<img"), "must render an <img>, not literal markdown: $both")
+        assertTrue(both.contains("src=\"/user-interface/home-page/main-menu.png\""), both)
+        assertTrue(both.contains("width=\"900\""), "width attribute applied: $both")
+        assertFalse(both.contains("height="), "no height when the H side is omitted: $both")
+        assertTrue(both.contains("title=\"Hubitat Home Page\""), "the author title is preserved: $both")
+        assertFalse(both.contains("wk-img-size"), "the size marker is consumed, not leaked into the title: $both")
+        assertFalse(both.contains("=900x"), "the size marker must be consumed, not shown: $both")
+        assertTrue(both.contains("alt=\"Screenshot of hub homepage (Main Menu)\""), "alt with parens kept: $both")
+
+        // Both dimensions plus a title.
+        val wh = renderer.render("![x](/a.png \"Cap\" =350x200)", ContentFormat.MARKDOWN)
+        assertTrue(wh.contains("width=\"350\"") && wh.contains("height=\"200\""), "both dimensions: $wh")
+        assertTrue(wh.contains("title=\"Cap\""), "title kept alongside both dimensions: $wh")
+    }
+
+    @Test
     fun `plain images and non-size titles are untouched by image sizing`() {
         val plain = renderer.render("![x](/a.png)", ContentFormat.MARKDOWN)
         assertTrue(plain.contains("src=\"/a.png\"") && !plain.contains("width="), "plain image unaffected: $plain")

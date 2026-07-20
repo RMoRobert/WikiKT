@@ -12,8 +12,9 @@
 <main class="container narrow">
     <div class="page-meta"><h1>{{path}}</h1><a class="btn btn-secondary" href="/f">All assets</a></div>
 
-    {{! The asset detail/edit surface. Bootstrap tabs (General / Info / History) + a persistent
-        action bar (Delete left, Save right). The whole `.asset-detail` block is injected verbatim as
+    {{! The asset detail/edit surface. Bootstrap tabs (General / File / Info / History) + a persistent
+        action bar (Delete left, Save right). General is a clean preview + embed snippet; File holds the
+        file's details and the Replace form. The whole `.asset-detail` block is injected verbatim as
         the body of the asset detail modal (wk-browser.js); standalone it's a normal tabbed page driven
         by Bootstrap's tab plugin (loaded site-wide via the footer partial). Save lives in the action
         bar and submits the Info metadata form via the `form=` attribute. }}
@@ -22,36 +23,36 @@
 
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item" role="presentation"><button class="nav-link active" id="asset-tab-general" data-bs-toggle="tab" data-bs-target="#asset-pane-general" type="button" role="tab" aria-controls="asset-pane-general" aria-selected="true">General</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="asset-tab-file" data-bs-toggle="tab" data-bs-target="#asset-pane-file" type="button" role="tab" aria-controls="asset-pane-file" aria-selected="false">File</button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="asset-tab-info" data-bs-toggle="tab" data-bs-target="#asset-pane-info" type="button" role="tab" aria-controls="asset-pane-info" aria-selected="false">Info</button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" id="asset-tab-history" data-bs-toggle="tab" data-bs-target="#asset-pane-history" type="button" role="tab" aria-controls="asset-pane-history" aria-selected="false">History</button></li>
         </ul>
 
         <div class="tab-content pt-3">
             <div class="tab-pane fade show active" id="asset-pane-general" role="tabpanel" aria-labelledby="asset-tab-general">
-                <p><a href="{{url}}"><img src="{{url}}" alt="{{originalFilename}}" style="max-width:100%;height:auto"></a></p>
-                <dl class="row mb-2">
-                    <dt class="col-sm-3">Locale</dt><dd class="col-sm-9">{{locale}}</dd>
-                    <dt class="col-sm-3">Type</dt><dd class="col-sm-9">{{mime}}</dd>
-                    <dt class="col-sm-3">Size</dt><dd class="col-sm-9">{{sizeKb}} KB</dd>
-                    <dt class="col-sm-3">Filename</dt><dd class="col-sm-9">{{originalFilename}}</dd>
-                    <dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>{{url}}</code></dd>
-                </dl>
-                <div class="mb-3"><label class="form-label">Markdown to embed</label><input type="text" readonly value="{{markdown}}" onclick="this.select()" class="form-control"></div>
-
-                {{#hasPending}}
-                <div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-outline" aria-hidden="true"></i> A replacement ({{pendingFilename}}) is scheduled for {{pendingScheduledAt}}.
-                    <form method="post" action="/f/{{id}}/pending/delete" onsubmit="return confirm('Cancel the scheduled replacement?');" class="ms-auto m-0">
-                        {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
-                    </form>
+                {{! Kept deliberately lean — just "what does it look like" and "how do I embed it". File
+                    details and the Replace action live on the File tab. Cap the preview height as well as
+                    width so a tall image doesn't dominate the modal (the modal body scrolls if needed). }}
+                <p class="text-center"><a href="{{url}}" target="_blank"><img src="{{url}}" alt="{{originalFilename}}"  title="Open image in new window" style="max-width:100%;max-height:360px;height:auto"></a></p>
+                <div class="mb-3"><label class="form-label">Markdown to embed</label>
+                    {{! Copy button uses an inline onclick (like the input's own select-on-click) so it works
+                        both standalone and when this block is injected into the asset modal, with no extra JS
+                        wiring. Prefers the async Clipboard API, falls back to execCommand on the already-selected
+                        text; briefly flips to a green check for feedback. }}
+                    <div class="input-group">
+                        <input type="text" readonly value="{{markdown}}" onclick="this.select()" class="form-control">
+                        <button type="button" class="btn btn-outline-secondary" title="Copy to clipboard" aria-label="Copy markdown to clipboard" onclick="var b=this,i=b.previousElementSibling,ic=b.querySelector('i');i.select();try{navigator.clipboard.writeText(i.value)}catch(e){try{document.execCommand('copy')}catch(_){}}ic.className='mdi mdi-check';b.classList.replace('btn-outline-secondary','btn-success');setTimeout(function(){ic.className='mdi mdi-content-copy';b.classList.replace('btn-success','btn-outline-secondary')},1200)"><i class="mdi mdi-content-copy" aria-hidden="true"></i></button>
+                    </div>
                 </div>
-                {{/hasPending}}
+            </div>
 
-                <h2 class="h5 border-top pt-3">Replace file</h2>
-                <p class="text-secondary">Upload a new image to replace this one at the same path — every page and fragment using it updates automatically. The current version is kept in history (last {{maxVersions}}).</p>
+            <div class="tab-pane fade" id="asset-pane-file" role="tabpanel" aria-labelledby="asset-tab-file">
+                <h2 class="h5 pt-3">Replace File</h2>
+                <p class="text-secondary">Upload new image to replace current one</p>
                 <form method="post" action="/f/{{id}}/replace" enctype="multipart/form-data" class="edit-form">
                     {{{csrfField}}}
                     <div class="mb-3"><label class="form-label">New image</label><input type="file" name="file" accept="image/png,image/jpeg,image/gif,image/webp" required class="form-control"></div>
-                    <div class="mb-3"><label class="form-label">When</label>
+                    <div class="mb-3"><label class="form-label">Schedule</label>
                         <select name="when" onchange="var s=this.closest('form').querySelector('.replace-at-row'); if(s) s.style.display=this.value==='scheduled'?'':'none';" class="form-select">
                             <option value="now">Replace now</option>
                             <option value="scheduled">Schedule for…</option>
@@ -60,31 +61,59 @@
                     <div class="mb-3 replace-at-row" style="display:none"><label class="form-label">At</label><input type="datetime-local" name="scheduleAt" class="form-control"></div>
                     <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Replace</button>
                 </form>
+                
+                <h2 class="h5 border-top pt-3 mt-4">File Data</h2>
+                <dl class="row mb-2">
+                    <dt class="col-sm-3">Locale</dt><dd class="col-sm-9">{{locale}}</dd>
+                    <dt class="col-sm-3">Uploaded</dt><dd class="col-sm-9">{{uploadedAt}}</dd>
+                    <dt class="col-sm-3">Last modified</dt><dd class="col-sm-9">{{modifiedAt}}</dd>
+                    <dt class="col-sm-3">Type</dt><dd class="col-sm-9">{{mime}}</dd>
+                    <dt class="col-sm-3">Size</dt><dd class="col-sm-9">{{sizeKb}} KB</dd>
+                    <dt class="col-sm-3">Filename</dt><dd class="col-sm-9">{{originalFilename}}</dd>
+                    <dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>{{url}}</code></dd>
+                </dl>
+
+                {{#hasPending}}
+                <div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-outline" aria-hidden="true"></i> A replacement ({{pendingFilename}}) is scheduled for {{pendingScheduledAt}}.
+                    <form method="post" action="/f/{{id}}/pending/delete" onsubmit="return confirm('Cancel the scheduled replacement?');" class="ms-auto m-0">
+                        {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                    </form>
+                </div>
+                {{/hasPending}}
             </div>
 
             <div class="tab-pane fade" id="asset-pane-info" role="tabpanel" aria-labelledby="asset-tab-info">
                 <form id="assetMetaForm" method="post" action="/f/{{id}}/meta" class="edit-form">
                     {{{csrfField}}}
+                    <h2 class="h5 pt-3">Replace File</h2>
                     <div class="mb-3">
-                        <label class="form-label">Default alt text</label>
+                        <label class="form-label">Accessibility and Description</label>
                         <input type="text" name="altText" value="{{altText}}" maxlength="1000" class="form-control" placeholder="Describes the image for screen readers and broken-image fallback">
-                        <p class="form-text">Used wherever the image is embedded with the <code>{alt}</code> token — <code>![{alt}]({{url}})</code> — so one edit updates every use. A normal alt in the markdown still wins; a bare <code>![](…)</code> stays intentionally empty.</p>
+                        <p class="form-text">Optional but likely convenient: to use this alt text on page, specify <code>{alt}</code> as the alt text in the Markdown file,
+                            i.e., <code>![{alt}]({{url}})</code> (and note that changing this text here will change it for any page that uses <code>{alt}</code> as the alt text).
+                            Other (or no) alt text may be specified in the file instead regardless of whether this value is set.</p>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Description <span class="text-secondary">(editors only)</span></label>
-                        <textarea name="description" rows="2" maxlength="2000" class="form-control" placeholder="Notes to help editors find this image — never shown to readers">{{description}}</textarea>
-                        <p class="form-text">Searchable from the <a href="/f">asset manager</a> filter. Not rendered on any page.</p>
+                        <label class="form-label">Notes <span class="text-secondary">(for internal use)</span></label>
+                        <textarea name="description" rows="2" maxlength="2000" class="form-control" placeholder="Notes or description to help other editors find this image">{{description}}</textarea>
+                        <p class="form-text">Optional. Searchable from the <a href="/f">asset manager</a> filter for site editors only (not displayed for regular users)</p>
                     </div>
                 </form>
 
-                <h2 class="h5 border-top pt-3">Used by {{usageCount}}</h2>
+                <h2 class="h5 border-top pt-3">In use in {{usageCount}} place(s)</h2>
                 {{#hasUsages}}
-                    <p class="text-secondary">Changing or deleting this asset affects:</p>
+                    <p class="text-secondary">Where this asset is referenced:</p>
                     <ul>
-                        {{#usages}}<li>{{type}}: <a href="{{url}}">{{label}}</a> <small class="text-secondary">({{locale}})</small></li>{{/usages}}
+                        {{! Site-wide sources (a setting, a nav entry) have no locale, so the suffix is
+                            conditional rather than always rendering an empty "()". }}
+                        {{#usages}}<li>{{type}}: <a href="{{url}}">{{label}}</a>{{#hasLocale}} <small class="text-secondary">({{locale}})</small>{{/hasLocale}}</li>{{/usages}}
                     </ul>
                 {{/hasUsages}}
-                {{^hasUsages}}<p class="text-secondary">Not referenced by any page or fragment.</p>{{/hasUsages}}
+                {{^hasUsages}}<p class="text-secondary">Not referenced by any page, fragment, scheduled draft, or site setting.</p>{{/hasUsages}}
+                {{#hasBrandingUses}}
+                    <p class="text-secondary mb-1">Also used as:</p>
+                    <ul class="mb-0">{{#brandingUses}}<li>{{.}}</li>{{/brandingUses}}</ul>
+                {{/hasBrandingUses}}
             </div>
 
             <div class="tab-pane fade" id="asset-pane-history" role="tabpanel" aria-labelledby="asset-tab-history">
@@ -94,15 +123,20 @@
                         <tbody>
                         {{#revisions}}
                             <tr>
-                                <td>v{{version}}</td>
+                                <td>{{version}}</td>
                                 <td>{{mime}}</td>
                                 <td>{{sizeKb}} KB</td>
                                 <td>{{filename}}</td>
                                 <td>{{createdAt}}</td>
                                 <td>
-                                    <form method="post" action="/f/{{assetId}}/restore/{{id}}" onsubmit="return confirm('Restore this version as the current file?');">
-                                        {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-primary">Restore</button>
-                                    </form>
+                                    <div class="d-flex gap-2 justify-content-end align-items-center">
+                                        {{! Opens this archived version's image in a new tab (target=_blank), so it's a
+                                            plain link — the detail modal only intercepts form submits, not link clicks. }}
+                                        <a href="/f/{{assetId}}/revision/{{id}}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Open this version in a new tab"><i class="mdi mdi-open-in-new" aria-hidden="true"></i> View</a>
+                                        <form method="post" action="/f/{{assetId}}/restore/{{id}}" onsubmit="return confirm('Restore this version as the current file?');" class="m-0">
+                                            {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-primary">Restore</button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         {{/revisions}}

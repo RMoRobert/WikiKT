@@ -190,7 +190,7 @@ class EmailTemplateService(private val database: R2dbcDatabase) {
                     |
                     |{{resetLink}}
                     |
-                    |If you didn't request this, you can ignore this email — your password won't change.
+                    |If you didn't request this, you can ignore this email.
                     |
                     |— {{siteName}}
                 """.trimMargin(),
@@ -235,19 +235,21 @@ class EmailTemplateService(private val database: R2dbcDatabase) {
             ),
             EmailTemplateDef(
                 key = REGISTRATION_EMAIL_EXISTS,
-                label = "Registration — address already in use",
+                label = "Registration email already in use",
                 description = "Sent to an existing account's address when someone tries to register with it — instead of revealing on the form that the address is taken.",
                 variables = listOf("siteName", "username", "loginUrl", "resetUrl", "recipient"),
                 defaultSubject = "Someone tried to register with your {{siteName}} email",
                 defaultText = """
                     |Hello {{username}},
                     |
-                    |Someone just tried to create a new {{siteName}} account with this email address, but it's
-                    |already registered to you. No new account was created and nothing has changed.
+                    |Someone just tried to create a new {{siteName}} account with this email address, but an account
+                    |already exists that is registered to this email addressed. For this reason, no new account was
+                    |created nor any other changes made.
                     |
                     |If this was you, simply sign in: {{loginUrl}}
                     |Forgot your password? Reset it here: {{resetUrl}}
-                    |If it wasn't you, you can safely ignore this email.
+                    |We are sending this message for your information only, and you can safely ignore this message
+                    |if this was you.
                     |
                     |— {{siteName}}
                 """.trimMargin(),

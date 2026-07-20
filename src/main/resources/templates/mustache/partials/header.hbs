@@ -140,7 +140,9 @@
 
         <!-- Search: centered inline box at xl; below xl a full-width row revealed by the search icon. -->
         <div class="collapse navbar-collapse order-xl-2" id="wkSearch">
-            <form class="header-search mx-xl-auto my-2 my-xl-0" action="/s" method="get" role="search" autocomplete="off" data-bs-theme="light">
+            {{! No data-bs-theme here: the box and its dropdown follow the *page* color mode, not the
+                navbar's pinned-dark one. site.css re-declares the surface vars for light mode. }}
+            <form class="header-search mx-xl-auto my-2 my-xl-0" action="/s" method="get" role="search" autocomplete="off">
                 <input type="hidden" name="locale" value="{{searchLocale}}">
                 <div class="header-search-box">
                     <i class="mdi mdi-magnify" aria-hidden="true"></i>
