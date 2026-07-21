@@ -38,11 +38,27 @@ class SettingsService(private val database: R2dbcDatabase) {
         // for contrast from each color's luminance (partials/brand-style.hbs).
         const val SITE_HEADER_COLOR = "site.headerColor"
         const val SITE_HEADER_COLOR_DARK = "site.headerColorDark"
+        /**
+         * Which surface the header search box wears:
+         *  - `theme` — follows the site color mode, like every other input (the default).
+         *  - `light` / `dark` — pinned, whatever the color mode or header color.
+         * Deliberately no luminance-derived option: deriving the box from the header bar only differs
+         * from a pinned choice when the two per-mode header colors differ in brightness, which is a
+         * corner of a corner. Resolved per color mode in [brandingModel]; see `.header-search` in site.css.
+         */
+        const val SITE_SEARCH_BOX_THEME = "site.searchBoxTheme"
+        const val DEFAULT_SEARCH_BOX_THEME = "theme"
+        val SEARCH_BOX_THEME_OPTIONS = listOf("theme", "light", "dark")
         // Optional background colors for the wiki nav sidebar, one per color mode (light / dark). When
         // unset, site.css defaults apply (blue in light mode, dark surface in dark mode). Foreground
         // tints are auto-chosen for contrast from the color's luminance (partials/brand-style.hbs).
         const val SITE_SIDEBAR_COLOR = "site.sidebarColor"
         const val SITE_SIDEBAR_COLOR_DARK = "site.sidebarColorDark"
+        // Optional text color for `header` items in the sidebar menu (the group labels added from
+        // Administration > Navigation), one per color mode. Unset, they keep the muted tint derived from
+        // the sidebar background — so these override only the headings, not the links around them.
+        const val SITE_NAV_HEADING_COLOR = "site.navHeadingColor"
+        const val SITE_NAV_HEADING_COLOR_DARK = "site.navHeadingColorDark"
         // Optional color for the fading underline drawn beneath content section headings (h2). When
         // unset, a neutral border-color fade is used (see .wiki-content h2 in site.css).
         const val SITE_HEADING_LINE_COLOR = "site.headingLineColor"
@@ -59,13 +75,10 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val SITE_DESCRIPTION = "site.description"
         const val SITE_META_ROBOTS = "site.metaRobots"
 
-        /** Per-page table of contents (built from H1/H2): display mode + which side it sits on. */
-        const val SITE_TOC_MODE = "site.tocMode"   // floating | column | off
-        const val SITE_TOC_SIDE = "site.tocSide"   // left | right
-        const val DEFAULT_TOC_MODE = "floating"
-        const val DEFAULT_TOC_SIDE = "right"
-        val TOC_MODE_OPTIONS = listOf("floating", "column", "off")
-        val TOC_SIDE_OPTIONS = listOf("left", "right")
+        /** Per-page table of contents (built from H1/H2): which side it sits on, or off entirely. */
+        const val SITE_TOC_MODE = "site.tocMode"   // left | right | off
+        const val DEFAULT_TOC_MODE = "right"
+        val TOC_MODE_OPTIONS = listOf("left", "right", "off")
 
         /**
          * Which wiki sidebar navigation(s) the site offers (Administration > Navigation):
@@ -78,6 +91,10 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val NAV_MODE = "nav.mode"
         const val DEFAULT_NAV_MODE = "static"
         val NAV_MODE_OPTIONS = listOf("static", "tree", "both", "none")
+
+        /** Whether the wiki sidebar shows its "Edit menu" link to users who may manage navigation.
+         *  Off = those users edit menus from Administration > Navigation instead. Default on. */
+        const val NAV_SHOW_EDIT_MENU_LINK = "nav.showEditMenuLink"
 
         /**
          * Typography + custom styling (Appearance page). Body/heading fonts are a preset key from
@@ -521,7 +538,16 @@ class SettingsService(private val database: R2dbcDatabase) {
             "siteSidebarColorIsDark" to (s[SITE_SIDEBAR_COLOR]?.ifBlank { null }?.let { isDarkColor(it) } ?: true),
             "siteSidebarColorDark" to (s[SITE_SIDEBAR_COLOR_DARK]?.ifBlank { null }),
             "siteSidebarColorDarkIsDark" to (s[SITE_SIDEBAR_COLOR_DARK]?.ifBlank { null }?.let { isDarkColor(it) } ?: true),
+            // Sidebar menu heading color per color mode. No *IsDark companion: this is a foreground, not a
+            // surface, so nothing has to be flipped for contrast against it.
+            "siteNavHeadingColor" to (s[SITE_NAV_HEADING_COLOR]?.ifBlank { null }),
+            "siteNavHeadingColorDark" to (s[SITE_NAV_HEADING_COLOR_DARK]?.ifBlank { null }),
             "siteHeadingLineColor" to (s[SITE_HEADING_LINE_COLOR]?.ifBlank { null }),
+            // Search box surface, resolved to a concrete "light"/"dark" per color mode (see
+            // searchBoxSurface). The two land on data attributes in partials/header.hbs, so the CSS can
+            // branch on the live root theme rather than on a server guess about which mode is showing.
+            "searchBoxLightMode" to searchBoxSurface(s, darkMode = false),
+            "searchBoxDarkMode" to searchBoxSurface(s, darkMode = true),
             "faviconUrl" to (s[SITE_FAVICON_URL]?.ifBlank { null } ?: DEFAULT_FAVICON_URL),
             "footerHtml" to footerHtml(s, markdown, year),
             // Site default color mode; the no-FOUC script in head-styles.hbs applies it. A logged-in
@@ -540,6 +566,19 @@ class SettingsService(private val database: R2dbcDatabase) {
             "customCss" to sanitizeCustomCss(s[APPEARANCE_CUSTOM_CSS]),
         )
     }
+
+    /**
+     * The header search box surface — `"light"` or `"dark"` — for one color mode, per
+     * [SITE_SEARCH_BOX_THEME]. Both modes are resolved up front so the CSS can branch on the live root
+     * theme; only `theme` actually varies between them. An unknown stored value falls back to `theme`,
+     * so a bad write can't strand the box on one surface.
+     */
+    private fun searchBoxSurface(s: Map<String, String>, darkMode: Boolean): String =
+        when (s[SITE_SEARCH_BOX_THEME]?.ifBlank { null } ?: DEFAULT_SEARCH_BOX_THEME) {
+            "light" -> "light"
+            "dark" -> "dark"
+            else -> if (darkMode) "dark" else "light"
+        }
 
     /** Resolves a stored (preset key, custom stack) pair to (css font-family stack, Google Fonts spec?). */
     private fun resolveFont(key: String?, custom: String?): Pair<String, String?> {

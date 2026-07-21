@@ -714,13 +714,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.viewModel(
     val metaRobots = pageMetaRobots?.ifBlank { null }
         ?: ctx.settings.get(siteId, s.SITE_META_ROBOTS)?.ifBlank { null }
         ?: s.DEFAULT_META_ROBOTS
-    // Table of contents (site-wide): mode (floating/column/off) + side (left/right). Built client-side
-    // from the rendered H1/H2 headings; the template just provides the container and CSS hooks.
+    // Table of contents (site-wide): left, right, or off. Built client-side from the rendered H1/H2
+    // headings; the template just provides the container and CSS hooks.
     val tocMode = ctx.settings.get(siteId, s.SITE_TOC_MODE)?.ifBlank { null } ?: s.DEFAULT_TOC_MODE
-    val tocSide = ctx.settings.get(siteId, s.SITE_TOC_SIDE)?.ifBlank { null } ?: s.DEFAULT_TOC_SIDE
     // The side column always renders (it carries the "page details" box); the TOC list within it is
-    // gated by tocEnabled. With the TOC off the column falls back to plain (non-card) styling.
-    val asideMode = if (tocMode == "off") "column" else tocMode
+    // gated by tocEnabled. With the TOC off there's no side to honour, so the remaining cards sit on
+    // the default side.
+    val asideSide = if (tocMode == "off") s.DEFAULT_TOC_MODE else tocMode
     // Breadcrumb trail: Home > ancestor > … > current page. Ancestor crumbs link to (and are labelled
     // by) the real page at that path when one exists; otherwise they show a humanized path segment with
     // no link (so we never link to a non-existent ancestor). The leaf uses the page's actual title.
@@ -800,7 +800,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.viewModel(
         "canCreate" to canCreate,
         "canViewHistory" to canViewHistory,
         "tocEnabled" to (tocMode != "off"),
-        "asideClass" to "page-aside--$asideMode page-aside--$tocSide",
+        "asideClass" to "page-aside--$asideSide",
         "updatedByName" to updatedByName,
         "hasUpdatedBy" to (updatedByName != null),
         "published" to published,
@@ -1216,7 +1216,11 @@ internal suspend fun io.ktor.server.application.ApplicationCall.navModel(
     // --- Static curated menu ---
     val activeTargets = if (pagePath.isNotEmpty()) activeNavTargets(locale, pagePath) else emptySet()
     val navItems = if (staticMode) buildNavItemModels(ctx.nav.itemsForPath(siteId, pagePath), activeTargets) else emptyList()
-    val canManageNav = staticMode && ctx.permissions.canManageNavigation(userId)
+    // The "Edit menu" link can be turned off (Administration > Navigation) for sites whose menu
+    // editors prefer the admin console; hiding it also stops the empty static pane appearing for them.
+    val canManageNav = staticMode &&
+        ctx.settings.getBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_EDIT_MENU_LINK, true) &&
+        ctx.permissions.canManageNavigation(userId)
     // The static pane shows when it has items OR the viewer can edit the menu (to add the first item).
     val staticHasContent = staticMode && (navItems.isNotEmpty() || canManageNav)
 

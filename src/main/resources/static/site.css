@@ -52,6 +52,12 @@ textarea::placeholder {
     --wk-sidebar-active-bg: rgba(255, 255, 255, 0.22);
     --wk-sidebar-line: rgba(255, 255, 255, 0.3);
     --wk-sidebar-edge: transparent;
+    /* Divider along the sidebar's top edge, where it meets the header. A whole border shorthand rather
+       than just a color so custom CSS can remove it (`none`) as easily as it can restyle it — the rules
+       that consume it are media-query-scoped child selectors, so a hand-written `.wiki-sidebar {...}`
+       override would lose on specificity. Declared at :root, so it resolves --wk-sidebar-line against
+       :root's per-color-mode value (that var is only ever set at :root, here and in brand-style.hbs). */
+    --wk-sidebar-header-line: var(--bs-border-width) solid var(--wk-sidebar-line);
     /* Admin console sidebar — a FIXED neutral palette, deliberately NOT the customizable --wk-sidebar-*
        vars above: a bad admin color pick would make the console (incl. the page needed to fix it)
        unreadable. Light mode = light-gray column; dark mode = the same dark surface the public
@@ -270,6 +276,19 @@ h2 { margin-top: 2rem; }
    editor; keep it under the sticky editor bar (z-index 5). Real fullscreen restores z-index 9. */
 .editor-preview-side { z-index: 4; }
 .CodeMirror-fullscreen ~ .editor-preview-side { z-index: 9; }
+
+/* Editor heading sizes track the *rendered* size, not the Markdown level. EasyMDE ships cm-header-N
+   sized to match Bootstrap's hN exactly, but the renderer demotes every content heading one level
+   (# → h2, ## → h3, … — the page title is the real h1; see HtmlSanitizer.demoteHeadings). So we shift
+   each editor heading down one level: cm-header-1 shows at the page's h2 size, and cm-header-5/6 both
+   land on h6 (matching the demotion cap). Values are Bootstrap's default responsive heading sizes.
+   Placed before the .editor--plain block below so plain-view's flat sizing still wins there. */
+.cm-s-easymde .cm-header-1 { font-size: calc(1.325rem + 0.9vw); }  /* h2 */
+.cm-s-easymde .cm-header-2 { font-size: calc(1.3rem + 0.6vw); }    /* h3 */
+.cm-s-easymde .cm-header-3 { font-size: calc(1.275rem + 0.3vw); }  /* h4 */
+.cm-s-easymde .cm-header-4 { font-size: 1.25rem; }                 /* h5 */
+.cm-s-easymde .cm-header-5 { font-size: 1rem; }                    /* h6 */
+.cm-s-easymde .cm-header-6 { font-size: 1rem; }                    /* h6 (demotion caps at h6) */
 
 /* Customize syntax highlight colors: quotes are dark blue (not gray/comment-like), links are dark green. */
 .CodeMirror .cm-quote { color: var(--bs-primary, #0d47a1); }
@@ -558,15 +577,20 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; }
 .brand-name { white-space: nowrap; }
 
-/* Long site names must truncate, not wrap the bar. This is a Bootstrap navbar-expand-xl, so below xl
+/* Long site names must truncate, not wrap the bar. This is a Bootstrap navbar-expand-lg, so below lg
    the navbar flex row wraps; without this a long .brand-name (white-space: nowrap) is sized at its full
    content width first, so .header-actions gets shoved onto a second row before any shrinking happens.
    That taller-than-expected bar then also pushed the compact sidebar pop-over (anchored at the fixed
    --wikikt-header-h) under the wrapped row. */
 .wk-navbar .navbar-brand.brand { min-width: 0; overflow: hidden; }
 .wk-navbar .brand-name { overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 1199.98px) {
-    /* Below xl (where the bar wraps): flex-basis 0 + grow makes the brand's hypothetical size 0, so the
+/* Must match the navbar-expand-lg breakpoint (991.98px). Above it the search is an inline centered box
+   and the brand keeps its natural width; only once the bar collapses (below lg) does the brand switch to
+   flex:1 1 0 so it shares the top row with the toggle + action icons. Keeping this at the old xl bound
+   would apply flex:1 1 0 in the 992-1199px range too, where the brand would then grow and fight the
+   now-inline search's mx-auto centering. */
+@media (max-width: 991.98px) {
+    /* Below lg (where the bar wraps): flex-basis 0 + grow makes the brand's hypothetical size 0, so the
        toggle, brand and action icons all collect on the top line together and the brand then grows to
        fill only the leftover space, ellipsizing its text. The search #wkSearch collapse still drops to
        its own row (it's a 100%-basis navbar-collapse), and the action icons stay intact (flex-shrink:0). */
@@ -620,14 +644,24 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .site-footer a { color: inherit; }
 
 /* --- Header search (in the navbar, pill-style) + live results dropdown --- */
-/* The box and its dropdown follow the *page* color mode, so they match the form controls and dropdowns
-   elsewhere in the UI — dark surface in dark mode, light in light mode. The navbar is pinned
-   data-bs-theme="dark" (so its icons stay light whatever the header color), which already hands the box
-   Bootstrap's dark surface vars; light mode therefore only has to re-declare the handful of vars the box
-   and dropdown actually use. color-scheme goes along for the ride so the UA renders the
-   <input type=search> text (and its clear button) on the matching side. */
-.header-search { position: relative; width: 100%; max-width: 32rem; color-scheme: dark; }
-:root:not([data-bs-theme="dark"]) .header-search {
+/* Surfaces here are set on the pill and the results popup separately, NOT on the form that wraps both:
+   only the pill answers to the admin's search-box preference. The popup is a floating panel over the
+   page rather than chrome on the bar, so it always follows the site color mode — pinning the pill light
+   over a dark site would otherwise drop a white sheet across the content on every keystroke.
+
+   The preference (follow site theme / always light / always dark) is resolved server-side into one
+   concrete light-or-dark answer per color mode, landing on data-wk-search-light/-dark in header.hbs; the
+   first two selectors below pick whichever matches the root theme in force right now, and the third
+   gives the popup the page's own answer. Dark needs no declarations; the navbar is pinned
+   data-bs-theme="dark" (so its icons stay light whatever the header color), which already hands both
+   Bootstrap's dark surface vars -- so only the light case re-declares the handful of vars they use.
+   color-scheme goes along for the ride so the UA renders the <input type=search> text (and its clear
+   button) and the popup's scrollbar on the matching side. */
+.header-search { position: relative; width: 100%; max-width: 28rem; }
+.header-search-box, .search-dropdown { color-scheme: dark; }
+:root:not([data-bs-theme="dark"]) .header-search[data-wk-search-light="light"] .header-search-box,
+:root[data-bs-theme="dark"] .header-search[data-wk-search-dark="light"] .header-search-box,
+:root:not([data-bs-theme="dark"]) .search-dropdown {
     color-scheme: light;
     --bs-body-bg: #fff;
     --bs-body-color: #212529;
@@ -692,7 +726,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     text-decoration: none;
     /* NOT `inherit`: that would take the *computed* colour from the navbar (pinned dark, so near-white)
        even in light mode, leaving white text on the popup's white background. Use the body colour the
-       .header-search block resolves for the current page theme instead. */
+       .search-dropdown surface block resolves for the current page theme instead. */
     color: var(--bs-body-color);
 }
 /* Neutral hover/active highlight (matches Bootstrap's own dropdown items) — the bright primary blue
@@ -839,7 +873,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     inset: -1px; /* cover the card's border box exactly -> the rounded corners line up perfectly */
     border-radius: var(--bs-border-radius);
     background: var(--bs-border-color);
-    clip-path: inset(0 calc(100% - 3px) 0 0); /* reveal only the 3px leading strip */
+    clip-path: inset(0 calc(100% - 4px) 0 0); /* reveal only the 4px leading strip */
     transition: background-color 0.12s ease;
     pointer-events: none;
 }
@@ -960,11 +994,51 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .wiki-content ul:not(.nav):not(.links-list):not(.page-toc-list):not(.toc-sublist) > li { position: relative; }
 .wiki-content ul:not(.nav):not(.links-list):not(.page-toc-list):not(.toc-sublist) > li:not(:has(> input[type="checkbox"]))::before {
     position: absolute;
-    left: -1.1rem;
+    left: -1.2rem;
     width: 1.35rem;
     content: '\25B8';
     color: var(--bs-secondary-color);
+    /* Scale the glyph up visually rather than via font-size: a transform doesn't grow the marker's
+       line-box, so its absolute anchor (and the alignment with the first text line) stays put. */
+    transform: scale(1.3);
 }
+/* Nested items (any level below the top one) show the marker hollow so a sub-list reads as a step
+   down. A list is nested only when it sits inside an <li>, so the extra `li` ancestor both selects
+   exactly those items and lifts specificity above the rule above. It keeps the SAME glyph (content
+   \25B8 from that rule) and just outlines it: swapping to the "white" triangle U+25B9 rendered much
+   larger because that codepoint font-substitutes to a taller glyph, so outlining the identical glyph
+   is the only way to keep the size matched. Deeper levels keep the hollow marker; a distinct third
+   symbol isn't worth the noise for nesting that deep. */
+.wiki-content li ul:not(.nav):not(.links-list):not(.page-toc-list):not(.toc-sublist) > li:not(:has(> input[type="checkbox"]))::before {
+    color: transparent;
+    -webkit-text-stroke: 1px var(--bs-secondary-color);
+}
+
+/* Ordered lists: draw the number/letter as a positioned counter (like the bullet markers) instead of a
+   native list marker, so it can sit a little left of the text in the gutter — native markers hug the
+   text and can't be nudged. The built-in `list-item` counter is used, so `<ol start>` / `<li value>`
+   still number correctly. The marker is right-aligned to the text edge (right: 100%) with a small gap,
+   so multi-digit values grow leftward and the delimiter stays a fixed distance from the text.
+   Depth is counted by <ol> ancestors: L1 decimal (1.), L2 lower-roman (i.), L3 lower-alpha (a.),
+   L4-and-deeper lower-roman closed with ")". */
+.wiki-content ol { list-style: none; }
+.wiki-content ol > li { position: relative; }
+.wiki-content ol > li::before {
+    position: absolute;
+    right: 100%;
+    margin-right: 0.55rem;
+    white-space: nowrap;
+    content: counter(list-item, decimal) ".";
+}
+.wiki-content ol ol > li::before { content: counter(list-item, lower-roman) "."; }
+.wiki-content ol ol ol > li::before { content: counter(list-item, lower-alpha) "."; }
+.wiki-content ol ol ol ol > li::before { content: counter(list-item, lower-roman) ")"; }
+
+/* Footnotes stay on native numbering (the numbers pair with the [n] references in the text), so opt
+   their list back out of the positioned-counter treatment above. */
+.wiki-content .footnotes ol { list-style: decimal; }
+.wiki-content .footnotes ol > li { position: static; }
+.wiki-content .footnotes ol > li::before { content: none; }
 
 /* Task lists (GFM): drop the bullet and align the checkbox where it would have been. */
 .wiki-content li:has(> input[type="checkbox"]) { list-style: none; margin-inline-start: -1.3em; }
@@ -1062,6 +1136,14 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
         overflow-y: auto;
         scrollbar-width: thin;
         border-right: var(--bs-border-width) solid var(--wk-sidebar-edge);
+        /* Hairline against the header. The column's top edge already sits exactly at the bar's bottom
+           (top: --wikikt-header-h), so a border here reads as a divider level with the bar rather than
+           an inset line. Needed because the header color and the sidebar color are independently
+           admin-set: choose the same value for both and the two surfaces merge into one slab with no
+           seam. The token's default tracks --wk-sidebar-line, which brand-style.hbs already flips white-
+           vs black-based with the rest of the sidebar foregrounds, so it contrasts whichever color is
+           chosen. Deliberately no shadow: the bar casts none, and one here would smear over the column. */
+        border-top: var(--wk-sidebar-header-line);
         /* Above page content, below the sticky header (Bootstrap sticky-top is 1020). */
         z-index: 1015;
     }
@@ -1089,9 +1171,11 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    gap before the label. */
 .wiki-sidebar nav a .mdi { font-size: 1.2rem; vertical-align: -0.18em; margin-right: 0.25rem; }
 .wiki-sidebar .nav-heading {
-    font-weight: 700;
+    font-weight: 400;
     font-size: 0.8rem;
-    color: var(--wk-sidebar-fg-muted);
+    /* Admin-settable per color mode (brand-style.hbs). Unset, it falls back to the muted tint derived
+       from the sidebar background, so headings keep tracking a recolored sidebar for free. */
+    color: var(--wk-sidebar-heading-fg, var(--wk-sidebar-fg-muted));
     /* Tighter than the link padding: headings sit close to the group below them. */
     padding-top: 0.3rem;
     padding-bottom: 0.3rem;
@@ -1128,6 +1212,9 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
         overflow-y: auto;
         z-index: 1019;
         border-radius: 0 0 0.4rem 0;            /* square against the top/left edges; only the free bottom-right corner softened */
+        /* Same header seam as the desktop column — the drawer's own shadow is thrown down and out, so it
+           does nothing for the edge butted against the bar. */
+        border-top: var(--wk-sidebar-header-line);
         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.28);
         display: none;                          /* collapsed by default — revealed by the hamburger (.is-open) */
     }
@@ -1206,8 +1293,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 
 /* The side column reserves its own space (so it never overlaps content) and sticks while scrolling.
    It holds the TOC (optional) and the always-present "page details" box, stacked. Left/right is
-   chosen with flex order. In "floating" mode the TOC reads as a detached card; in "column" mode it
-   sits inline like the nav sidebar. */
+   chosen with flex order, from the site's Appearance > Table of contents setting. */
 .page-aside {
     flex: 0 0 16rem;
     align-self: flex-start;

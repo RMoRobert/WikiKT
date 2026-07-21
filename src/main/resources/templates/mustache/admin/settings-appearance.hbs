@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Appearance | Admin</title>
+    <title>Admin | Appearance | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
 </head>
@@ -78,6 +78,22 @@
             <p class="form-text">The sidebar color used when the site is in dark mode. Leave blank for the default dark surface.</p>
         </div>
         <div class="mb-3">
+            <label class="form-label">Sidebar menu header color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteNavHeadingColor" value="{{siteNavHeadingColorValue}}" placeholder="#ffffff" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">A hex color for <em>Header</em> items in the sidebar menu (the group labels you add under <a href="/a/navigation">Navigation</a>) in light mode. Leave blank to keep the muted tint derived from the sidebar color.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Sidebar menu header color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteNavHeadingColorDark" value="{{siteNavHeadingColorDarkValue}}" placeholder="#ffffff" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">The sidebar menu header color used when the site is in dark mode.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="searchBoxTheme">Search box</label>
+            <select class="form-select" id="searchBoxTheme" name="searchBoxTheme">
+                {{#searchBoxOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/searchBoxOptions}}
+            </select>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Heading underline color <span class="text-secondary">(optional)</span></label>
             <input class="form-control" type="text" name="siteHeadingLineColor" value="{{siteHeadingLineColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
             <p class="form-text">Section headings on wiki pages get a thin underline with gradient to white. Leave blank for a neutral gray.</p>
@@ -85,17 +101,11 @@
 
         <h2>Table of contents</h2>
         <div class="mb-3">
-            <label class="form-label">Display</label>
+            <label class="form-label">Position</label>
             <select class="form-select" name="tocMode">
                 {{#tocModeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/tocModeOptions}}
             </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Position</label>
-            <select class="form-select" name="tocSide">
-                {{#tocSideOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/tocSideOptions}}
-            </select>
-            <p class="form-text">Auto-built from each page's H1 and H2 headings. "Floating" overlays the side margin; "Separate column" sits beside the content; "Disabled" hides it site-wide. Position chooses the left or right side.</p>
+            <p class="form-text">Auto-built from each page's H1 and H2 headings. If enabled, shown beside the content or, on narrow screens, under the page title.</p>
         </div>
 
         <h2>Typography</h2>
@@ -123,7 +133,8 @@
         </div>
         <p class="form-text">Built-in fonts load automatically from Google Fonts. Pick <strong>Custom…</strong> to use your own —
             enter its <code>font-family</code> and load it via Custom CSS below (<code>@font-face</code>, <code>@import</code>, or a
-            self-hosted <a href="/f">asset</a>). Third-party hosts currently must be Google Fonts or jsDelivr (per content-security policy).</p>
+            self-hosted <a href="/f">asset</a>). Google Fonts and jsDelivr are allowed by default; other hosts
+            must be added to the <a href="/a/security">content-security policy</a>.</p>
         <div class="mb-3" style="max-width:14rem">
             <label class="form-label" for="baseFontSize">Base text size</label>
             <div class="input-group">
@@ -138,8 +149,8 @@
             <textarea class="form-control text-body-emphasis" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="customCss" name="customCss" rows="8" spellcheck="false" placeholder=".content h1 { letter-spacing: -0.02em; }&#10;:root { --bs-border-radius: 0.75rem; }" maxlength="20000">{{customCssValue}}</textarea>
             <p class="form-text">Injected into <code>&lt;head&gt;</code> of every page after the theme, so it overrides built-i
                 styles. Examples: theme via CSS variables like <code>--bs-primary</code>. External resources (images,
-                <code>@import</code>, <code>@font-face</code>) can currently load only from this server, Google Fonts,
-                or jsDelivr per content-security policy.</p>
+                <code>@import</code>, <code>@font-face</code>) may load from this server, Google Fonts, and jsDelivr by default;
+                other hosts must be allowed by <a href="/a/security">content-security policy</a>.</p>
         </div>
 
         <h2>Custom HTML <span class="text-secondary fs-6">(advanced)</span></h2>
@@ -147,7 +158,8 @@
             <code>&lt;meta&gt;</code> tags, chat widgets, etc. <strong>Unlike Custom CSS, this is not
             sanitized</strong>, so only trusted admins should use it; a mistake can break the page.
             <strong>Note:</strong> the content-security policy still applies: inline scripts run, but scripts loaded
-            from an external host work only from allowed sources. Third-party analytics hosts would need a CSP change.</p>
+            from an external host work only from allowed sources — add a third-party analytics host to
+            <a href="/a/security">Security</a> first.</p>
         <div class="mb-3">
             <label class="form-label" for="headHtml">Head HTML <span class="text-secondary">— injected at the end of <code>&lt;head&gt;</code></span></label>
             <textarea class="form-control" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="headHtml" name="headHtml" rows="5" spellcheck="false" placeholder="&lt;meta name=&quot;google-site-verification&quot; content=&quot;…&quot;&gt;" maxlength="20000">{{headHtmlValue}}</textarea>

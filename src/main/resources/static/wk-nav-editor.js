@@ -1,9 +1,9 @@
 /*
- * Visual navigation menu editor. Progressive enhancement over the plain-text "definition" textarea:
- * it parses that text into rows (link / header / divider, with one level of nesting), lets the admin
- * add / edit / reorder / nest / delete them with a live sidebar preview, and serializes back into the
- * SAME text format the server parses (NavService.parseDefinition — 2-space indent = a nested link).
- * A "Source" toggle reveals the raw text for power users / git round-trips.
+ * Visual navigation menu editor. Progressive enhancement over the plain-text "definition" textarea, which is
+ * still available. It parses that text into rows (link / header / divider, with one level of nesting), lets
+ * an admin edit sidebar items with them with a live sidebar preview, and serializes back into the
+ * raw text format the server parses (NavService.parseDefinition: 2-space indent = a nested link).
+ * An "Edit Source" toggle reveals the raw text for power users or git sync..
  */
 (function () {
   var root = document.getElementById('navEditor');
@@ -241,7 +241,7 @@
     ta.classList.toggle('d-none', !show);
     if (help) help.classList.toggle('d-none', !show);
     rowsEl.classList.toggle('d-none', show);
-    srcBtn.innerHTML = show ? '<i class="mdi mdi-view-list"></i> Visual' : '<i class="mdi mdi-code-tags"></i> Source';
+    srcBtn.innerHTML = show ? '<i class="mdi mdi-view-list"></i> Visual Editor' : '<i class="mdi mdi-code-tags"></i> Edit Source';
     if (show) sync(); else { items = parse(ta.value); render(); }
   }
   srcBtn.addEventListener('click', function () { setSource(ta.classList.contains('d-none')); });

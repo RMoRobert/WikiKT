@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navigation | Admin</title>
+    <title>Admin | Navigation | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
 </head>
@@ -18,7 +18,7 @@
         {{{csrfField}}}
         <div class="card-body">
             <h2 class="h5 mb-1">Sidebar navigation</h2>
-            <p class="text-secondary">Choose how visitors navigate between pages from the sidebar.</p>
+            <p>Choose how visitors navigate between pages from the sidebar.</p>
             <div class="form-check mb-2">
                 <input class="form-check-input" type="radio" name="mode" id="modeStatic" value="static"{{#modeStatic}} checked{{/modeStatic}}>
                 <label class="form-check-label" for="modeStatic">
@@ -47,6 +47,14 @@
                     <span class="d-block text-secondary small">No sidebar. Visitors navigate via links, breadcrumbs, and search.</span>
                 </label>
             </div>
+            <hr>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="showEditMenuLink" id="showEditMenuLink" value="1" {{#showEditMenuLink}}checked{{/showEditMenuLink}}>
+                <label class="form-check-label" for="showEditMenuLink">
+                    Show "Edit menu" link in sidebar for users who can manage navigation
+                    <span class="d-block text-secondary small">When disabled, users with permissions can still edit menus from this page instead.</span>
+                </label>
+            </div>
             <button type="submit" class="btn btn-primary">Save</button>
         </div>
     </form>
@@ -54,8 +62,8 @@
     {{! Static menu editor — only meaningful when a static menu is shown, but always editable so a menu can
         be prepared before switching modes. }}
     <div class="page-meta"><h2 class="h5"><i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i> Static menus</h2><a class="btn btn-primary" href="/a/navigation/new">New menu</a></div>
-    {{^staticEnabled}}<p class="text-secondary"><i class="mdi mdi-information-outline" aria-hidden="true"></i> The current mode doesn't show a static menu, so these menus aren't displayed to visitors right now.</p>{{/staticEnabled}}
-    <p class="text-secondary">Each menu is a sidebar. The default menu (empty scope) is used everywhere a more specific menu doesn't match.</p>
+    {{^staticEnabled}}<p class="text-secondary"><i class="mdi mdi-information-outline" aria-hidden="true"></i>NOTE: As configured, your site currently does not show a static menu, so the menus configured below will not appear anywhere.</p>{{/staticEnabled}}
+    <p>Customize the static menu navigation bar for your site. Menus may be scoped to entire site or specific paths only. The default menu (empty scope) is used everywhere a more specific menu doesn't match.</p>
     <table class="table table-hover align-middle">
         <thead><tr><th>Scope</th><th>Items</th><th></th></tr></thead>
         <tbody>

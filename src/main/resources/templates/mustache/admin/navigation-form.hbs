@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{#isNew}}New Menu{{/isNew}}{{^isNew}}Edit Menu{{/isNew}} | Admin</title>
+    <title>Admin | {{#isNew}}New Menu{{/isNew}}{{^isNew}}Edit Menu{{/isNew}} | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
 </head>
@@ -16,7 +16,7 @@
         <div class="mb-3" style="max-width:32rem">
             <label class="form-label">Scope</label>
             <input class="form-control" type="text" name="scope" value="{{scope}}" placeholder="e.g. apps/rule-machine (empty = default menu)">
-            <p class="form-text">Leave empty for the default menu. Otherwise a path prefix — the menu applies to that path and everything under it; the longest matching scope wins.</p>
+            <p class="form-text">Leave empty to configure the default menu (used when no path matches). Otherwise, specify a path, and the menu will appear for all pages at that path (and under any subpaths). Longer paths override shorter paths (e.g., <code>/path1/path2/page1</code> page will show menu configured for <code>/path1/path2</code> and not <code>/path1</code> if both are configured).</p>
         </div>
         <div class="mb-3">
             <label class="form-label">Items</label>
@@ -26,7 +26,7 @@
                     <button type="button" class="btn btn-sm btn-outline-primary" data-add="link"><i class="mdi mdi-link-variant" aria-hidden="true"></i> Link</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-add="header"><i class="mdi mdi-format-header-pound" aria-hidden="true"></i> Header</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-add="divider"><i class="mdi mdi-minus" aria-hidden="true"></i> Divider</button>
-                    <button type="button" class="btn btn-sm btn-link ms-auto" data-toggle-source><i class="mdi mdi-code-tags" aria-hidden="true"></i> Source</button>
+                    <button type="button" class="btn btn-sm btn-link ms-auto" data-toggle-source><i class="mdi mdi-code-tags" aria-hidden="true"></i> Edit Source</button>
                 </div>
                 <div class="nav-ed-main">
                     <div class="nav-ed-rows" data-rows></div>

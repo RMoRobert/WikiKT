@@ -6,7 +6,7 @@
     {{! While a background sync runs, reload this page every few seconds. Once it clears, the tag is }}
     {{! no longer rendered, so refreshing stops on its own and the Last-run panel shows the outcome. }}
     {{#syncRunning}}<meta http-equiv="refresh" content="4">{{/syncRunning}}
-    <title>Storage and backup | Admin</title>
+    <title>Admin | Storage and backup | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
 </head>

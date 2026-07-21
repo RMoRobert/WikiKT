@@ -38,36 +38,38 @@ class TableOfContentsTest {
         val csrf = admin.loginAsAdmin()
         admin.createSamplePage(csrf)
 
-        // Default: floating TOC on the right is present on the page (the list is filled in client-side).
+        // Default: the TOC sits on the right (the list itself is filled in client-side).
         anon.get(pageUrl).bodyAsText().let { html ->
             assertTrue(html.contains("""id="pageToc""""), "TOC container present by default")
-            assertTrue(html.contains("page-aside--floating") && html.contains("page-aside--right"), "default mode/side")
+            assertTrue(html.contains("page-aside--right"), "default side")
             // The "page details" box (last modified by/on) is always present in the side column.
             assertTrue(html.contains("Last modified by") && html.contains("Last modified on"), "page details box present")
         }
 
-        suspend fun saveToc(mode: String, side: String) = admin.post("/a/settings/appearance") {
+        suspend fun saveToc(mode: String) = admin.post("/a/settings/appearance") {
             setBody(
                 FormDataContent(
                     Parameters.build {
                         append("_csrf", csrf)
                         append("tocMode", mode)
-                        append("tocSide", side)
                     },
                 ),
             )
         }
 
-        // Switch to a left-hand separate column.
-        saveToc("column", "left")
+        // Switch sides.
+        saveToc("left")
         anon.get(pageUrl).bodyAsText().let { html ->
-            assertTrue(html.contains("page-aside--column") && html.contains("page-aside--left"), "column/left applied")
+            assertTrue(html.contains("page-aside--left"), "left applied")
+            assertFalse(html.contains("page-aside--right"), "old side dropped")
         }
 
-        // Disable site-wide: the TOC list is gone, but the page-details box remains.
-        saveToc("off", "right")
+        // Disable site-wide: the TOC list is gone, but the page-details box remains in the column,
+        // which falls back to the default side.
+        saveToc("off")
         anon.get(pageUrl).bodyAsText().let { html ->
             assertFalse(html.contains("""id="pageToc""""), "TOC removed when disabled")
+            assertTrue(html.contains("page-aside--right"), "column falls back to the default side")
             assertTrue(html.contains("Last modified on"), "page details box stays when the TOC is disabled")
         }
     }

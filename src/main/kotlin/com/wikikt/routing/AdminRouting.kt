@@ -220,13 +220,17 @@ fun Route.configureAdminRouting() {
             ctx.settings.set(siteId, s.SITE_SIDEBAR_COLOR, if (sidebarColor.matches(HEX_COLOR)) sidebarColor else "")
             val sidebarColorDark = params["siteSidebarColorDark"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_SIDEBAR_COLOR_DARK, if (sidebarColorDark.matches(HEX_COLOR)) sidebarColorDark else "")
+            val navHeadingColor = params["siteNavHeadingColor"].orEmpty().trim()
+            ctx.settings.set(siteId, s.SITE_NAV_HEADING_COLOR, if (navHeadingColor.matches(HEX_COLOR)) navHeadingColor else "")
+            val navHeadingColorDark = params["siteNavHeadingColorDark"].orEmpty().trim()
+            ctx.settings.set(siteId, s.SITE_NAV_HEADING_COLOR_DARK, if (navHeadingColorDark.matches(HEX_COLOR)) navHeadingColorDark else "")
+            val searchBoxTheme = params["searchBoxTheme"].orEmpty().trim()
+            ctx.settings.set(siteId, s.SITE_SEARCH_BOX_THEME, if (searchBoxTheme in s.SEARCH_BOX_THEME_OPTIONS) searchBoxTheme else "")
             val headingLineColor = params["siteHeadingLineColor"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_HEADING_LINE_COLOR, if (headingLineColor.matches(HEX_COLOR)) headingLineColor else "")
-            // Table of contents: mode + side must be known values (else clear → fall back to defaults).
+            // Table of contents: must be a known value (else clear/fall back to the default).
             val tocMode = params["tocMode"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_TOC_MODE, if (tocMode in s.TOC_MODE_OPTIONS) tocMode else "")
-            val tocSide = params["tocSide"].orEmpty().trim()
-            ctx.settings.set(siteId, s.SITE_TOC_SIDE, if (tocSide in s.TOC_SIDE_OPTIONS) tocSide else "")
             // Typography: font is a known preset key (else fall back to the default); the custom family
             // and Custom CSS are sanitized on output (SettingsService), so store the trimmed input here.
             val fontKeys = s.FONT_PRESETS.map { it.key }.toSet()
@@ -1178,6 +1182,7 @@ fun Route.configureAdminRouting() {
                         "modeNone" to (mode == "none"),
                         // The static menu list is only relevant when a static menu is actually shown.
                         "staticEnabled" to (mode == "static" || mode == "both"),
+                        "showEditMenuLink" to call.appContext.settings.getBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_EDIT_MENU_LINK, true),
                         "modeSaved" to (call.request.queryParameters["saved"] != null),
                     ),
                 ),
@@ -1193,7 +1198,9 @@ fun Route.configureAdminRouting() {
             if (!call.validateFormCsrf(params)) return@post
             val mode = params["mode"]?.takeIf { it in com.wikikt.service.SettingsService.NAV_MODE_OPTIONS }
                 ?: com.wikikt.service.SettingsService.DEFAULT_NAV_MODE
-            call.appContext.settings.set(call.adminSiteId(), com.wikikt.service.SettingsService.NAV_MODE, mode)
+            val siteId = call.adminSiteId()
+            call.appContext.settings.set(siteId, com.wikikt.service.SettingsService.NAV_MODE, mode)
+            call.appContext.settings.setBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_EDIT_MENU_LINK, params["showEditMenuLink"] != null)
             call.respondRedirect("/a/navigation?saved=1")
         }
 
@@ -2046,12 +2053,16 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
     val faviconValue = currentFavicon.takeIf { it.isNotBlank() && logoUrls.any { u -> u.first == it } }.orEmpty()
     val currentRobots = settings.get(siteId, s.SITE_META_ROBOTS)?.ifBlank { null } ?: s.DEFAULT_META_ROBOTS
     val siteRobotsOptions = s.META_ROBOTS_OPTIONS.map { opt -> mapOf("value" to opt, "label" to opt, "selected" to (opt == currentRobots)) }
-    val tocModeLabels = mapOf("floating" to "Floating", "column" to "Separate column", "off" to "Disabled")
+    val searchBoxLabels = mapOf(
+        "theme" to "Follow site theme",
+        "light" to "Always light",
+        "dark" to "Always dark",
+    )
+    val currentSearchBox = settings.get(siteId, s.SITE_SEARCH_BOX_THEME)?.ifBlank { null } ?: s.DEFAULT_SEARCH_BOX_THEME
+    val searchBoxOptions = s.SEARCH_BOX_THEME_OPTIONS.map { mapOf("value" to it, "label" to searchBoxLabels[it], "selected" to (it == currentSearchBox)) }
+    val tocModeLabels = mapOf("left" to "Left", "right" to "Right", "off" to "Disabled")
     val currentTocMode = settings.get(siteId, s.SITE_TOC_MODE)?.ifBlank { null } ?: s.DEFAULT_TOC_MODE
     val tocModeOptions = s.TOC_MODE_OPTIONS.map { mapOf("value" to it, "label" to tocModeLabels[it], "selected" to (it == currentTocMode)) }
-    val tocSideLabels = mapOf("left" to "Left", "right" to "Right")
-    val currentTocSide = settings.get(siteId, s.SITE_TOC_SIDE)?.ifBlank { null } ?: s.DEFAULT_TOC_SIDE
-    val tocSideOptions = s.TOC_SIDE_OPTIONS.map { mapOf("value" to it, "label" to tocSideLabels[it], "selected" to (it == currentTocSide)) }
     // Theme: site default color mode.
     val themeLabels = mapOf("light" to "Light", "dark" to "Dark", "auto" to "Auto (match user's device)")
     val currentTheme = settings.get(siteId, s.APPEARANCE_THEME)?.ifBlank { null } ?: s.DEFAULT_THEME
@@ -2116,6 +2127,8 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         "siteHeaderColorDarkValue" to settings.get(siteId, s.SITE_HEADER_COLOR_DARK).orEmpty(),
         "siteSidebarColorValue" to settings.get(siteId, s.SITE_SIDEBAR_COLOR).orEmpty(),
         "siteSidebarColorDarkValue" to settings.get(siteId, s.SITE_SIDEBAR_COLOR_DARK).orEmpty(),
+        "siteNavHeadingColorValue" to settings.get(siteId, s.SITE_NAV_HEADING_COLOR).orEmpty(),
+        "siteNavHeadingColorDarkValue" to settings.get(siteId, s.SITE_NAV_HEADING_COLOR_DARK).orEmpty(),
         "siteHeadingLineColorValue" to settings.get(siteId, s.SITE_HEADING_LINE_COLOR).orEmpty(),
         // Logo / favicon: the currently-chosen image-asset URL ("" = the bundled default). Picked via the
         // asset browser; the POST handler re-validates the URL against the uploaded image assets.
@@ -2127,8 +2140,8 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         "siteFooterOverrideValue" to settings.get(siteId, s.SITE_FOOTER_OVERRIDE).orEmpty(),
         "siteDescriptionValue" to settings.get(siteId, s.SITE_DESCRIPTION).orEmpty(),
         "siteRobotsOptions" to siteRobotsOptions,
+        "searchBoxOptions" to searchBoxOptions,
         "tocModeOptions" to tocModeOptions,
-        "tocSideOptions" to tocSideOptions,
         "themeOptions" to themeOptions,
         "showThemePicker" to settings.getBool(siteId, s.APPEARANCE_SHOW_THEME_PICKER, true),
         "headHtmlValue" to settings.get(siteId, s.APPEARANCE_HEAD_HTML).orEmpty(),
