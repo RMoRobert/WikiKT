@@ -176,7 +176,12 @@ class PermissionService(
     suspend fun canManageNavigation(userId: UInt?): Boolean =
         userId != null && AccessResolver.check(principal(userId), AccessResolver.Perm.MANAGE_NAVIGATION)
 
-    /** Governs appearance / CSP / site-wide custom HTML+CSS — and per-page custom code (unsanitized). */
+    /**
+     * Governs **per-page** custom code — the unsanitized CSS/JS a page author attaches via the editor's
+     * "Custom Code" panel. NOTE: site-wide appearance (custom head/body HTML) and the CSP editor are
+     * gated on [AccessResolver.Perm.MANAGE_GROUPS], not this verb, so `manage:theme` alone does not
+     * reach them. Keep the group-editor label ([com.wikikt.routing] `adminVerbLabel`) in sync.
+     */
     suspend fun canManageTheme(userId: UInt?): Boolean =
         userId != null && AccessResolver.check(principal(userId), AccessResolver.Perm.MANAGE_THEME)
 

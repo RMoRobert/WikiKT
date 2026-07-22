@@ -23,6 +23,7 @@ import com.wikikt.service.PageService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.plugins.origin
+import io.ktor.server.request.contentLength
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -46,9 +47,25 @@ private suspend fun io.ktor.server.application.ApplicationCall.requireApiCsrf():
     return false
 }
 
+// Auth request bodies (login credentials) are a few hundred bytes at most; reject anything larger up
+// front so an anonymous caller can't force a big parse/buffer before the throttle even runs. This
+// guards the declared Content-Length; a chunked body without one still streams, but the production
+// reverse proxy caps request size and form endpoints are already bounded by Ktor's form-field limit.
+private const val MAX_AUTH_BODY_BYTES = 4L * 1024
+
+private suspend fun io.ktor.server.application.ApplicationCall.enforceAuthBodyCap(): Boolean {
+    val length = request.contentLength()
+    if (length != null && length > MAX_AUTH_BODY_BYTES) {
+        respond(HttpStatusCode.PayloadTooLarge, mapOf("error" to "Request body too large"))
+        return false
+    }
+    return true
+}
+
 fun Route.configureApiRouting() {
     route("/u/v1") {
         post("/auth/login") {
+            if (!call.enforceAuthBodyCap()) return@post
             val ctx = call.appContext
             val request = call.receive<LoginRequest>()
             // Same brute-force throttle as the form login — without it this endpoint would be the

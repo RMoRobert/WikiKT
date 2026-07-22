@@ -52,7 +52,14 @@
     // cursor over the handle is hint enough.
     '.wkab-col-resize::after{content:"";position:absolute;top:15%;bottom:15%;right:4px;width:1px;background:var(--bs-secondary-color,#adb5bd);opacity:.35;}',
     'body.wkab-col-resizing{cursor:col-resize;user-select:none;}',
-    '.wkab-bsbody .wkab-body{min-height:min(72vh,620px);}',
+    // Pin the two-pane area to one size — min and max are the same var — so a folder with hundreds
+    // of entries scrolls inside .wkab-tree / .wkab-main instead of stretching the dialog past the
+    // viewport and handing the scroll to the page behind it. (min-height alone can't cap it, and
+    // plain `height` is ignored here — flex:1 makes flex-basis:0 win over it on the main axis.)
+    // The 15rem term is the dialog's own chrome — centred margins, header, toolbar, footer — so the
+    // whole modal still fits a short viewport, where a flat 72vh would have overhung the bottom.
+    '.wkab-bsbody{--wkab-pane-h:min(72vh,620px,calc(100vh - 15rem));}',
+    '.wkab-bsbody .wkab-body{min-height:var(--wkab-pane-h);max-height:var(--wkab-pane-h);}',
     '.wkab-bsfoot{flex-wrap:nowrap;}',
     '.wkab-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;padding:.5rem .75rem;border-bottom:1px solid var(--bs-border-color,#dee2e6);background:var(--bs-tertiary-bg,#f8f9fa);}',
     '.wkab-crumbs{flex:1;min-width:0;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',

@@ -169,9 +169,8 @@
     <hr class="my-4">
 
     <h2><i class="mdi mdi-tray-arrow-up" aria-hidden="true"></i> Uploads</h2>
-    <p class="text-secondary">The most files that can be sent in a single upload — this applies both to the
-        asset manager's upload box and to the editor's multi-file <em>Upload</em>. Individual file size and
-        allowed types are set in server configuration.</p>
+    <p class="text-secondary">The most files that can be sent in a single upload in the asset editor.
+        Individual file size and allowed types are set in server configuration.</p>
     <form method="post" action="/a/storage/uploads" class="edit-form">
         {{{csrfField}}}
         <div style="max-width:20rem">
@@ -179,6 +178,10 @@
             <select class="form-select" id="maxUploadFiles" name="maxUploadFiles">
                 {{#uploadFileOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{value}}</option>{{/uploadFileOptions}}
             </select>
+        </div>
+        <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="stripMetadata" name="stripMetadata" {{#stripMetadata}}checked{{/stripMetadata}}>
+            <label class="form-check-label" for="stripMetadata">Remove image metadata (EXIF/GPS) on upload</label>
         </div>
         <button type="submit" class="btn btn-primary mt-3"><i class="mdi mdi-content-save-outline" aria-hidden="true"></i> Save upload settings</button>
     </form>

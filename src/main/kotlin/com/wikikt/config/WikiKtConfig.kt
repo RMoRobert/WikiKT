@@ -27,14 +27,25 @@ internal fun ApplicationConfig.envOrConfig(
     getEnv(envVar)?.ifBlank { null }
         ?: propertyOrNull(yamlKey)?.getString()?.ifBlank { null }
 
+// The only values that positively mean "development" — anything else non-blank is treated as
+// production (fail closed). Kept small and explicit so a typo can't accidentally land in this set.
+private val DEVELOPMENT_ENVIRONMENTS = setOf("development", "dev", "local", "test")
+
 /**
  * Whether the app is running in a production deployment, controlled by `WIKIKT_ENV`
- * (or `wikikt.environment`). Defaults to development. In production, insecure defaults
- * (built-in session keys, the default admin password) are fatal rather than merely warned.
+ * (or `wikikt.environment`). In production, insecure defaults (built-in session keys, the default
+ * admin password, a non-Secure cookie) are fatal rather than merely warned.
+ *
+ * Fails closed on ambiguity: an unset/blank environment stays development (so `./gradlew run` and the
+ * test suite boot without ceremony), but any *non-blank* value that isn't an explicit development
+ * keyword is treated as production. That way a typo or variant like `prod-eu`, `live`, or `staging`
+ * can never silently drop the production guards — it errs toward refusing to start over shipping
+ * insecure defaults.
  */
 fun ApplicationConfig.isProductionEnvironment(): Boolean {
-    val env = envOrConfig("wikikt.environment", "WIKIKT_ENV") ?: "development"
-    return env.trim().lowercase() in setOf("prod", "production")
+    val env = envOrConfig("wikikt.environment", "WIKIKT_ENV")?.trim()?.lowercase()
+    if (env.isNullOrEmpty()) return false
+    return env !in DEVELOPMENT_ENVIRONMENTS
 }
 
 data class WikiKtConfig(

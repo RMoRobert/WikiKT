@@ -38,24 +38,26 @@ fun ApplicationConfig.loadSessionConfig(): SessionConfig {
     val configuredSign = envOrConfig("wikikt.session.signKey", "WIKIKT_SESSION_SIGN_KEY")
 
     val production = isProductionEnvironment()
+    val secureCookie = envOrConfig("wikikt.session.secureCookie", "WIKIKT_SESSION_SECURE_COOKIE")
+        ?.toBoolean() ?: false
 
     if (configuredEncryption == null || configuredSign == null) {
         val message = "Session keys are not configured. Set wikikt.session.encryptionKey / " +
             "wikikt.session.signKey (or WIKIKT_SESSION_ENCRYPTION_KEY / WIKIKT_SESSION_SIGN_KEY) " +
             "to random hex values."
-        if (production) {
-            // Falling back to the in-source dev keys in production would let anyone forge a session
-            // cookie and become any user, so refuse to start instead.
-            throw IllegalStateException("Refusing to start in production: $message")
+        // Falling back to the in-source dev keys on a real deployment would let anyone forge a session
+        // cookie and become any user. Refuse to start not only when production is positively detected,
+        // but also whenever the Secure cookie flag is on — that's the reliable "served over HTTPS"
+        // signal a public deployment always sets, so it closes the gap where an operator ships over
+        // HTTPS but forgot to set WIKIKT_ENV=production.
+        if (production || secureCookie) {
+            throw IllegalStateException("Refusing to start: $message")
         }
         sessionLogger.warn("$message Using built-in DEVELOPMENT keys for now.")
     }
 
     val encryptionKey = configuredEncryption?.decodeSessionKey("encryptionKey") ?: DEV_ENCRYPTION_KEY
     val signKey = configuredSign?.decodeSessionKey("signKey") ?: DEV_SIGN_KEY
-
-    val secureCookie = envOrConfig("wikikt.session.secureCookie", "WIKIKT_SESSION_SECURE_COOKIE")
-        ?.toBoolean() ?: false
 
     if (production && !secureCookie) {
         // Without the Secure attribute the session cookie is sent over plain HTTP (and HSTS is not

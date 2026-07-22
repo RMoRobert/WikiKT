@@ -1157,19 +1157,27 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .wiki-sidebar nav a,
 .wiki-sidebar .nav-heading {
     display: block;
-    padding: 0.45rem 0.5rem;
+    padding: 0.65rem 0.5rem;
     border-radius: var(--bs-border-radius);
     margin: 0;
 }
+/* Flex row rather than inline text: the icon sizes against the label's line box instead of sitting on
+   the baseline, so the row's height is max(icon, label) + padding and doesn't need the extra leading
+   an inline icon would demand. flex-start (not center) keeps the icon beside the *first* line when a
+   long label wraps. */
 .wiki-sidebar nav a {
+    display: flex;
+    align-items: flex-start;
+    line-height: 1.35;
     text-decoration: none;
     color: var(--wk-sidebar-fg);
     font-size: 0.85rem;
 }
 .wiki-sidebar nav a:hover { background: var(--wk-sidebar-hover-bg); }
-/* Item icons read a touch larger than the label text, aligned to the text baseline, with a small
-   gap before the label. */
-.wiki-sidebar nav a .mdi { font-size: 1.2rem; vertical-align: -0.18em; margin-right: 0.25rem; }
+/* Item icons read a touch larger than the label text, with a small gap before it. line-height 1 keeps
+   the glyph's own leading (1.5 inherited = ~29px at this size) from making icon rows taller than
+   plain-text ones. */
+.wiki-sidebar nav a .mdi { font-size: 1.2rem; line-height: 1; margin-right: 0.8rem; }
 .wiki-sidebar .nav-heading {
     font-weight: 400;
     font-size: 0.8rem;
@@ -1239,9 +1247,9 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     cursor: default;
     pointer-events: none;
 }
-.page-toc-toggle .page-toc-title { margin: 0; }
+.page-toc-toggle .page-card-title { margin: 0; }
 .page-toc-toggle .mdi { display: none; color: var(--bs-secondary-color); font-size: 1.1rem; line-height: 1; }
-.page-toc-title {
+.page-card-title {
     font-weight: 700;
     font-size: 0.7rem;
     text-transform: uppercase;
@@ -1310,17 +1318,19 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .page-aside--left { order: -1; }
 .page-aside--right { order: 1; }
 
-/* Every box in the side column (On This Page, Tags, Page details, Share) is a small bordered card. */
-.page-card {
-    padding: 0.7rem 0.85rem;
+/* Every box in the side column (On This Page, Tags, Page details) is a small bordered card except the Share and Print buttons. */
+.page-card.page-toc, .page-card.page-tag-box, .page-card.page-meta-box {
     border: var(--bs-border-width) solid var(--bs-border-color);
     border-radius: var(--bs-border-radius);
     background: var(--bs-body-bg);
 }
+/* Shared styling for all the above plus Share and Print buttons: */
+.page-card {
+    padding: 0.7rem 0.85rem;
+}
 
 /* "Page details" box — last-modified by/on. */
-.page-meta-box .page-toc-title { margin-bottom: 0.5rem; }
-.page-meta-box { margin-top: 1rem; }
+.page-meta-box .page-card-title { margin-bottom: 0.5rem; }
 .page-meta-row { margin: 0.4rem 0 0; line-height: 1.25; }
 .page-meta-label {
     display: block;
@@ -1415,10 +1425,8 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
         align-items: start;
     }
     /* Page details spans both rows on the right; Tags and Share auto-place into the left column.
-       With no Tags card, Share auto-places beside Page details and the pair still top-aligns.
-       (.page-meta-box's margin-top separates stacked cards in the column/narrow layouts; here it
-       would knock the card out of top alignment.) */
-    .page-aside .page-meta-box { margin-top: 0; grid-column: 2; grid-row: 1 / span 2; }
+       With no Tags card, Share auto-places beside Page details and the pair still top-aligns. */
+    .page-aside .page-meta-box { grid-column: 2; grid-row: 1 / span 2; }
 }
 /* On narrow screens, dissolve the side column (display:contents) so its pieces place independently
    in the single column: "Page details" & co. keep their natural DOM position AFTER <main>, so they
@@ -1691,7 +1699,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     align-items: center;
     gap: 0.3rem;
     width: 100%;
-    padding: 0.4rem 0.5rem;
+    padding: 0.6rem 0.5rem;
     margin-bottom: 0.3rem;
     border: 0;
     border-radius: var(--bs-border-radius);
@@ -1703,7 +1711,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     cursor: pointer;
 }
 .wiki-sidebar .wk-tree-up:hover { color: var(--wk-sidebar-fg); }
-.wiki-sidebar .wk-tree-up .mdi { flex: none; font-size: 1.1rem; }
+.wiki-sidebar .wk-tree-up .mdi { flex: none; font-size: 1.1rem; line-height: 1; }
 /* A folder/page row is a single full-width target: a page opens, a folder drills in. The folder vs file
    icon is the only cue for which — no separate drill arrow, so nothing highlights independently. */
 .wiki-sidebar .wk-tree-row { display: flex; }
@@ -1713,17 +1721,18 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     display: flex;
     align-items: center;
     gap: 0.1rem;
-    padding: 0.45rem 0.5rem;
+    padding: 0.65rem 0.5rem;
     border: 0;
     border-radius: var(--bs-border-radius);
     background: transparent;
     color: var(--wk-sidebar-fg);
     font-size: 0.85rem;
+    line-height: 1.35;
     text-align: start;
     text-decoration: none;
     cursor: pointer;
 }
-.wiki-sidebar .wk-tree-link .mdi { flex: none; font-size: 1.2rem; vertical-align: -0.18em; margin-right: 0.15rem; }
+.wiki-sidebar .wk-tree-link .mdi { flex: none; font-size: 1.2rem; line-height: 1; margin-right: 0.3rem; }
 .wiki-sidebar .wk-tree-link:hover { background: var(--wk-sidebar-hover-bg); }
 .wiki-sidebar .wk-tree-link.active { background: var(--wk-sidebar-active-bg); }
 .wiki-sidebar .wk-tree-empty { color: var(--wk-sidebar-fg-muted); font-size: 0.8rem; padding: 0.5rem; }

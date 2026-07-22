@@ -252,6 +252,15 @@ class SettingsService(private val database: R2dbcDatabase) {
         val UPLOAD_FILE_LIMIT_OPTIONS = listOf(5, 10, 20, 30, 50, 100)
 
         /**
+         * Whether uploaded images are stripped of privacy-sensitive metadata (EXIF GPS/camera info,
+         * XMP, IPTC, comments) at upload time. On by default — on a public wiki a contributor's photo
+         * would otherwise leak its capture location. Admins can disable it (Administration > Storage)
+         * when metadata must be preserved. See [com.wikikt.service.MetadataStripper].
+         */
+        const val ASSETS_STRIP_METADATA = "assets.stripMetadata"
+        const val DEFAULT_STRIP_METADATA = true
+
+        /**
          * Common content locales offered as a checklist in Settings (code -> display name). Curated, not
          * exhaustive; any code already configured but not listed here is merged in so it's never lost.
          */
@@ -295,7 +304,7 @@ class SettingsService(private val database: R2dbcDatabase) {
         val GIT_SYNC_MODE_OPTIONS = listOf("off", "push", "pull", "bidirectional")
         val GIT_SYNC_INTERVAL_OPTIONS = listOf(0, 5, 15, 30, 60)
         const val DEFAULT_GIT_SYNC_BRANCH = "main"
-        const val DEFAULT_GIT_SYNC_INTERVAL_MINUTES = 5
+        const val DEFAULT_GIT_SYNC_INTERVAL_MINUTES = 0
 
         /**
          * Settings whose values are plaintext credentials. A full backup NEVER writes these into its

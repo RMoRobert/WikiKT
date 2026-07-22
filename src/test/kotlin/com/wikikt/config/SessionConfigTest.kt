@@ -64,4 +64,39 @@ class SessionConfigTest {
 
         assertTrue(!session.secureCookie)
     }
+
+    @Test
+    fun `an unrecognized environment value is treated as production and refuses dev keys`() {
+        // A typo/variant like `prod-eu` must fail closed, not silently fall back to the in-source keys.
+        val config = MapApplicationConfig("wikikt.environment" to "prod-eu")
+
+        assertFailsWith<IllegalStateException> {
+            config.loadSessionConfig()
+        }
+    }
+
+    @Test
+    fun `secureCookie without keys refuses to start even outside production`() {
+        // An HTTPS deployment (Secure cookie on) that forgot WIKIKT_ENV=production must not fall back to
+        // the in-source dev session keys — those are public in source control and forgeable.
+        val config = MapApplicationConfig(
+            "wikikt.environment" to "development",
+            "wikikt.session.secureCookie" to "true",
+        )
+
+        assertFailsWith<IllegalStateException> {
+            config.loadSessionConfig()
+        }
+    }
+
+    @Test
+    fun `an unset environment still allows local dev keys`() {
+        // The bare local/test path (no environment, no Secure cookie) must keep booting on dev keys.
+        val config = MapApplicationConfig()
+
+        val session = config.loadSessionConfig()
+
+        assertTrue(session.encryptionKey.isNotEmpty())
+        assertTrue(!session.secureCookie)
+    }
 }

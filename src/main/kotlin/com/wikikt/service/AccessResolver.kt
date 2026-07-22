@@ -48,7 +48,7 @@ object AccessResolver {
         const val MANAGE_GROUPS = "manage:groups"
         const val MANAGE_NAVIGATION = "manage:navigation"
         const val MANAGE_SITES = "manage:sites"
-        const val MANAGE_THEME = "manage:theme" // appearance / CSP / custom HTML+CSS
+        const val MANAGE_THEME = "manage:theme" // per-page custom code (CSS/JS); site-wide appearance/CSP is manage:groups
         const val CREATE_APIKEYS = "create:apikeys" // WikiKT-only: self-service API-key minting
         const val MANAGE_SYSTEM = "manage:system" // root: grants everything
     }
@@ -126,10 +126,23 @@ object AccessResolver {
         return winner.mode == Mode.ALLOW
     }
 
+    /**
+     * Whether this rule participates in resolving [permission]. A rule normally governs exactly the
+     * verbs listed in its [AccessRule.roles]. One coupling exception: a DENY that blocks page reads
+     * (`read:pages`) ALSO blocks asset reads (`read:assets`) on the same path — so making a page
+     * private with the natural "DENY read:pages" rule doesn't leave its images anonymously fetchable
+     * at their asset URL. The coupling is deliberately one-way: reading an asset still needs an
+     * explicit `read:assets` ALLOW (an `read:pages` ALLOW never grants assets), so this only ever
+     * removes access, never widens it.
+     */
+    private fun AccessRule.governs(permission: String): Boolean =
+        permission in roles ||
+            (permission == Perm.READ_ASSETS && mode == Mode.DENY && Perm.READ_PAGES in roles)
+
     /** The most-specific rule that applies to [permission] on [resource], or null if none match. */
     private fun winningRule(rules: List<AccessRule>, permission: String, resource: Resource): AccessRule? =
         rules.asSequence()
-            .filter { permission in it.roles }
+            .filter { it.governs(permission) }
             .filter { it.sites.isEmpty() || resource.siteId in it.sites }
             .filter { it.locales.isEmpty() || resource.locale in it.locales }
             .filter { it.matchesPath(resource) }

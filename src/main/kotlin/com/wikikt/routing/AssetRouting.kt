@@ -11,6 +11,8 @@ import com.wikikt.model.slugFilename
 import com.wikikt.model.toIsoString
 import com.wikikt.model.validateWikiPath
 import com.wikikt.service.ImageType
+import com.wikikt.service.MetadataStripper
+import com.wikikt.service.SettingsService
 import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -210,6 +212,7 @@ private suspend fun ApplicationCall.handleAssetUpload() {
     val cfg = ctx.config.assets
     // Per-site cap (admin-set, falling back to config); governs both this form and the editor's picker upload.
     val maxFiles = ctx.settings.uploadFileLimit(siteId, cfg.maxFilesPerUpload)
+    val stripMeta = ctx.settings.getBool(siteId, SettingsService.ASSETS_STRIP_METADATA, SettingsService.DEFAULT_STRIP_METADATA)
     val contentLength = request.contentLength()
     if (contentLength != null && contentLength > maxFiles.toLong() * cfg.maxUploadSizeBytes + 1_048_576L) {
         respond(HttpStatusCode.PayloadTooLarge, MustacheContent("error.hbs", errorModel("Upload too large", 413)))
@@ -256,6 +259,8 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                             errors.add("$original: unsupported file type")
                             return@forEachPart
                         }
+                        // Strip EXIF/XMP/IPTC metadata before the bytes are stored (privacy). No-op when disabled.
+                        val finalSize = stripMetadataIfEnabled(temp, mime, stripMeta)
                         val folder = fields["folder"]?.trim()?.trim('/').orEmpty()
                         val locale = fields["locale"]?.trim()?.ifBlank { null } ?: ctx.config.defaultLocale
                         val candidate = if (folder.isEmpty()) slugFilename(original) else "$folder/${slugFilename(original)}"
@@ -275,7 +280,7 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                             // Same path: overwrite (archives the old as a revision) only when asked; otherwise
                             // report it as a conflict so the client can confirm before replacing.
                             if (fields["overwrite"]?.trim() == "1") {
-                                ctx.assets.replace(existing.id, mime, size, original.take(500), temp, userId, assetHistoryLimit(siteId))
+                                ctx.assets.replace(existing.id, mime, finalSize, original.take(500), temp, userId, assetHistoryLimit(siteId))
                                 temps.remove(temp)
                                 ok++
                             } else {
@@ -283,7 +288,7 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                             }
                             return@forEachPart
                         }
-                        ctx.assets.create(siteId, locale, path, original.take(500), mime, size, temp, userId)
+                        ctx.assets.create(siteId, locale, path, original.take(500), mime, finalSize, temp, userId)
                         temps.remove(temp) // moved into place by create()
                         ok++
                     }
@@ -317,6 +322,23 @@ private suspend fun ApplicationCall.handleAssetUpload() {
         if (errors.isNotEmpty()) append(" Skipped: ${errors.joinToString("; ")}")
     }
     respond(MustacheContent("assets/list.hbs", assetListModel(message)))
+}
+
+/**
+ * Strips privacy metadata (EXIF/XMP/IPTC) from the just-written [temp] image in place when [enabled],
+ * returning the resulting file size. A no-op -- and no rewrite -- when disabled or when the format
+ * carries nothing to remove. Runs on already-validated bytes bounded by the upload size limit.
+ */
+private fun stripMetadataIfEnabled(temp: Path, mime: String, enabled: Boolean): Long {
+    if (enabled) {
+        val original = Files.readAllBytes(temp)
+        val stripped = MetadataStripper.strip(original, mime)
+        if (!stripped.contentEquals(original)) {
+            Files.write(temp, stripped)
+            return stripped.size.toLong()
+        }
+    }
+    return Files.size(temp)
 }
 
 /** Streams [channel] into [temp], returning the byte count, or null if it exceeds [maxBytes]. */
@@ -446,6 +468,7 @@ private suspend fun ApplicationCall.assetHistoryLimit(site: UInt? = null): Int {
 private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
     val ctx = appContext
     val cfg = ctx.config.assets
+    val stripMeta = ctx.settings.getBool(asset.siteId, SettingsService.ASSETS_STRIP_METADATA, SettingsService.DEFAULT_STRIP_METADATA)
     val contentLength = request.contentLength()
     if (contentLength != null && contentLength > cfg.maxUploadSizeBytes + 1_048_576L) {
         respond(HttpStatusCode.PayloadTooLarge, MustacheContent("error.hbs", errorModel("Upload too large", 413)))
@@ -488,7 +511,7 @@ private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
                         }
                         temp = t
                         mime = detected
-                        size = s
+                        size = stripMetadataIfEnabled(t, detected, stripMeta) // strip EXIF/XMP/IPTC before storing
                         originalName = orig
                     }
                     else -> {}

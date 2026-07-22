@@ -123,6 +123,31 @@ class AccessResolverTest {
         assertFalse(AccessResolver.check(p, Perm.WRITE_ASSETS, Resource(SITE_B, "en", "api/logo.png")))
     }
 
+    // --- read:assets is coupled to read:pages DENY (making a page private hides its images too) ---
+
+    @Test fun `a read pages deny also denies read assets on the same path`() {
+        // The Guest/User seed: broad ALLOW of both read verbs everywhere, then an admin marks a subtree
+        // private with the natural "DENY read:pages". An asset under that subtree must NOT stay readable.
+        val p = principal(
+            rules = listOf(
+                allow(Perm.READ_PAGES, path = ""),
+                allow(Perm.READ_ASSETS, path = ""),
+                deny(Perm.READ_PAGES, path = "secret/"),
+            ),
+        )
+        assertFalse(AccessResolver.check(p, Perm.READ_ASSETS, Resource(SITE_A, "en", "secret/diagram.png")))
+        assertFalse(AccessResolver.check(p, Perm.READ_PAGES, Resource(SITE_A, "en", "secret/page")))
+        // Outside the denied subtree, assets remain readable.
+        assertTrue(AccessResolver.check(p, Perm.READ_ASSETS, Resource(SITE_A, "en", "public/diagram.png")))
+    }
+
+    @Test fun `the coupling is one-way - a read pages allow does not grant read assets`() {
+        // Only read:pages is allowed here; assets still need their own grant (default-deny holds).
+        val p = principal(rules = listOf(allow(Perm.READ_PAGES, path = "")))
+        assertTrue(AccessResolver.check(p, Perm.READ_PAGES, Resource(SITE_A, "en", "docs/x")))
+        assertFalse(AccessResolver.check(p, Perm.READ_ASSETS, Resource(SITE_A, "en", "docs/x.png")))
+    }
+
     // --- Match types ---
 
     @Test fun `TAG rule matches by page tag`() {

@@ -443,6 +443,8 @@ fun Route.configureAdminRouting() {
             val limit = (params["maxUploadFiles"]?.trim()?.toIntOrNull() ?: ctx.config.assets.maxFilesPerUpload)
                 .coerceIn(1, s.MAX_UPLOAD_FILE_LIMIT)
             ctx.settings.set(siteId, s.ASSETS_MAX_FILES_PER_UPLOAD, limit.toString())
+            // Unchecked checkboxes don't submit, so absence means "off".
+            ctx.settings.setBool(siteId, s.ASSETS_STRIP_METADATA, params["stripMetadata"] != null)
             call.respond(MustacheContent("admin/storage.hbs", call.storageModel(uploadsSaved = true)))
         }
 
@@ -1868,7 +1870,7 @@ private fun adminVerbLabel(verb: String): String = when (verb) {
     com.wikikt.service.AccessResolver.Perm.MANAGE_GROUPS -> "Manage groups & access"
     com.wikikt.service.AccessResolver.Perm.MANAGE_NAVIGATION -> "Manage navigation"
     com.wikikt.service.AccessResolver.Perm.MANAGE_SITES -> "Manage sites"
-    com.wikikt.service.AccessResolver.Perm.MANAGE_THEME -> "Manage appearance & theme"
+    com.wikikt.service.AccessResolver.Perm.MANAGE_THEME -> "Add per-page custom code (CSS/JS)"
     com.wikikt.service.AccessResolver.Perm.CREATE_APIKEYS -> "Create API keys"
     else -> verb
 }
@@ -2283,6 +2285,7 @@ internal suspend fun io.ktor.server.application.ApplicationCall.storageModel(
         "maxAssetRevisions" to settings.getHistoryLimit(siteId, s.HISTORY_MAX_ASSET_REVISIONS, appContext.config.assets.maxAssetVersions),
         "maxUploadFiles" to maxUploadFiles,
         "uploadFileOptions" to uploadFileOptions,
+        "stripMetadata" to settings.getBool(siteId, s.ASSETS_STRIP_METADATA, s.DEFAULT_STRIP_METADATA),
     )
 }
 

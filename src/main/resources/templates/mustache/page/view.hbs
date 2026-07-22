@@ -65,22 +65,22 @@
             and the toggle is inert (CSS always shows the list). }}
         <nav class="page-toc page-card" id="pageToc" aria-label="Table of contents" hidden>
             <button type="button" class="page-toc-toggle" id="pageTocToggle" aria-expanded="false" aria-controls="pageTocList">
-                <span class="page-toc-title">On This Page</span>
+                <span class="page-card-title">On This Page</span>
                 <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
             </button>
             <ul class="page-toc-list" id="pageTocList"></ul>
         </nav>
         {{/tocEnabled}}
         {{#hasTags}}
-        <div class="page-card">
-            <p class="page-toc-title">Tags</p>
+        <div class="page-tag-box page-card">
+            <p class="page-card-title">Tags</p>
             <div class="d-flex flex-wrap gap-2">
                 {{#tags}}<a class="badge rounded-pill text-bg-light border text-decoration-none" href="{{url}}"><i class="mdi mdi-tag-outline" aria-hidden="true"></i> {{name}}</a>{{/tags}}
             </div>
         </div>
         {{/hasTags}}
         <div class="page-meta-box page-card">
-            <p class="page-toc-title">Page details</p>
+            <p class="page-card-title">Page details</p>
             <p class="page-meta-row"><span class="page-meta-label">Last modified by</span> {{#hasUpdatedBy}}{{updatedByName}}{{/hasUpdatedBy}}{{^hasUpdatedBy}}—{{/hasUpdatedBy}}</p>
             <p class="page-meta-row"><span class="page-meta-label">Last modified on</span> {{updatedAt}}</p>
             {{#canViewHistory}}<p class="page-meta-row"><a href="{{historyUrl}}"><i class="mdi mdi-history" aria-hidden="true"></i> View history</a></p>{{/canViewHistory}}
