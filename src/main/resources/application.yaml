@@ -33,9 +33,25 @@ wikikt:
     # Default 604800 (7 days). Bounds how long a stolen or stale cookie stays usable.
     maxAgeSeconds: 604800
   ui:
-    # Where front-end assets (Bootstrap) load from: "local" (bundled under static/vendor/, the default,
-    # no external dependency) or "cdn" (jsdelivr). Override via WIKIKT_UI_ASSET_SOURCE.
-    assetSource: local
+    # --- Front-end asset delivery -------------------------------------------------------------
+    # Each of the three is "cdn" (the default) or "local". "local" serves the copy bundled in the
+    # jar under static/vendor/ — no outbound request, at the cost of your own bandwidth. They are
+    # separate knobs because the two webfonts are far larger than everything else, so you may want
+    # them handled differently. Set ALL THREE to "local" for an air-gapped install; see
+    # docs/install.md. Administration > Appearance shows the effective values read-only.
+    #
+    # Bootstrap + highlight.js (~440KB). Override via WIKIKT_UI_ASSET_SOURCE.
+    assetSource: cdn
+    # Emoji webfont, used when Appearance > "Use a consistent emoji font" is on: Google Fonts, or
+    # static/vendor/noto-emoji/ (~2MB, unicode-range sliced so a page fetches only what it uses).
+    # A blocked CDN here is harmless — emoji fall back to the visitor's OS font.
+    # Override via WIKIKT_UI_EMOJI_FONT_SOURCE.
+    emojiFontSource: cdn
+    # Material Design Icons webfont: jsdelivr, or static/vendor/mdi/ (~750KB, woff2 only). These are
+    # UI chrome, so unlike the emoji font a blocked CDN shows missing glyphs rather than degrading
+    # gracefully — prefer "local" if outbound requests aren't guaranteed.
+    # Override via WIKIKT_UI_ICON_FONT_SOURCE.
+    iconFontSource: cdn
   assets:
     # Directory for uploaded files (relative to the working dir, or absolute). Include it in backups.
     # Override via WIKIKT_ASSET_STORAGE_DIR.

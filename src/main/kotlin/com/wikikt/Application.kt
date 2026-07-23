@@ -83,6 +83,9 @@ fun Application.module() {
             val userTheme = currentUser?.theme?.takeIf { it in com.wikikt.service.SettingsService.THEME_OPTIONS }
             val merged = mapOf(
                 "assetsCdn" to ctx.config.ui.useCdnAssets,
+                // Webfont hosts, each independent of assetsCdn (see UiConfig.useCdnEmojiFont / useCdnIconFont).
+                "emojiFontCdn" to ctx.config.ui.useCdnEmojiFont,
+                "iconFontCdn" to ctx.config.ui.useCdnIconFont,
                 // Session CSRF hidden-input on every page (empty when logged out), so shared
                 // chrome — e.g. the header's POST /logout form — always has a token to submit.
                 "csrfField" to call.csrfField(),

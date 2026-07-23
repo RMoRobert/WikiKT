@@ -129,6 +129,24 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val MAX_CUSTOM_CSS_LENGTH = 20_000
 
         /**
+         * Render emoji from the bundled Noto Color Emoji webfont instead of whatever the visitor's OS
+         * supplies (Apple Color Emoji / Segoe UI Emoji / …), so a page looks the same everywhere. On by
+         * default. Implemented purely by appending [EMOJI_FONT_FAMILY] to the font stacks — emoji stay
+         * real text, so copy/paste, in-page find and screen readers are unaffected, both `:shortcode:`
+         * expansions and literal pasted emoji are covered, and nothing about the *rendered HTML* changes
+         * (so flipping this needs no render-cache bump). Off = the previous OS-dependent behavior.
+         * The stylesheet is loaded in partials/head-styles.hbs, from Google Fonts or the vendored copy
+         * at /static/vendor/noto-emoji/ depending on `wikikt.ui.useCdnAssets`.
+         */
+        const val APPEARANCE_EMOJI_FONT = "appearance.emojiFont"
+        const val DEFAULT_EMOJI_FONT = true
+
+        /** Appended to every font stack when [APPEARANCE_EMOJI_FONT] is on. Last position is deliberate:
+         *  the earlier families win for the characters they cover, and only codepoints they lack — i.e.
+         *  emoji — fall through to here, ahead of the browser's own system-emoji fallback. */
+        const val EMOJI_FONT_FAMILY = "'Noto Color Emoji'"
+
+        /**
          * Curated web fonts. [stack] is the CSS `font-family` value; [googleSpec] is the Google Fonts
          * `family=` fragment to load (null = a system stack that needs no network load). The special
          * "custom" preset means "use the admin-entered font-family value" (loaded via Custom CSS).
@@ -531,6 +549,7 @@ class SettingsService(private val database: R2dbcDatabase) {
         val (bodyStack, bodySpec) = resolveFont(s[APPEARANCE_BODY_FONT] ?: DEFAULT_BODY_FONT, s[APPEARANCE_BODY_FONT_CUSTOM])
         val (headStack, headSpec) = resolveFont(s[APPEARANCE_HEADING_FONT] ?: DEFAULT_HEADING_FONT, s[APPEARANCE_HEADING_FONT_CUSTOM])
         val baseSize = s[APPEARANCE_BASE_FONT_SIZE]?.toIntOrNull()?.coerceIn(12, 24) ?: DEFAULT_BASE_FONT_SIZE
+        val emojiFont = s[APPEARANCE_EMOJI_FONT]?.toBooleanStrictOrNull() ?: DEFAULT_EMOJI_FONT
         return mapOf(
             "siteName" to (s[SITE_NAME]?.ifBlank { null } ?: DEFAULT_SITE_NAME),
             "siteLogoUrl" to (s[SITE_LOGO_URL]?.ifBlank { null } ?: DEFAULT_LOGO_URL),
@@ -569,9 +588,11 @@ class SettingsService(private val database: R2dbcDatabase) {
             "bodyHtml" to s[APPEARANCE_BODY_HTML]?.ifBlank { null },
             // Typography + custom styling, consumed by partials/head-styles.hbs on every page.
             "googleFontsUrl" to googleFontsUrl(listOfNotNull(bodySpec, headSpec)),
-            "bodyFontStack" to bodyStack,
-            "headingFontStack" to headStack,
+            "bodyFontStack" to withEmojiFont(bodyStack, emojiFont),
+            "headingFontStack" to withEmojiFont(headStack, emojiFont),
             "baseFontSize" to baseSize,
+            // Loads the Noto Color Emoji @font-face rules the stacks above now reference (head-styles.hbs).
+            "emojiFont" to emojiFont,
             "customCss" to sanitizeCustomCss(s[APPEARANCE_CUSTOM_CSS]),
         )
     }
@@ -597,6 +618,12 @@ class SettingsService(private val database: R2dbcDatabase) {
         val stack = sanitizeFontStack(custom).ifBlank { "system-ui, sans-serif" }
         return stack to null
     }
+
+    /** Appends the emoji webfont to a resolved font stack when the setting is on (see
+     *  [APPEARANCE_EMOJI_FONT]). A blank stack can't happen for the presets, but a custom one falls back
+     *  in [resolveFont], so this never produces a leading comma. */
+    private fun withEmojiFont(stack: String, enabled: Boolean): String =
+        if (enabled && stack.isNotBlank()) "$stack, $EMOJI_FONT_FAMILY" else stack
 
     /** Builds the Google Fonts stylesheet URL for the given `family=` specs, or null if there are none. */
     private fun googleFontsUrl(specs: List<String>): String? {

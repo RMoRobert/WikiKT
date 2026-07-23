@@ -13,7 +13,8 @@ to be useful in real deployments).
 
 ## Configure
 
-Create a `.env` file next to `docker-compose.prod.yml`:
+Create a `.env` file next to `docker-compose.prod.yml` — `cp .env.example .env` gives you the
+template below with every option and its comments, ready to fill in:
 
 ```bash
 # Your primary domain (required). Caddy will obtain HTTPS certificate
@@ -43,6 +44,23 @@ echo "WIKIKT_SESSION_ENCRYPTION_KEY=$(openssl rand -hex 16)"
 echo "WIKIKT_SESSION_SIGN_KEY=$(openssl rand -hex 32)"
 echo "WIKIKT_MFA_KEY=$(openssl rand -hex 32)"
 ```
+
+### Asset delivery (optional)
+
+Front-end libraries and webfonts load from public CDNs by default. All of them are also bundled in the
+image, so you can serve them from your own container instead — for an air-gapped network, a strict
+egress policy, or to avoid sending visitor IP addresses to jsDelivr and Google. Add to `.env`:
+
+```bash
+WIKIKT_UI_ASSET_SOURCE=local        # Bootstrap, highlight.js (~440KB)
+WIKIKT_UI_ICON_FONT_SOURCE=local    # Material Design Icons (~750KB)
+WIKIKT_UI_EMOJI_FONT_SOURCE=local   # Noto Color Emoji (~2MB)
+```
+
+Set all three — they are independent. One more request remains after that: the body/heading font
+chosen in **Admin → Settings → Appearance** still comes from Google Fonts unless you pick the
+**System UI** preset. The effective state of all three is shown on that same page, and the full
+rationale is in [docs/install.md](../docs/install.md#asset-delivery).
 
 ## DNS
 

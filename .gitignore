@@ -6,10 +6,10 @@ build/
 # Runtime data: H2 database, uploaded assets, git-sync working clone
 data/
 
-# Secrets (commit .env.example file but not real .env file)
+# Secrets: ignore any real .env, but commit the .example templates people copy from.
 .env
 .env.*
-!.env.example
+!.env*.example
 
 # IDE files
 .idea/
@@ -21,7 +21,6 @@ data/
 *.log
 nohup.out
 .dockerignore
-.env.example
 .claude/
 CLAUDE.md
 

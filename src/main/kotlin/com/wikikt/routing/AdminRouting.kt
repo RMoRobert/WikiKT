@@ -242,6 +242,8 @@ fun Route.configureAdminRouting() {
             ctx.settings.set(siteId, s.APPEARANCE_HEADING_FONT_CUSTOM, params["headingFontCustom"].orEmpty().trim().take(200))
             val baseSize = params["baseFontSize"]?.toIntOrNull()?.coerceIn(12, 24) ?: s.DEFAULT_BASE_FONT_SIZE
             ctx.settings.set(siteId, s.APPEARANCE_BASE_FONT_SIZE, baseSize.toString())
+            // Emoji webfont: affects only the font stacks in <head>, not the stored HTML, so no render bump.
+            ctx.settings.setBool(siteId, s.APPEARANCE_EMOJI_FONT, params["emojiFont"] != null)
             ctx.settings.set(siteId, s.APPEARANCE_CUSTOM_CSS, params["customCss"].orEmpty().take(s.MAX_CUSTOM_CSS_LENGTH))
             call.respond(MustacheContent("admin/settings-appearance.hbs", call.settingsModel(saved = true)))
         }
@@ -2069,6 +2071,8 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
     val themeLabels = mapOf("light" to "Light", "dark" to "Dark", "auto" to "Auto (match user's device)")
     val currentTheme = settings.get(siteId, s.APPEARANCE_THEME)?.ifBlank { null } ?: s.DEFAULT_THEME
     val themeOptions = s.THEME_OPTIONS.map { mapOf("value" to it, "label" to themeLabels[it], "selected" to (it == currentTheme)) }
+    // Asset delivery: instance-wide deployment config, shown read-only alongside the typography settings.
+    val ui = appContext.config.ui
     // Typography: body/heading font preset selects (+ whether the current pick is "custom").
     val bodyFontKey = settings.get(siteId, s.APPEARANCE_BODY_FONT)?.ifBlank { null } ?: s.DEFAULT_BODY_FONT
     val headingFontKey = settings.get(siteId, s.APPEARANCE_HEADING_FONT)?.ifBlank { null } ?: s.DEFAULT_HEADING_FONT
@@ -2156,6 +2160,23 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         "bodyFontCustomValue" to settings.get(siteId, s.APPEARANCE_BODY_FONT_CUSTOM).orEmpty(),
         "headingFontCustomValue" to settings.get(siteId, s.APPEARANCE_HEADING_FONT_CUSTOM).orEmpty(),
         "baseFontSizeValue" to (settings.get(siteId, s.APPEARANCE_BASE_FONT_SIZE)?.toIntOrNull() ?: s.DEFAULT_BASE_FONT_SIZE),
+        "emojiFontValue" to settings.getBool(siteId, s.APPEARANCE_EMOJI_FONT, s.DEFAULT_EMOJI_FONT),
+        // Read-only view of the instance-wide asset-delivery config (UiConfig), so the Appearance page can
+        // show where each front-end asset actually comes from and which env var changes it.
+        "assetSources" to listOf(
+            mapOf(
+                "label" to "Bootstrap, highlight.js", "size" to "~440 KB", "env" to "WIKIKT_UI_ASSET_SOURCE",
+                "cdn" to ui.useCdnAssets, "host" to "cdn.jsdelivr.net", "path" to "/static/vendor/",
+            ),
+            mapOf(
+                "label" to "Icon font (Material Design Icons)", "size" to "~750 KB", "env" to "WIKIKT_UI_ICON_FONT_SOURCE",
+                "cdn" to ui.useCdnIconFont, "host" to "cdn.jsdelivr.net", "path" to "/static/vendor/mdi/",
+            ),
+            mapOf(
+                "label" to "Emoji font (Noto Color Emoji)", "size" to "~2 MB", "env" to "WIKIKT_UI_EMOJI_FONT_SOURCE",
+                "cdn" to ui.useCdnEmojiFont, "host" to "fonts.googleapis.com", "path" to "/static/vendor/noto-emoji/",
+            ),
+        ),
         "customCssValue" to settings.get(siteId, s.APPEARANCE_CUSTOM_CSS).orEmpty(),
         "currentYear" to java.time.Year.now(java.time.ZoneId.systemDefault()).value,
     )

@@ -88,10 +88,46 @@ data class GitSyncDirConfig(
     val dir: java.nio.file.Path,
 )
 
-/** Front-end asset delivery. [useCdnAssets] picks the CDN copy of Bootstrap et al. over the bundled
- *  local files under `static/vendor/`. Defaults to local so a fresh install has no external dependency. */
+/**
+ * Front-end asset delivery — where Bootstrap, the icon font and the emoji font are fetched from.
+ *
+ * All three default to the CDN, and each has a bundled counterpart under `static/vendor/` that a
+ * matching `local` setting serves instead. They are *separate* knobs rather than one because the two
+ * webfonts dwarf everything else (2 MB and 750 KB against a few hundred KB), so an operator may
+ * reasonably want the big ones off their own bandwidth while keeping the small ones in-house, or the
+ * reverse. An install with no guaranteed outbound access sets all three to `local`; see the
+ * air-gapped note in `docs/install.md`.
+ *
+ * This is deployment config (yaml/env), not a per-site admin setting, because it answers "does this
+ * *network* allow outbound requests" — an instance-wide, operator-level question. Every site on an
+ * instance shares it. Administration > Appearance shows the effective values read-only, so an admin
+ * can see the state and where to change it without it being editable from the web UI.
+ *
+ * TODO: a third mode — "self-serve" — could fetch each asset from its CDN once at startup into a
+ * cache directory under the data dir and serve it from there, giving the CDN's size savings on the
+ * shipped jar plus local delivery afterwards. That needs a download step with checksum verification
+ * (the SRI hashes in head-deps.hbs are the obvious source of truth), a writable cache dir, a refresh
+ * policy on version bumps, and a fallback for the first request while the download is in flight.
+ * Deliberately out of scope for now: the current two modes cover both the common and the air-gapped
+ * case, and vendoring is what makes the offline mode work with no runtime dependency at all.
+ */
 data class UiConfig(
+    /** CDN (jsDelivr) copies of Bootstrap et al. over the bundled files under `static/vendor/`. */
     val useCdnAssets: Boolean,
+    /**
+     * Where the emoji webfont loads from. Noto Color Emoji is 2 MB of woff2, and Google serves it
+     * unicode-range-sliced from a host most visitors have cached already. The bundled copy under
+     * `static/vendor/noto-emoji/` is used when `wikikt.ui.emojiFontSource: local`. Only consulted when
+     * the per-site emoji setting is on; see [com.wikikt.service.SettingsService.APPEARANCE_EMOJI_FONT].
+     * A blocked CDN here degrades gracefully — emoji fall back to the visitor's OS font.
+     */
+    val useCdnEmojiFont: Boolean,
+    /**
+     * Where the Material Design Icons webfont loads from (~750 KB of CSS + woff2); `local` serves
+     * `static/vendor/mdi/`. Unlike the emoji font this one is *functional* — these icons are UI chrome,
+     * so a blocked CDN means missing glyphs rather than a graceful fallback.
+     */
+    val useCdnIconFont: Boolean,
 )
 
 /** Supported (decodable + validatable) asset MIME types. The effective allowlist is this ∩ config. */
@@ -187,10 +223,22 @@ internal fun ApplicationConfig.loadGitSyncDirConfig(): GitSyncDirConfig {
     return GitSyncDirConfig(dir = java.nio.file.Path.of(dir).toAbsolutePath().normalize())
 }
 
-internal fun ApplicationConfig.loadUiConfig(): UiConfig {
-    // "local" (default) serves bundled assets from static/vendor/; "cdn" uses jsdelivr.
-    val source = (envOrConfig("wikikt.ui.assetSource", "WIKIKT_UI_ASSET_SOURCE") ?: "local").trim().lowercase()
-    return UiConfig(useCdnAssets = source == "cdn")
+/**
+ * Resolves the three asset-source settings. None is mandatory: an unset (or blank) key falls through
+ * to `"cdn"`, so a deployment that configures nothing here still boots and simply uses the CDN.
+ *
+ * Only an explicit `local` opts out. Anything unrecognized — a typo, `true`, `bundled` — is treated as
+ * `cdn` rather than as local, because guessing "local" wrong yields a visibly broken page (missing
+ * icons), while guessing "cdn" wrong is just an outbound request the operator may not have wanted.
+ */
+internal fun ApplicationConfig.loadUiConfig(getEnv: (String) -> String? = System::getenv): UiConfig {
+    fun source(key: String, env: String) =
+        (envOrConfig(key, env, getEnv) ?: "cdn").trim().lowercase() != "local"
+    return UiConfig(
+        useCdnAssets = source("wikikt.ui.assetSource", "WIKIKT_UI_ASSET_SOURCE"),
+        useCdnEmojiFont = source("wikikt.ui.emojiFontSource", "WIKIKT_UI_EMOJI_FONT_SOURCE"),
+        useCdnIconFont = source("wikikt.ui.iconFontSource", "WIKIKT_UI_ICON_FONT_SOURCE"),
+    )
 }
 
 internal fun ApplicationConfig.loadAssetConfig(): AssetConfig {

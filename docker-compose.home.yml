@@ -89,6 +89,14 @@ services:
       #   WIKIKT_TRUST_PROXY: "false"            # directly exposed: must NOT trust X-Forwarded-For
       #   WIKIKT_SESSION_SECURE_COOKIE: "false"  # allow the cookie over plain HTTP
       #   WIKIKT_PUBLIC_URL: "http://192.168.1.50:8080"   # only affects outbound-email links
+
+      # Asset delivery:
+      # Where frontend libraries and webfonts load from: "cdn" (default) or "local" (to serve the copies
+      # bundled in the image). Set all three in .env for a fully local install; see docs/install.md ("Asset delivery").
+      WIKIKT_UI_ASSET_SOURCE: ${WIKIKT_UI_ASSET_SOURCE:-cdn}             # Bootstrap, highlight.js (~440KB)
+      WIKIKT_UI_ICON_FONT_SOURCE: ${WIKIKT_UI_ICON_FONT_SOURCE:-cdn}     # icons (~750KB); if unavailable, gaps in UI
+      WIKIKT_UI_EMOJI_FONT_SOURCE: ${WIKIKT_UI_EMOJI_FONT_SOURCE:-cdn}   # emoji font (~2MB); if unavailable, uses OS emoji
+      # inline (B): set the literal value, e.g. WIKIKT_UI_ASSET_SOURCE: "local"
     depends_on:
       postgres:
         condition: service_healthy
