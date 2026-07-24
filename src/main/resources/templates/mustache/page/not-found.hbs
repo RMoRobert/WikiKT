@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Page not found | {{siteName}}</title>
+    <title>Page Not Found | {{siteName}}</title>
     <meta name="robots" content="noindex">
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
@@ -15,19 +15,19 @@
     <main class="wiki-main page-view">
         <article class="wiki-content">
             <header>
-                <h1><i class="mdi mdi-map-marker-question-outline" aria-hidden="true"></i> Page not found</h1>
+                <h1><i class="mdi mdi-file-document-alert-outline" aria-hidden="true"></i> Page does not exist</h1>
             </header>
             <p>There’s no page at <code>{{locale}}/{{pagePath}}</code>.</p>
             {{#canCreate}}
-            <p>You can create it now, or check the address for a typo.</p>
+            <p>Would you like to create it now?</p>
             <p class="d-flex flex-wrap gap-2">
-                <a class="btn btn-primary" href="{{editUrl}}"><i class="mdi mdi-file-plus-outline" aria-hidden="true"></i> Create this page</a>
-                <a class="btn btn-outline-secondary" href="/"><i class="mdi mdi-home" aria-hidden="true"></i> Back to home</a>
+                <a class="btn btn-primary" href="{{editUrl}}"><i class="mdi mdi-file-plus-outline" aria-hidden="true"></i> Create This Page</a>
+                <a class="btn btn-outline-secondary" href="/"><i class="mdi mdi-home" aria-hidden="true"></i> Go to Home</a>
             </p>
             {{/canCreate}}
             {{^canCreate}}
-            <p>Check the address for a typo, use search above, or head back home.</p>
-            <p><a class="btn btn-outline-secondary" href="/"><i class="mdi mdi-home" aria-hidden="true"></i> Back to home</a></p>
+                <p>If you are looking for something, use the <b>Search</b> feature above or go to the home page to browse.</p>
+            <p><a class="btn btn-outline-secondary" href="/"><i class="mdi mdi-home" aria-hidden="true"></i> Go to Home</a></p>
             {{/canCreate}}
         </article>
     </main>

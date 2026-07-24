@@ -583,7 +583,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    That taller-than-expected bar then also pushed the compact sidebar pop-over (anchored at the fixed
    --wikikt-header-h) under the wrapped row. */
 .wk-navbar .navbar-brand.brand { min-width: 0; overflow: hidden; }
-.wk-navbar .brand-name { overflow: hidden; text-overflow: ellipsis; }
+.wk-navbar .brand-name { overflow: hidden; text-overflow: ellipsis; font-weight: 400 }
 /* Must match the navbar-expand-lg breakpoint (991.98px). Above it the search is an inline centered box
    and the brand keeps its natural width; only once the bar collapses (below lg) does the brand switch to
    flex:1 1 0 so it shares the top row with the toggle + action icons. Keeping this at the old xl bound
