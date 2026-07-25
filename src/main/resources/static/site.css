@@ -538,6 +538,34 @@ th.wkab-th-sort:hover { color: var(--bs-body-color, #212529); }
    when a *light* header color is chosen. --wikikt-header-h is
    the approx navbar height, used below to offset the sticky side columns so they clear the bar. */
 :root { --wikikt-header-h: 3.6rem; }
+/* Skip link (a11y): the first tab stop on every page with the navbar. Kept off-screen until focused,
+   then it slides into the top-left corner over the fixed navbar so a keyboard user can jump straight to
+   <main>. Bootstrap body vars keep it legible in both light and dark themes. Transform (not display/
+   visibility) hides it, so it stays focusable and reachable by Tab. */
+.skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 2000;                 /* above the fixed navbar (Bootstrap fixed-top is 1030) */
+    padding: 0.5rem 0.9rem;
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
+    text-decoration: none;
+    transform: translateY(-150%);  /* tucked off the top edge until focused */
+    transition: transform 0.15s ease;
+}
+.skip-link:focus {
+    transform: translateY(0);
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+/* <main> is the skip destination: it takes focus via tabindex="-1" but shouldn't show a focus ring, and
+   its top must clear the fixed navbar when the fragment is jumped to. */
+#main { scroll-margin-top: var(--wikikt-header-h); }
+#main:focus { outline: none; }
 /* The navbar is fixed-top, not sticky: a sticky bar lives in the document's scroll layer, so the
    macOS/iOS rubber-band overscroll (most visible at the bottom of a long page) drags it along and the
    bar visibly bounces. A fixed bar sits in the viewport layer, outside the bounce, so it stays put
@@ -582,7 +610,6 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    content width first, so .header-actions gets shoved onto a second row before any shrinking happens.
    That taller-than-expected bar then also pushed the compact sidebar pop-over (anchored at the fixed
    --wikikt-header-h) under the wrapped row. */
-.wk-navbar .navbar-brand.brand { min-width: 0; overflow: hidden; }
 .wk-navbar .brand-name { overflow: hidden; text-overflow: ellipsis; font-weight: 400 }
 /* Must match the navbar-expand-lg breakpoint (991.98px). Above it the search is an inline centered box
    and the brand keeps its natural width; only once the bar collapses (below lg) does the brand switch to
@@ -1375,8 +1402,29 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .wk-infobox-bool--no { color: var(--bs-secondary-color); }
 .wk-infobox-bool .mdi { font-size: 1rem; line-height: 1; }
 
-/* Jumped-to headings shouldn't hide under the sticky header. */
-.wiki-content h1, .wiki-content h2 { scroll-margin-top: 5rem; }
+/* Jumped-to headings shouldn't hide under the sticky header (all levels, since any section heading
+   can now be an anchor target). */
+.wiki-content :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: 5rem; }
+
+/* Section-heading anchors: a small link icon floated to the RIGHT edge of each content heading
+   (added by heading-anchors.js). Deliberately muted (tertiary grey, not link blue) and hidden until
+   the heading is hovered on pointer devices; on touch (no hover) it stays faintly visible so it's
+   reachable there too — same reveal pattern as the code-copy button. */
+.wiki-content .wk-heading-anchor {
+    float: right;
+    margin-left: 0.5rem;
+    color: var(--bs-tertiary-color);
+    text-decoration: none;
+    opacity: 0;
+    line-height: inherit;
+    transition: opacity 0.12s ease, color 0.12s ease;
+}
+.wiki-content .wk-heading-anchor .mdi { font-size: 0.55em; line-height: 1; }
+.wiki-content :is(h2, h3, h4, h5, h6):hover .wk-heading-anchor,
+.wiki-content .wk-heading-anchor:focus-visible { opacity: 1; }
+/* More prominent on hover, but stay greyscale — step up to the body colour, not a link accent. */
+.wiki-content .wk-heading-anchor:hover { color: var(--bs-body-color); }
+@media (hover: none) { .wiki-content .wk-heading-anchor { opacity: 0.5; } }
 
 /* Section headings get full-width underlines (mapped one level down since content
    headings are demoted on render: our h2 = a source h1, our h3 = a source h2). h2 gets a 2px line

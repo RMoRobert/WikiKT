@@ -1,18 +1,20 @@
 <!DOCTYPE html>
+{{! <html lang> is the English chrome language (see page/view.hbs); the rendered revision content
+    carries its own lang on <article> below. }}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Revision #{{revisionNumber}}: {{title}} | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
-    <link rel="stylesheet" href="/static/vendor/highlight/github.min.css">
+    <link rel="stylesheet" href="/static/vendor/highlight/github.min.css?v={{assetVersion}}">
     {{>partials/head-styles.hbs}}
 </head>
 <body>
 {{>partials/header.hbs}}
 <div class="container wiki-layout">
 {{>partials/sidebar.hbs}}
-<main class="wiki-main page-view">
+<main id="main" tabindex="-1" class="wiki-main page-view">
     <div class="page-meta">
         <h1>Revision #{{revisionNumber}}</h1>
         <a class="btn btn-outline-secondary btn-sm" href="{{historyUrl}}">Back to history</a>
@@ -25,15 +27,18 @@
         <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-history" aria-hidden="true"></i> Restore this version</button>
     </form>
     {{/canEdit}}
-    <article class="wiki-content">
+    {{! Content locale on the rendered revision body (chrome above stays English) — see page/view.hbs. }}
+    <article class="wiki-content" lang="{{locale}}">
         {{{htmlContent}}}
     </article>
 </main>
 </div>
 {{>partials/footer.hbs}}
-<script src="/static/vendor/highlight/highlight.min.js"></script>
-<script src="/static/vendor/highlight/groovy.min.js"></script>
+<script src="/static/vendor/highlight/highlight.min.js?v={{assetVersion}}"></script>
+<script src="/static/vendor/highlight/groovy.min.js?v={{assetVersion}}"></script>
 <script>if (window.hljs) hljs.highlightAll();</script>
-<script src="/static/code-copy.js"></script>
+<script src="/static/code-copy.js?v={{assetVersion}}"></script>
+{{! Copy-link icon + stable ids on section headings (same as the live page view). }}
+<script src="/static/heading-anchors.js?v={{assetVersion}}"></script>
 {{{bodyHtml}}}</body>
 </html>

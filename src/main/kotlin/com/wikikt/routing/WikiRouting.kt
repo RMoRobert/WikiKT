@@ -475,6 +475,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleHistory(segments
                 "page/revision.hbs",
                 mapOf(
                     "title" to page.title,
+                    // Content locale for <html lang> so a screen reader pronounces the revision in the
+                    // page's language (see page/revision.hbs).
+                    "locale" to wikiPath.locale,
                     "revisionNumber" to revision.revisionNumber,
                     "createdAt" to DateDisplay.format(revision.createdAt, formats),
                     "author" to author,

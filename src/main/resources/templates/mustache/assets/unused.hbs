@@ -9,7 +9,7 @@
 </head>
 <body>
 {{>partials/header.hbs}}
-<main class="container">
+<main id="main" tabindex="-1" class="container">
     <div class="page-meta">
         <h1><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Unused assets</h1>
         <a class="btn btn-secondary" href="/f">Back to All Assets</a>
@@ -76,7 +76,7 @@
 </main>
 {{! wk-browser.js supplies WikiKtAssetDetail — the same detail/edit modal the /f manager opens, which
     fetches this asset's /f/{id} body and AJAX-submits its forms (each carries its own CSRF field). }}
-<script src="/static/wk-browser.js"></script>
+<script src="/static/wk-browser.js?v={{assetVersion}}"></script>
 <script>
   // Open the asset in a modal rather than navigating, so the list — and the reader's place in it —
   // survives an edit or delete. Delegated so it needs no per-row wiring. If the bundle failed to load

@@ -11,7 +11,7 @@
 {{>partials/header.hbs}}
 <div class="container wiki-layout">
 {{>partials/sidebar.hbs}}
-<main class="wiki-main">
+<main id="main" tabindex="-1" class="wiki-main">
     <h1>Search</h1>
 
     {{^hasQuery}}<p class="text-secondary">Type a query in the search box above to find pages. Tip: add <code>#tag</code> to a query to filter by tag (e.g. <code>backup #docs</code>), or search <code>#docs</code> on its own.</p>{{/hasQuery}}

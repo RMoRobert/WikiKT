@@ -1,5 +1,5 @@
 <script>(function(){try{var d=document.documentElement;var LI={{#loggedIn}}true{{/loggedIn}}{{^loggedIn}}false{{/loggedIn}};var DEF='{{themeMode}}';function dark(m){return m==='dark'||(m==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);}function apply(m){d.setAttribute('data-bs-theme',dark(m)?'dark':'light');window.__wkThemeMode=m;}window.wkApplyTheme=apply;window.__wkLoggedIn=LI;apply((LI?null:localStorage.getItem('wk-theme'))||DEF);if(window.matchMedia){window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){if(window.__wkThemeMode==='auto')apply('auto');});}}catch(e){}})();</script>
-<link rel="stylesheet" href="/static/site.css">
+<link rel="stylesheet" href="/static/site.css?v={{assetVersion}}">
 {{#googleFontsUrl}}<link rel="stylesheet" href="{{{googleFontsUrl}}}">{{/googleFontsUrl}}
 {{! Noto Color Emoji: makes emoji look the same on every OS instead of Apple/Segoe/Noto-per-platform.
     Already appended to the font stacks below by SettingsService.brandingModel; code/pre use the
@@ -7,7 +7,7 @@
     by unicode-range, so a page only downloads the ranges it actually uses. The host follows
     emojiFontCdn, NOT assetsCdn — this one font outweighs every other vendored asset combined, so it
     defaults to the CDN even on an otherwise-local install (see UiConfig.useCdnEmojiFont). }}
-{{#emojiFont}}{{#emojiFontCdn}}<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap">{{/emojiFontCdn}}{{^emojiFontCdn}}<link rel="stylesheet" href="/static/vendor/noto-emoji/noto-color-emoji.css">{{/emojiFontCdn}}{{/emojiFont}}
+{{#emojiFont}}{{#emojiFontCdn}}<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap">{{/emojiFontCdn}}{{^emojiFontCdn}}<link rel="stylesheet" href="/static/vendor/noto-emoji/noto-color-emoji.css?v={{assetVersion}}">{{/emojiFontCdn}}{{/emojiFont}}
 <style>:root{--bs-body-font-family:{{{bodyFontStack}}};--wk-heading-font:{{{headingFontStack}}};--bs-body-font-size:{{baseFontSize}}px;}{{#emojiFont}}code,pre,kbd,samp{font-family:var(--bs-font-monospace),'Noto Color Emoji';}{{/emojiFont}}</style>
 {{#customCss}}<style>{{{customCss}}}</style>{{/customCss}}
 {{{headHtml}}}

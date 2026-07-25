@@ -41,7 +41,7 @@ class IconFontSourceTest {
         val client = createClient { followRedirects = true }
 
         val html = client.get("/").bodyAsText()
-        assertTrue(html.contains("""href="$localHref""""), "bundled stylesheet linked")
+        assertTrue(html.contains("""href="$localHref?v="""), "bundled stylesheet linked (with the cache-busting token)")
         assertFalse(html.contains("cdn.jsdelivr.net/npm/@mdi"), "no jsDelivr request for icons")
 
         // The stylesheet and the woff2 it points at must both actually be served, or every icon is tofu.

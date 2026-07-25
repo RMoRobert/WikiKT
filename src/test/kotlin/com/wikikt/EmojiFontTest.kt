@@ -101,7 +101,7 @@ class EmojiFontTest {
         login(client)
 
         val html = client.get("/a").bodyAsText()
-        assertTrue(html.contains("""href="/static/vendor/noto-emoji/noto-color-emoji.css""""), "bundled stylesheet linked")
+        assertTrue(html.contains("""href="/static/vendor/noto-emoji/noto-color-emoji.css?v="""), "bundled stylesheet linked (with the cache-busting token)")
         assertFalse(html.contains("family=Noto+Color+Emoji"), "and no third-party request is made")
     }
 

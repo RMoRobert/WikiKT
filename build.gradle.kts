@@ -1,4 +1,20 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.google.javascript.jscomp.CompilationLevel
+import com.google.javascript.jscomp.CompilerOptions
+import com.google.javascript.jscomp.SourceFile
+import com.google.javascript.jscomp.WarningLevel
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        // Build-only (never in the app's runtime classpath): real JS parser used to minify first-party
+        // static/*.js for the production jar. A parser, not regex, is required for JS — `/` is ambiguous
+        // (division vs regex literal) and newlines are semantic (automatic semicolon insertion).
+        classpath("com.google.javascript:closure-compiler:v20260720")
+    }
+}
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -88,9 +104,99 @@ tasks.register<Exec>("databaseInstance") {
     isIgnoreExitValue = true
 }
 
-// Bake the project version into a classpath resource so it's readable at runtime (dev + jar).
+// Basic CSS minification to avoid a non-Kotlin dependency and because those I found don't seem to handle modern CSS:
+// Collapse whitespace runs and drop /* */ comments. Everything where css-syntax-3
+// makes bytes significant is matched first and unchanged. Alternatives, in order:
+//   \26⎵-style hex escapes WITH their optional whitespace terminator (space is part of the escape,
+//     so the run after it must not be collapsed into it); then any other \-escape (so an escaped quote
+//     in a selector can't falsely open a string); quoted strings (internal spaces and /* are literal);
+//     unquoted url() tokens (treat /* inside a URL as content, not comment); then comments and whitespace,
+//     each collapsing to a single space. A space (not deletion) is required: comments are token
+//     separators, so `foo/**/bar` must stay two tokens.
+// Collapsed but not fully delete whitespace -- e.g., calc() spacing and Selectors-L4 :is()/:has() are untouched.
+val cssToken = Regex(
+    """\\[0-9a-fA-F]{1,6}\s?|\\.|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[uU][rR][lL]\(\s*(?:\\.|[^"'()\\\s])*\s*\)|\s*/\*.*?\*/\s*|\s+""",
+    RegexOption.DOT_MATCHES_ALL,
+)
+fun minifyCss(css: String): String =
+    cssToken.replace(css) { m ->
+        val c = m.value.first()
+        if (c == '/' || c.isWhitespace()) " " else m.value
+    }.trim()
+
+// JS minify via Closure Compiler (actual parser, unlike my CSS). SIMPLE renames local
+// variables and drops comments/whitespace but doesn't touch globals or property names, so scripts
+// keep working with inline handlers and each other. No transpilation: syntax passes through as-is.
+// A parse error fails the build (better to catch now than failing in deployment!).
+fun minifyJs(name: String, code: String): String {
+    val compiler = com.google.javascript.jscomp.Compiler()
+    val options = CompilerOptions().apply {
+        setLanguageIn(CompilerOptions.LanguageMode.ECMASCRIPT_NEXT)
+        setLanguageOut(CompilerOptions.LanguageMode.NO_TRANSPILE)
+        // Don't prepend 'use strict' -- sources haven't been verified to not use Sloppy Mode
+        setEmitUseStrict(false)
+    }
+    CompilationLevel.SIMPLE_OPTIMIZATIONS.setOptionsForCompilationLevel(options)
+    WarningLevel.QUIET.setOptionsForWarningLevel(options)
+    val result = compiler.compile(emptyList<SourceFile>(), listOf(SourceFile.fromCode(name, code)), options)
+    if (!result.success) {
+        throw GradleException("Closure Compiler failed on $name:\n${result.errors.joinToString("\n")}")
+    }
+    return compiler.toSource()
+}
+
+// True only when the self-contained production jar is being built (shadowJar, which the Dockerfile
+// runs, or ktor's buildFatJar that also depends on it). Resolved once the task graph is known, so it never
+// trips for `./gradlew run`.
+// Dev opt-in: `./gradlew run -Pwikikt.minify` serves the minified CSS/JS from the normal dev server —
+// same H2 database, default admin, and dev session keys — to rule minification in or out when
+// debugging. The flag is part of the task's inputs, so a following plain `run` re-copies the readable
+// sources automatically.
+val devMinify = providers.gradleProperty("wikikt.minify").isPresent
+val minifyProdAssets = objects.property(Boolean::class.java).convention(false)
+gradle.taskGraph.whenReady {
+    minifyProdAssets.set(hasTask(":shadowJar") || devMinify)
+}
+
 tasks.processResources {
+    // Bake the project version into a classpath resource so it's readable at runtime (dev + jar).
     filesMatching("wikikt.properties") {
         expand("version" to project.version)
+    }
+
+    // Minifiy static/site.css and first-party static JS if building prod JAR; keep as-is for dev for
+    // ease. vendor/ and *.min.js are already minified upstream and are skipped.
+    // Recorded as a task input so switching between a prod build and `run` re-copies the right variant
+    // instead of leaving a stale minified file in build/resources/main.
+    inputs.property("minifyProdAssets", minifyProdAssets)
+    doLast {
+        if (!minifyProdAssets.get()) return@doLast
+        val staticDir = sourceSets.main.get().output.resourcesDir!!.resolve("static")
+
+        val css = staticDir.resolve("site.css")
+        val cssOriginal = css.readText()
+        css.writeText(minifyCss(cssOriginal))
+        logger.lifecycle("Minified static/site.css: ${cssOriginal.length} -> ${css.length()} bytes")
+
+        var jsBefore = 0L
+        var jsAfter = 0L
+        staticDir.walkTopDown()
+            .filter { it.isFile && it.extension == "js" }
+            .filterNot { it.name.endsWith(".min.js") || it.relativeTo(staticDir).path.startsWith("vendor") }
+            .forEach { f ->
+                val original = f.readText()
+                f.writeText(minifyJs(f.name, original))
+                jsBefore += original.length
+                jsAfter += f.length()
+            }
+        logger.lifecycle("Minified first-party static JS: $jsBefore -> $jsAfter bytes")
+
+        // Stamp the build time into wikikt.properties (prod jars only). BuildInfo.assetVersion appends
+        // it to the version for the ?v= cache-busting token on /static URLs, so two prod builds of the
+        // same -SNAPSHOT version still bust caches. Living in this doLast keeps dev/test inputs stable
+        // (no per-build churn), and an UP-TO-DATE shadowJar keeps its previous stamp. Stamp only
+        // changes when the outputs actually rebuild.
+        val props = sourceSets.main.get().output.resourcesDir!!.resolve("wikikt.properties")
+        props.appendText("\nbuiltAt=${System.currentTimeMillis() / 1000}\n")
     }
 }

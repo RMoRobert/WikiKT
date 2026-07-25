@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+{{! <html lang> is the language of the CHROME (nav, breadcrumbs, page-detail cards, footer), which is
+    English-only for now — so it stays "en". The article body can be in a different locale; it carries
+    its own lang on <article> below. When the UI itself becomes localized, swap this "en" for the UI
+    locale. }}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,7 +11,7 @@
     {{#hasMetaDescription}}<meta name="description" content="{{metaDescription}}">{{/hasMetaDescription}}
     <meta name="robots" content="{{metaRobots}}">
     {{>partials/head-deps.hbs}}
-    <link rel="stylesheet" href="/static/vendor/highlight/github.min.css">
+    <link rel="stylesheet" href="/static/vendor/highlight/github.min.css?v={{assetVersion}}">
     {{>partials/head-styles.hbs}}
     {{! Per-page custom code (Page Info → Custom Code), injected on view only. Set exclusively by users
         with manage:theme and stored unsanitized: CSS is wrapped in a <style> tag here; JS is emitted
@@ -33,7 +37,7 @@
 {{/showBreadcrumbs}}
 <div class="container wiki-layout">
     {{>partials/sidebar.hbs}}
-    <main class="wiki-main page-view">
+    <main id="main" tabindex="-1" class="wiki-main page-view">
         {{^published}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-eye-off-outline" aria-hidden="true"></i>DRAFT: Page is not published</div>{{/published}}
         {{#previewingStaged}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-eye-check-outline" aria-hidden="true"></i> Previewing staged version. <a href="{{viewUrl}}" class="alert-link">Switch to live view.</a></div>{{/previewingStaged}}
         {{#canEdit}}{{#hasStaged}}{{^previewingStaged}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-edit-outline" aria-hidden="true"></i> A staged update {{#stagedScheduled}}is scheduled for {{stagedScheduledAt}}{{/stagedScheduled}}{{^stagedScheduled}}is saved (no schedule){{/stagedScheduled}} — <a href="{{stagedPreviewUrl}}" class="alert-link">Preview</a> · <a href="{{editUrl}}" class="alert-link">Edit</a></div>{{/previewingStaged}}{{/hasStaged}}{{/canEdit}}
@@ -44,7 +48,13 @@
             EVERY direct child of the flex container, including between "Integration" and the following
             period and between "Add it" and its period, showing as unwanted extra spaces before both. }}
         {{#infoboxMissing}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-card-text-outline" aria-hidden="true"></i><span>This page is specified for but missing {{infoboxMissingNoun}}: <strong>{{infoboxMissingNames}}</strong>. <a href="{{editUrl}}" class="alert-link">Add {{infoboxMissingPronoun}}</a>.</span></div>{{/infoboxMissing}}
-        <article class="wiki-content">
+        {{! The article body is the one region in a locale that can differ from the English chrome, so it
+            carries lang here (not on <html>). The value is the URL's locale segment, which today always
+            equals the served page's locale; if you add cross-locale content fallback later, bind it to the
+            RESOLVED page's locale so fell-back English content isn't mislabelled as the requested locale.
+            (Don't reference the locale variable inside this comment — its closing braces would end the
+            comment early and dump the rest as visible text.) }}
+        <article class="wiki-content" lang="{{locale}}">
             <header>
             <h1>{{title}}</h1>
             {{#hasDescription}}<p>{{description}}</p>{{/hasDescription}}
@@ -162,172 +172,15 @@
 {{/canEdit}}
 
 {{>partials/footer.hbs}}
-{{#tocEnabled}}
-<script>
-(function () {
-  var toc = document.getElementById('pageToc');
-  var content = document.querySelector('.wiki-content');
-  if (!toc || !content) return;
-  var list = toc.querySelector('.page-toc-list');
-  var used = Object.create(null);
-  var count = 0;
-  // Heading anchor slugs follow Wiki.js (uslug): keep letters/numbers/marks and - _ ~, turn
-  // separators into spaces, and DROP every other punctuation mark (so "can't" -> "cant", not
-  // "can-t"). Then collapse runs of space/hyphen to a single hyphen and lower-case. Unicode
-  // property escapes stand in for uslug's code-point tables, so non-ASCII headings slug sanely too.
-  function slugify(text) {
-    var s = text;
-    try { s = s.normalize('NFKC'); } catch (e) { /* old engines: skip normalization */ }
-    s = s
-      .replace(/\p{Z}/gu, ' ')                  // unicode separators -> space
-      .replace(/[^\p{L}\p{N}\p{M}\s\-_~]/gu, '') // drop punctuation/symbols (apostrophes, commas, ...)
-      .replace(/^\s+|\s+$/g, '')                 // trim
-      .replace(/[\s\-]+/g, '-')                  // collapse space/hyphen runs to one hyphen
-      .toLowerCase();
-    // CSS ids can't start with a digit; Wiki.js prefixes such slugs with "h-".
-    if (/^[0-9]/.test(s)) s = 'h-' + s;
-    return s || 'section';
-  }
-  // Headings are demoted one level on render (the page title is the sole h1), so the content's top
-  // two levels are h2/h3. Scanning these also excludes the title h1 from the table of contents.
-  // H3s nest under the preceding H2; an H2 that gains children grows a chevron that expands/collapses
-  // its sub-list (created lazily on the first child so childless H2s stay plain).
-  var currentTop = null;      // current top-level <li> (an H2) that H3s attach to
-  var currentSublist = null;  // its child <ul>, created on the first H3
-  // Every entry gets the same chevron in a fixed-width gutter so titles line up; only sections that
-  // turn out to have children swap theirs for a real (clickable) toggle below.
-  function buildRow(a) {
-    var row = document.createElement('div');
-    row.className = 'toc-row';
-    var gutter = document.createElement('span');
-    gutter.className = 'toc-gutter';
-    gutter.innerHTML = '<i class="mdi mdi-chevron-right toc-bullet" aria-hidden="true"></i>';
-    row.appendChild(gutter);
-    row.appendChild(a);
-    return row;
-  }
-  content.querySelectorAll('h2, h3').forEach(function (h) {
-    var text = (h.textContent || '').trim();
-    if (!text) return;
-    var id = h.id;
-    if (!id) {
-      var base = slugify(text);
-      id = base;
-      while (used[id] || document.getElementById(id)) { id = base + '-' + (used[base] = (used[base] || 1) + 1); }
-      h.id = id;
-    }
-    used[id] = (used[id] || 0) + 1;
-    var a = document.createElement('a');
-    a.href = '#' + id;
-    a.textContent = text;
-
-    if (h.tagName === 'H3' && currentTop) {
-      if (!currentSublist) {
-        // First child: swap the parent's static chevron for a toggle, and open a sub-list.
-        var toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'toc-toggle';
-        toggle.setAttribute('aria-expanded', 'true');
-        toggle.setAttribute('aria-label', 'Toggle subheadings');
-        toggle.innerHTML = '<i class="mdi mdi-chevron-right" aria-hidden="true"></i>';
-        currentTop.classList.add('toc-has-children', 'is-expanded');
-        var parentGutter = currentTop.querySelector('.toc-gutter');
-        parentGutter.innerHTML = '';
-        parentGutter.appendChild(toggle);
-        currentSublist = document.createElement('ul');
-        currentSublist.className = 'toc-sublist';
-        currentTop.appendChild(currentSublist);
-      }
-      var subLi = document.createElement('li');
-      subLi.className = 'toc-h3';
-      subLi.appendChild(buildRow(a));
-      currentSublist.appendChild(subLi);
-    } else {
-      // Top-level entry (an H2, or a stray H3 with no preceding H2).
-      var li = document.createElement('li');
-      li.className = 'toc-' + h.tagName.toLowerCase();
-      li.appendChild(buildRow(a));
-      list.appendChild(li);
-      currentTop = (h.tagName === 'H2') ? li : null;
-      currentSublist = null;
-    }
-    count++;
-  });
-  if (count > 0) toc.hidden = false;
-
-  // A chevron click toggles its section (and only that — the title link still navigates).
-  list.addEventListener('click', function (e) {
-    var btn = e.target.closest('.toc-toggle');
-    if (!btn) return;
-    e.preventDefault();
-    var li = btn.closest('li');
-    btn.setAttribute('aria-expanded', String(li.classList.toggle('is-expanded')));
-  });
-
-  // Collapse toggle — only interactive on compact screens (CSS makes it inert on desktop, where
-  // the list is always shown).
-  var toggleBtn = document.getElementById('pageTocToggle');
-  toggleBtn.addEventListener('click', function () {
-    var open = toc.classList.toggle('is-open');
-    toggleBtn.setAttribute('aria-expanded', String(open));
-  });
-
-  // Compact screens: move the TOC under the page title (it reads as part of the article there);
-  // desktop: back to the top of the side column. Collapse state resets to the breakpoint default
-  // (mobile collapsed, desktop expanded).
-  var aside = document.querySelector('.page-aside');
-  var articleHeader = document.querySelector('.wiki-content > header');
-  // Below 1200px — NOT the 768px single-column point — because with the side column in the row,
-  // mid-width screens squeezed the article between the nav and the TOC. Must match the CSS blocks.
-  var mq = window.matchMedia('(max-width: 1199.98px)');
-  function place() {
-    var compact = mq.matches && articleHeader;
-    if (compact) articleHeader.after(toc);
-    else aside.insertBefore(toc, aside.firstChild);
-    toc.classList.toggle('is-open', !compact);
-    toggleBtn.setAttribute('aria-expanded', String(!compact));
-  }
-  if (mq.addEventListener) mq.addEventListener('change', place); else mq.addListener(place);
-  place();
-})();
-</script>
-{{/tocEnabled}}
-<script>
-(function () {
-  // Share box: e-mail (mailto with the page title + URL), copy-to-clipboard, and print.
-  var url = window.location.href;
-  var emailLink = document.getElementById('shareEmail');
-  if (emailLink) {
-    emailLink.href = 'mailto:?subject=' + encodeURIComponent(document.title) +
-      '&body=' + encodeURIComponent(url);
-  }
-  var copyBtn = document.getElementById('shareCopyUrl');
-  if (copyBtn) {
-    var flash = function () {
-      var orig = copyBtn.innerHTML;
-      copyBtn.innerHTML = '<i class="mdi mdi-check"></i> Copied!';
-      setTimeout(function () { copyBtn.innerHTML = orig; }, 1500);
-    };
-    var fallbackCopy = function () {
-      var ta = document.createElement('textarea');
-      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.focus(); ta.select();
-      try { document.execCommand('copy'); flash(); } catch (e) { /* no-op */ }
-      document.body.removeChild(ta);
-    };
-    copyBtn.addEventListener('click', function () {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(flash, fallbackCopy);
-      } else { fallbackCopy(); }
-    });
-  }
-  var printBtn = document.getElementById('printPage');
-  if (printBtn) printBtn.addEventListener('click', function () { window.print(); });
-})();
-</script>
-<script src="/static/vendor/highlight/highlight.min.js"></script>
-<script src="/static/vendor/highlight/groovy.min.js"></script>
+{{! Site-wide (content pages): stable ids + a copy-link icon on every section heading. Loaded BEFORE
+    page-view.js so heading ids are already assigned; its TOC builder reuses them (window.wkEnsureHeadingId). }}
+<script src="/static/heading-anchors.js?v={{assetVersion}}"></script>
+{{! TOC builder + share box. The TOC part no-ops when the tocEnabled markup above wasn't rendered
+    (it early-returns without #pageToc), so no conditional is needed around the include. }}
+<script src="/static/page-view.js?v={{assetVersion}}"></script>
+<script src="/static/vendor/highlight/highlight.min.js?v={{assetVersion}}"></script>
+<script src="/static/vendor/highlight/groovy.min.js?v={{assetVersion}}"></script>
 <script>if (window.hljs) hljs.highlightAll();</script>
-<script src="/static/code-copy.js"></script>
+<script src="/static/code-copy.js?v={{assetVersion}}"></script>
 {{{bodyHtml}}}</body>
 </html>

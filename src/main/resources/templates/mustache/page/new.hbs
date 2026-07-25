@@ -11,7 +11,7 @@
 {{>partials/header.hbs}}
 <div class="container wiki-layout">
 {{>partials/sidebar.hbs}}
-<main class="wiki-main">
+<main id="main" tabindex="-1" class="wiki-main">
     <div style="max-width:40rem;">
     <h1>{{#isDuplicate}}Duplicate page{{/isDuplicate}}{{^isDuplicate}}New page{{/isDuplicate}}</h1>
     {{#isDuplicate}}<p class="text-secondary">Copying content from <code>{{sourceLabel}}</code> into a new page — choose where it should live.</p>{{/isDuplicate}}
@@ -41,7 +41,7 @@
 </main>
 </div>
 {{>partials/footer.hbs}}
-<script src="/static/wk-browser.js"></script>
+<script src="/static/wk-browser.js?v={{assetVersion}}"></script>
 <script>
 (function () {
   var btn = document.getElementById('browsePath');

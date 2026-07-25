@@ -9,7 +9,7 @@
 </head>
 <body>
 {{>partials/header.hbs}}
-<main class="container">
+<main id="main" tabindex="-1" class="container">
     <div class="page-meta"><h1><i class="mdi mdi-image-multiple-outline" aria-hidden="true"></i> Assets</h1></div>
     {{#message}}<div class="alert alert-info py-2">{{message}}</div>{{/message}}
 
@@ -56,8 +56,8 @@
     </p>
 </main>
 <script>window.__WK_ASSETS__ = {{{assetsJson}}}; window.__WK_UPLOAD_MAX__ = {{maxFiles}};</script>
-<script src="/static/wk-browser.js"></script>
-<script src="/static/asset-manager.js"></script>
+<script src="/static/wk-browser.js?v={{assetVersion}}"></script>
+<script src="/static/asset-manager.js?v={{assetVersion}}"></script>
 {{>partials/footer.hbs}}
 {{{bodyHtml}}}</body>
 </html>

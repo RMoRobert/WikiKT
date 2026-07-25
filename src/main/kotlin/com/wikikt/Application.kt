@@ -15,6 +15,8 @@ import com.wikikt.routing.errorModel
 import com.wikikt.routing.configureSearchRouting
 import com.wikikt.routing.configureTagRouting
 import com.wikikt.routing.configureWikiRouting
+import com.wikikt.config.isProductionEnvironment
+import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -94,6 +96,9 @@ fun Application.module() {
                 "loggedIn" to (currentUser != null),
                 "username" to currentUser?.username,
                 "displayName" to currentUser?.displayName?.takeIf { it.isNotBlank() },
+                // Cache-busting token appended (?v=) to every local /static URL, paired with the
+                // long-lived Cache-Control on the /static route below.
+                "assetVersion" to BuildInfo.assetVersion,
             ) +
                 ctx.settings.brandingModel(call.siteId(), ctx.markdown, year) +
                 (userTheme?.let { mapOf("themeMode" to it) } ?: emptyMap()) +
@@ -107,7 +112,16 @@ fun Application.module() {
     startEmailWorker()
 
     routing {
-        staticResources("/static", "static")
+        staticResources("/static", "static") {
+            // Every local /static reference carries ?v=assetVersion, so production can cache hard for a
+            // year — a new build changes the token and browsers fetch fresh files immediately. Dev keeps
+            // today's no-header behavior so edits show on a plain reload.
+            if (environment.config.isProductionEnvironment()) {
+                cacheControl {
+                    listOf(CacheControl.MaxAge(maxAgeSeconds = 31_536_000, visibility = CacheControl.Visibility.Public))
+                }
+            }
+        }
 
         // Bundled default favicon + logo, served at root paths. Admin-selected assets (site.faviconUrl
         // / site.logoUrl) override them via the page <head> and header markup.

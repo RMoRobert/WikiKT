@@ -9,7 +9,7 @@
 </head>
 <body>
 {{>partials/header.hbs}}
-<main class="container narrow">
+<main id="main" tabindex="-1" class="container narrow">
     <div class="page-meta"><h1>{{path}}</h1><a class="btn btn-secondary" href="/f">All assets</a></div>
 
     {{! The asset detail/edit surface. Bootstrap tabs (General / File / Info / History) + a persistent

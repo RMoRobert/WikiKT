@@ -6,5 +6,5 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 {{! Material Design Icons. Follows iconFontCdn, NOT assetsCdn — like the emoji font this one is big
     enough (~750KB) to warrant its own switch, and defaults to the CDN. The local copy is woff2-only. }}
-{{#iconFontCdn}}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" integrity="sha384-HphS8cQyN+eYiJ5PMbzShG6qZdRtvHPVLPkYb8JwMkmNgaIxrFVDhQe3jIbq3EZ2" crossorigin="anonymous">{{/iconFontCdn}}{{^iconFontCdn}}<link rel="stylesheet" href="/static/vendor/mdi/materialdesignicons.min.css">{{/iconFontCdn}}
+{{#iconFontCdn}}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" integrity="sha384-HphS8cQyN+eYiJ5PMbzShG6qZdRtvHPVLPkYb8JwMkmNgaIxrFVDhQe3jIbq3EZ2" crossorigin="anonymous">{{/iconFontCdn}}{{^iconFontCdn}}<link rel="stylesheet" href="/static/vendor/mdi/materialdesignicons.min.css?v={{assetVersion}}">{{/iconFontCdn}}
 {{>partials/framework-css.hbs}}
