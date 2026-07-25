@@ -535,8 +535,11 @@ th.wkab-th-sort:hover { color: var(--bs-body-color, #212529); }
    Background comes from the admin "header color" settings (one per color mode) via brand-style.hbs
    (--wk-navbar-bg); unset for the current mode, it falls back to the neutral dark bar below.
    data-bs-theme="dark" on the navbar keeps text/icons light; brand-style overrides the navbar fg vars
-   when a *light* header color is chosen. --wikikt-header-h is
-   the approx navbar height, used below to offset the sticky side columns so they clear the bar. */
+   when a *light* header color is chosen. --wikikt-header-h is the navbar's height, used below to offset
+   the body, the sticky side columns and the compact sidebar pop-over so they clear the bar. The value
+   here is the single-row default, correct before scripts run; site-header.js then measures the real bar
+   and republishes it here, because below lg the search box expands into a second row. Anything that has
+   to sit under the header must read THIS var, never re-measure — that keeps the whole page in step. */
 :root { --wikikt-header-h: 3.6rem; }
 /* Skip link (a11y): the first tab stop on every page with the navbar. Kept off-screen until focused,
    then it slides into the top-left corner over the fixed navbar so a keyboard user can jump straight to
@@ -608,8 +611,9 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 /* Long site names must truncate, not wrap the bar. This is a Bootstrap navbar-expand-lg, so below lg
    the navbar flex row wraps; without this a long .brand-name (white-space: nowrap) is sized at its full
    content width first, so .header-actions gets shoved onto a second row before any shrinking happens.
-   That taller-than-expected bar then also pushed the compact sidebar pop-over (anchored at the fixed
-   --wikikt-header-h) under the wrapped row. */
+   That taller-than-expected bar then also pushed the compact sidebar pop-over under the wrapped row —
+   no longer load-bearing for that second symptom (site-header.js now keeps --wikikt-header-h on the
+   bar's real height), but still what keeps the bar itself one row. */
 .wk-navbar .brand-name { overflow: hidden; text-overflow: ellipsis; font-weight: 400 }
 /* Must match the navbar-expand-lg breakpoint (991.98px). Above it the search is an inline centered box
    and the brand keeps its natural width; only once the bar collapses (below lg) does the brand switch to
@@ -619,10 +623,58 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 @media (max-width: 991.98px) {
     /* Below lg (where the bar wraps): flex-basis 0 + grow makes the brand's hypothetical size 0, so the
        toggle, brand and action icons all collect on the top line together and the brand then grows to
-       fill only the leftover space, ellipsizing its text. The search #wkSearch collapse still drops to
-       its own row (it's a 100%-basis navbar-collapse), and the action icons stay intact (flex-shrink:0). */
-    .wk-navbar .navbar-brand.brand { flex: 1 1 0; }
+       fill only the leftover space, ellipsizing its text. The action icons stay intact (flex-shrink:0).
+
+       min-width: 0 is what actually lets that happen, and without it the ellipsis above is decorative:
+       a flex item defaults to min-width:auto, i.e. it refuses to shrink below its content, and .brand-name
+       is `white-space: nowrap` so its min-content size is the WHOLE title however long. flex-basis 0 only
+       sets the item's starting size — the auto minimum then floors it right back at full text width, and a
+       long enough site name shoves the action icons onto a second row. The title never truncated; it just
+       never got long enough to notice. */
+    .wk-navbar .navbar-brand.brand { flex: 1 1 0; min-width: 0; }
     .wk-navbar .header-actions { flex-shrink: 0; }
+
+    /* --- Compact search opens INTO the top row, never onto a second one ---
+       A .navbar-collapse is a 100%-basis flex item, so by default revealing #wkSearch wraps it below the
+       brand and doubles the bar's height. A taller bar is not a local cost: it eats viewport on the
+       device with the least of it, and everything anchored beneath the header (sidebar pop-over, sticky
+       TOC, scroll-margin) has to shift with it. So re-box the collapse as an ordinary item on the
+       existing row. Still Bootstrap's collapse — same toggle, same .show, same show/hide animation,
+       which now grows the pill's height inside a row whose height the 2.6rem icons already fix.
+
+       flex-basis 0 (not auto) for the same reason the brand uses it: a flex container assigns items to
+       lines by their HYPOTHETICAL size and only shrinks within a line afterwards, so an auto-basis pill
+       measuring its 28rem max-width bumps the icons onto a second row before min-width:0 ever gets a
+       chance to squeeze it. Basis 0 means it claims only leftover space and can never force a wrap. */
+    .wk-navbar #wkSearch { flex: 1 1 0; min-width: 0; }
+    /* Ordered last so the pill lands between the brand and the icons: everything else is order 0 and
+       falls in DOM order (toggle, brand, search), and the icons then follow. */
+    .wk-navbar .header-actions { order: 1; }
+    /* Half the desktop gutter: inline, the pill has real neighbours either side instead of floating in
+       an empty row. (Its vertical margin is gone from the markup — see partials/header.hbs — so the
+       pill measures ~2rem against the 2.6rem icons and opening the search cannot grow the bar.) */
+    .wk-navbar #wkSearch .header-search-box { margin-inline: 0.5rem; }
+    /* Suggestions are anchored to .header-search, which inline is only as wide as the pill — too narrow
+       for a title + snippet. Pin them under the bar across the full viewport instead. position: fixed
+       still paints inside the navbar's stacking context (z-index 1030), so the z-index 6 above keeps
+       working, and --wikikt-header-h is kept on the bar's real height by site-header.js. */
+    .wk-navbar .search-dropdown {
+        position: fixed;
+        top: calc(var(--wikikt-header-h) + 0.35rem);
+        left: 0.5rem;
+        right: 0.5rem;
+        width: auto;
+        max-width: none;
+    }
+}
+/* Phones only (below md, matching the `d-none d-md-flex` icons in the markup): the title steps aside
+   while the search is open. This row seats the search box OR the title, not both — split between them
+   the search is too cramped to type in and the title is an ellipsis anyway. Deliberately NOT applied up
+   to lg: between md and lg the bar is wide enough for both, and there's no reason to drop the site's
+   identity where it fits. The whole brand goes, logo included, so nothing is left stranded mid-row. It
+   returns the moment the search closes. */
+@media (max-width: 767.98px) {
+    .wk-navbar:has(#wkSearch.show) .navbar-brand.brand { display: none; }
 }
 
 /* Large icon action buttons in the top navbar (flat, no labels). */
@@ -1181,7 +1233,11 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     body:has(.wiki-layout > .wiki-sidebar) .wk-crumbbar > .container { width: auto; margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
     body:has(.wiki-layout > .wiki-sidebar) .site-footer { margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
 }
+/* .wk-nav-home-link (the switch-less "Home" shortcut) is listed alongside the menu's own links rather
+   than styled separately: it sits above the <nav> panes, but it's meant to be indistinguishable from a
+   hand-added first menu item. */
 .wiki-sidebar nav a,
+.wiki-sidebar .wk-nav-home-link,
 .wiki-sidebar .nav-heading {
     display: block;
     padding: 0.65rem 0.5rem;
@@ -1192,7 +1248,8 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    the baseline, so the row's height is max(icon, label) + padding and doesn't need the extra leading
    an inline icon would demand. flex-start (not center) keeps the icon beside the *first* line when a
    long label wraps. */
-.wiki-sidebar nav a {
+.wiki-sidebar nav a,
+.wiki-sidebar .wk-nav-home-link {
     display: flex;
     align-items: flex-start;
     line-height: 1.35;
@@ -1200,11 +1257,13 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     color: var(--wk-sidebar-fg);
     font-size: 0.85rem;
 }
-.wiki-sidebar nav a:hover { background: var(--wk-sidebar-hover-bg); }
+.wiki-sidebar nav a:hover,
+.wiki-sidebar .wk-nav-home-link:hover { background: var(--wk-sidebar-hover-bg); }
 /* Item icons read a touch larger than the label text, with a small gap before it. line-height 1 keeps
    the glyph's own leading (1.5 inherited = ~29px at this size) from making icon rows taller than
    plain-text ones. */
-.wiki-sidebar nav a .mdi { font-size: 1.2rem; line-height: 1; margin-right: 0.8rem; }
+.wiki-sidebar nav a .mdi,
+.wiki-sidebar .wk-nav-home-link .mdi { font-size: 1.2rem; line-height: 1; margin-right: 0.8rem; }
 .wiki-sidebar .nav-heading {
     font-weight: 400;
     font-size: 0.8rem;
@@ -1715,8 +1774,17 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     background: var(--wk-sidebar-hover-bg);
     border-radius: 0.4rem;
 }
+/* The two view buttons split whatever the Home shortcut leaves. min-width:0 lets them shrink past
+   their labels rather than pushing the control wider than the column. */
+.wiki-sidebar .wk-nav-switch-views {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    gap: 0.2rem;
+}
 .wiki-sidebar .wk-nav-switch-btn {
     flex: 1 1 0;
+    min-width: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1727,15 +1795,33 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     background: transparent;
     color: var(--wk-sidebar-fg-muted);
     font-size: 0.8rem;
+    /* Labels are single-line: two words on one button and one on the other read as a lopsided control,
+       and there's no room for a second line above the panes. Overflow only bites at font metrics far
+       wider than the stack's — everything here scales with rem, so zoom alone never triggers it. */
+    white-space: nowrap;
+    overflow: hidden;
     cursor: pointer;
 }
-.wiki-sidebar .wk-nav-switch-btn .mdi { font-size: 1.05rem; }
+.wiki-sidebar .wk-nav-switch-btn .mdi { flex: none; font-size: 1.05rem; }
 .wiki-sidebar .wk-nav-switch-btn:hover { color: var(--wk-sidebar-fg); }
 .wiki-sidebar .wk-nav-switch-btn.is-active {
     background: var(--wk-sidebar-bg);
     color: var(--wk-sidebar-fg);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
+/* Home shortcut folded into the switch: icon-only and non-flexing, so the two view labels keep as much
+   of the 16rem column as possible. The hairline marks it as a link out of the control rather than a
+   third pane — it never takes .is-active, so only one thing in the row ever looks selected. */
+.wiki-sidebar .wk-nav-switch .wk-nav-home-btn {
+    flex: 0 0 auto;
+    padding: 0.3rem 0.45rem;
+    border-radius: 0.3rem 0 0 0.3rem;
+    border-right: var(--bs-border-width) solid var(--wk-sidebar-line);
+    text-decoration: none;
+}
+.wiki-sidebar .wk-nav-switch .wk-nav-home-btn .mdi { font-size: 1.15rem; }
+/* Three items in the row instead of two — buy the labels back the padding. */
+.wiki-sidebar .wk-nav-switch.has-home .wk-nav-switch-views .wk-nav-switch-btn { padding-inline: 0.25rem; gap: 0.2rem; }
 
 /* Panes: only the active one is shown. Single-mode sidebars have one pane, always active. */
 .wiki-sidebar .wk-nav-pane { display: none; }

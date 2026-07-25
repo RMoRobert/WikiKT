@@ -1,17 +1,30 @@
 {{! Wiki sidebar. Lives as the first child of a `.container.wiki-layout` flex row, before <main>, and is
     the single source for all navigation modes (Administration > Navigation), driven by the model built
     in WikiRouting.navModel: the static curated menu (navShowStatic), the auto-built drill-down site tree
-    (navShowTree), or both with a per-visitor switch (navShowToggle). The whole aside is gated on
-    showSidebar, so `none` mode (and empty menus) renders nothing. The compact-screen show/hide is driven
-    by the hamburger in partials/header.hbs, which finds #wikiSidebar and wires itself. }}
+    (navShowTree), or both with a per-visitor switch (navShowToggle), plus the optional "Home" shortcut
+    above them all (navShowHome). The whole aside is gated on showSidebar, so `none` mode (and empty
+    menus) renders nothing — including the Home shortcut, which never conjures a sidebar of its own. The
+    compact-screen show/hide is driven by the hamburger in partials/header.hbs, which finds #wikiSidebar
+    and wires itself. }}
 {{#showSidebar}}
 <aside class="wiki-sidebar" id="wikiSidebar">
     {{#navShowToggle}}
-    {{! Static ⇄ tree switch (both mode). wk-nav-browser.js remembers the choice in the wk-nav-view cookie. }}
-    <div class="wk-nav-switch" role="tablist" aria-label="Navigation view">
-        <button type="button" class="wk-nav-switch-btn{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static" aria-label="Main navigation menu tree"><i class="mdi mdi-menu" aria-hidden="true"></i> Main Menu</button>
-        <button type="button" class="wk-nav-switch-btn{{#navTreeActive}} is-active{{/navTreeActive}}" data-nav-view="tree" aria-label="Browse pages"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i> Browse</button>
+    {{! Static ⇄ tree switch (both mode). wk-nav-browser.js remembers the choice in the wk-nav-view cookie.
+        The optional Home shortcut (navShowHome) rides along at the left as an icon-only button: it's a
+        link, not a third view, so it sits OUTSIDE the tablist and behind a divider, and it stays
+        label-less both to say "not a pane" and to leave the two view labels room in a 16rem column. }}
+    <div class="wk-nav-switch{{#navShowHome}} has-home{{/navShowHome}}">
+        {{#navShowHome}}<a class="wk-nav-switch-btn wk-nav-home-btn" href="{{navHomeUrl}}" title="Home" aria-label="Home"{{#navHomeActive}} aria-current="page"{{/navHomeActive}}><i class="mdi mdi-home-outline" aria-hidden="true"></i></a>{{/navShowHome}}
+        <div class="wk-nav-switch-views" role="tablist" aria-label="Navigation view">
+            <button type="button" class="wk-nav-switch-btn{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static" aria-label="Main navigation menu tree"><i class="mdi mdi-menu" aria-hidden="true"></i> Main Menu</button>
+            <button type="button" class="wk-nav-switch-btn{{#navTreeActive}} is-active{{/navTreeActive}}" data-nav-view="tree" aria-label="Browse pages"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i> Browse</button>
+        </div>
     </div>
+    {{/navShowToggle}}
+    {{^navShowToggle}}
+    {{! No switch to fold it into, so the Home shortcut is a plain link in the sidebar's own item style —
+        it should read as the menu's first entry, not as separate chrome. }}
+    {{#navShowHome}}<a class="wk-nav-home-link{{#navHomeActive}} active{{/navHomeActive}}" href="{{navHomeUrl}}"{{#navHomeActive}} aria-current="page"{{/navHomeActive}}><i class="mdi mdi-home-outline" aria-hidden="true"></i> Home</a>{{/navShowHome}}
     {{/navShowToggle}}
     {{#navShowStatic}}
     <nav class="wk-nav-pane wk-nav-pane--static{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static">

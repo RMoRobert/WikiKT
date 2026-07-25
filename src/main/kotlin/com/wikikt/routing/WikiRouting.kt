@@ -1249,6 +1249,21 @@ internal suspend fun io.ktor.server.application.ApplicationCall.navModel(
     }
     val staticActive = staticHasContent && !treeActive
 
+    // --- "Home" shortcut at the top of the sidebar (Administration > Navigation; on by default) ---
+    // With the switch showing it rides along inside that control as an icon button; without one it's a
+    // plain nav link above the menu, indistinguishable from a hand-added first item. Either way it only
+    // appears when the sidebar itself does — a column holding nothing but "Home" isn't worth the space.
+    val showHome = ctx.settings.getBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_HOME, true)
+    // Same canonical form the "/" and "/{locale}" redirects settle on: unprefixed only when the primary
+    // locale is being viewed and prefixes aren't forced.
+    val homeUrl = if (locale == ctx.config.defaultLocale &&
+        !ctx.settings.getBool(siteId, com.wikikt.service.SettingsService.LOCALE_FORCE_PREFIX)
+    ) {
+        "/$HOME_PAGE_PATH"
+    } else {
+        "/$locale/$HOME_PAGE_PATH"
+    }
+
     return mapOf(
         "navMode" to mode,
         "showSidebar" to (staticHasContent || treeHasContent),
@@ -1257,6 +1272,9 @@ internal suspend fun io.ktor.server.application.ApplicationCall.navModel(
         "navShowToggle" to showToggle,
         "navStaticActive" to staticActive,
         "navTreeActive" to treeActive,
+        "navShowHome" to showHome,
+        "navHomeUrl" to homeUrl,
+        "navHomeActive" to (pagePath == HOME_PAGE_PATH),
         "navItems" to navItems,
         "hasNav" to navItems.isNotEmpty(),
         "canManageNav" to canManageNav,

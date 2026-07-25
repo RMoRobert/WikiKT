@@ -8,7 +8,9 @@
   function switchInit(side) {
     if (side.dataset.navSwitchWired) return;
     side.dataset.navSwitchWired = '1';
-    var btns = Array.prototype.slice.call(side.querySelectorAll('.wk-nav-switch-btn'));
+    // [data-nav-view] filters out the optional Home shortcut, which shares the button styling but is a
+    // plain link to the home page rather than a pane selector.
+    var btns = Array.prototype.slice.call(side.querySelectorAll('.wk-nav-switch-btn[data-nav-view]'));
     var panes = Array.prototype.slice.call(side.querySelectorAll('.wk-nav-pane'));
     if (!btns.length) return;
     function show(view) {

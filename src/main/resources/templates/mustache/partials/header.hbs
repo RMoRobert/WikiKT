@@ -148,7 +148,11 @@
                 Instead the admin's search-box preference is resolved per color mode (SettingsService.
                 searchBoxSurface) and CSS picks between the two on the live root theme, so a visitor
                 toggling light/dark re-surfaces the box without a reload. }}
-            <form class="header-search mx-lg-auto my-2 my-lg-0" action="/s" method="get" role="search" autocomplete="off" data-wk-search-light="{{searchBoxLightMode}}" data-wk-search-dark="{{searchBoxDarkMode}}">
+            {{! No vertical margin at any width: at lg+ the box is inline in the bar, and below lg it is
+                too (site.css re-boxes this collapse onto the top row rather than letting it wrap to a
+                second one). The old `my-2` spaced it inside that second row, and being a Bootstrap
+                utility it was !important — it out-measured the 2.6rem action icons and grew the bar. }}
+            <form class="header-search mx-lg-auto" action="/s" method="get" role="search" autocomplete="off" data-wk-search-light="{{searchBoxLightMode}}" data-wk-search-dark="{{searchBoxDarkMode}}">
                 <input type="hidden" name="locale" value="{{searchLocale}}">
                 <div class="header-search-box">
                     <i class="mdi mdi-magnify" aria-hidden="true"></i>

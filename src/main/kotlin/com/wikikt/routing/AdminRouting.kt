@@ -1187,6 +1187,7 @@ fun Route.configureAdminRouting() {
                         // The static menu list is only relevant when a static menu is actually shown.
                         "staticEnabled" to (mode == "static" || mode == "both"),
                         "showEditMenuLink" to call.appContext.settings.getBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_EDIT_MENU_LINK, true),
+                        "showHome" to call.appContext.settings.getBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_HOME, true),
                         "modeSaved" to (call.request.queryParameters["saved"] != null),
                     ),
                 ),
@@ -1205,6 +1206,7 @@ fun Route.configureAdminRouting() {
             val siteId = call.adminSiteId()
             call.appContext.settings.set(siteId, com.wikikt.service.SettingsService.NAV_MODE, mode)
             call.appContext.settings.setBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_EDIT_MENU_LINK, params["showEditMenuLink"] != null)
+            call.appContext.settings.setBool(siteId, com.wikikt.service.SettingsService.NAV_SHOW_HOME, params["showHome"] != null)
             call.respondRedirect("/a/navigation?saved=1")
         }
 

@@ -1,15 +1,17 @@
 // Header behaviors, loaded right after the fixed navbar markup in partials/header.hbs (every
-// page). Independent pieces, each a no-op when its markup is absent: body-padding sync for the
+// page). Independent pieces, each a no-op when its markup is absent: height sync for the
 // fixed navbar, the compact-screen sidebar hamburger, the theme switcher (persists via the
 // data-persist/data-csrf attributes on .wk-theme-menu), and the live search suggestions combobox.
-// The navbar is `position: fixed` to take it out of flow (better behavior for macOS/iOS overscroll),
-// site.css reserves `--wikikt-header-h` of body padding for it, correct for the
-// default single row. On narrow screens the search box expands into a second row (taller bar), so keep the
-// body's top padding pinned to the bar's real height. Mirrors the editor bar's `--wk-editor-bar-h` measuring.
+// The navbar is `position: fixed` to take it out of flow (better behavior for macOS/iOS overscroll), so
+// site.css reserves `--wikikt-header-h` for it — correct for the default single row, but below lg the
+// search box expands into a second row and the bar grows. Republish the measured height into that same
+// variable (mirrors the editor bar's `--wk-editor-bar-h` in page-edit.js) rather than patching body
+// padding alone: EVERYTHING anchored under the bar reads this var, and a stale value left the compact
+// sidebar pop-over tucked behind the wrapped row instead of below it.
 (function () {
   var nav = document.querySelector('.wk-navbar');
   if (!nav) return;
-  function sync() { document.body.style.paddingTop = nav.offsetHeight + 'px'; }
+  function sync() { document.documentElement.style.setProperty('--wikikt-header-h', nav.offsetHeight + 'px'); }
   sync();
   if (window.ResizeObserver) new ResizeObserver(sync).observe(nav);
   else window.addEventListener('resize', sync);

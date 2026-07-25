@@ -96,6 +96,10 @@ class SettingsService(private val database: R2dbcDatabase) {
          *  Off = those users edit menus from Administration > Navigation instead. Default on. */
         const val NAV_SHOW_EDIT_MENU_LINK = "nav.showEditMenuLink"
 
+        /** Whether the wiki sidebar offers a "Home" shortcut at its top — folded into the view switch in
+         *  `both` mode, and a plain nav link above the menu otherwise. Default on. */
+        const val NAV_SHOW_HOME = "nav.showHome"
+
         /**
          * Typography + custom styling (Appearance page). Body/heading fonts are a preset key from
          * [FONT_PRESETS]; when the key is "custom" the paired `*Custom` value holds a raw CSS

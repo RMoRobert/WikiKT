@@ -49,6 +49,14 @@
             </div>
             <hr>
             <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="showHome" id="showHome" value="1" {{#showHome}}checked{{/showHome}}>
+                <label class="form-check-label" for="showHome">
+                    Show a "Home" shortcut at the top of the sidebar
+                    <span class="d-block text-secondary small">With the site tree + static menu option enabled, "Home" appears as icon
+                        next to that toggle; otherwise appears as plain link above the menu. Not shown if "None" selected (i.e., if sidebar disabled).</span>
+                </label>
+            </div>
+            <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" name="showEditMenuLink" id="showEditMenuLink" value="1" {{#showEditMenuLink}}checked{{/showEditMenuLink}}>
                 <label class="form-check-label" for="showEditMenuLink">
                     Show "Edit menu" link in sidebar for users who can manage navigation

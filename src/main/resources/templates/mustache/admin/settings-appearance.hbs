@@ -145,13 +145,10 @@
         </div>
         <div class="form-check mb-2">
             <input class="form-check-input" type="checkbox" name="emojiFont" value="1" id="emojiFont" {{#emojiFontValue}}checked{{/emojiFontValue}}>
-            <label class="form-check-label" for="emojiFont">Use a consistent emoji font</label>
+            <label class="form-check-label" for="emojiFont">Enable standardized emoji font</label>
         </div>
-        <p class="form-text mb-3">Render emoji &mdash; both <code>:smile:</code> shortcodes and pasted characters &mdash; with the
-            Noto Color Emoji webfont, so a page looks the same on every device. Off means each visitor sees their own
-            platform's emoji (Apple, Windows, Android &hellip;), which differ in style and sometimes in meaning. The font
-            is split by character range, so a page only downloads what it uses. It loads from Google Fonts by default;
-            set <code>wikikt.ui.emojiFontSource</code> to <code>local</code> to serve the bundled copy instead.</p>
+        <p class="form-text mb-3">Render emoji ( <code>:smile:</code> shortcodes or literal characters) with
+            Noto Color Emoji webfont, so a page looks the same on every device. Disable to use browser/OS default.</p>
 
         <h2>Custom CSS <span class="text-secondary fs-6">(advanced)</span></h2>
         <div class="mb-3">
@@ -180,14 +177,11 @@
         <button type="submit" class="btn btn-primary">Save</button>
     </form>
 
-    {{! Read-only: asset delivery is instance-wide deployment config, not a per-site setting — it answers
-        "does this network allow outbound requests", which is the same for every site here. Surfaced so an
+    {{! Read-only: asset delivery is instance-wide deployment config, not a per-site setting. Visible here so an
         admin can see the effective state and where to change it without hunting through docs. }}
     <h2>Asset delivery</h2>
-    <p class="text-secondary">Where the front-end libraries and webfonts are fetched from. Each defaults to a
-        public CDN; setting one to <code>local</code> serves the copy bundled with WikiKT instead &mdash; no
-        outbound request, at the cost of your own bandwidth. This is server configuration rather than a site
-        setting, because it applies to every site on this instance.</p>
+    <p class="text-secondary">Where the front-end libraries and webfonts are fetched from. Configured by environment
+        settings/variables at deployment time (see install readme); view-only here for reference. Per instance, not per site.</p>
     <div class="table-responsive mb-2">
         <table class="table table-sm align-middle">
             <thead><tr><th>Asset</th><th>Source</th><th>Environment variable</th></tr></thead>
@@ -202,10 +196,6 @@
             </tbody>
         </table>
     </div>
-    <p class="form-text mb-3">Set the variable to <code>local</code> or <code>cdn</code> and restart. In Docker,
-        add it to your <code>.env</code>. An install with no guaranteed outbound access should set
-        <strong>all three</strong> to <code>local</code> &mdash; note that a built-in body or heading font above
-        still loads from Google Fonts, so pick <strong>System UI</strong> there as well.</p>
 {{>partials/admin-shell-end.hbs}}
 <script src="/static/wk-browser.js?v={{assetVersion}}"></script>
 <script>

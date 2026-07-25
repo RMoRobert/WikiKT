@@ -35,21 +35,21 @@ wikikt:
   ui:
     # --- Front-end asset delivery -------------------------------------------------------------
     # Each of the three is "cdn" (the default) or "local". "local" serves the copy bundled in the
-    # jar under static/vendor/ — no outbound request, at the cost of your own bandwidth. They are
+    # jar under static/vendor/ -- no Internet request, at the cost of your own bandwidth. They are
     # separate knobs because the two webfonts are far larger than everything else, so you may want
-    # them handled differently. Set ALL THREE to "local" for an air-gapped install; see
-    # docs/install.md. Administration > Appearance shows the effective values read-only.
+    # them handled differently. Set all three to "local" for completely offline install (but minnd
+    # fonts also); see docs/install.md. Administration > Appearance shows the effective values, read-only.
     #
     # Bootstrap + highlight.js (~440KB). Override via WIKIKT_UI_ASSET_SOURCE.
     assetSource: cdn
-    # Emoji webfont, used when Appearance > "Use a consistent emoji font" is on: Google Fonts, or
+    # Emoji webfont, used when Appearance > "Enable standardized emoji font" is on: Google Fonts, or
     # static/vendor/noto-emoji/ (~2MB, unicode-range sliced so a page fetches only what it uses).
-    # A blocked CDN here is harmless — emoji fall back to the visitor's OS font.
+    # A blocked CDN here is harmless; emoji fall back to the visitor's OS font.
     # Override via WIKIKT_UI_EMOJI_FONT_SOURCE.
     emojiFontSource: cdn
     # Material Design Icons webfont: jsdelivr, or static/vendor/mdi/ (~750KB, woff2 only). These are
     # UI chrome, so unlike the emoji font a blocked CDN shows missing glyphs rather than degrading
-    # gracefully — prefer "local" if outbound requests aren't guaranteed.
+    # gracefully. Prefer "local" if outbound requests aren't possible/guaranteed.
     # Override via WIKIKT_UI_ICON_FONT_SOURCE.
     iconFontSource: cdn
   assets:
