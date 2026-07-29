@@ -49,7 +49,11 @@ class AdminDashboardTest {
 
         // Stat tiles (Bootstrap colored count cards) + version info.
         assertTrue(html.contains("text-bg-primary"), "stat cards rendered")
-        assertTrue(html.contains("1.0.0-SNAPSHOT"), "app version baked + shown")
+        // Compared against BuildInfo rather than a literal: the version is overridable at build time
+        // (-PwikiktVersion, which release image builds set from the git tag) and changes whenever it is
+        // bumped for a release, so a hardcoded version would fail on the next release rather than on a
+        // real regression. This still asserts the value was baked in and reaches the page.
+        assertTrue(html.contains(BuildInfo.version), "app version baked + shown")
 
         // Recent pages: the page just created shows up.
         assertTrue(html.contains("Recently edited pages"), "recent pages panel")

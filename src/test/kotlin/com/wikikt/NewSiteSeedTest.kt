@@ -13,16 +13,17 @@ import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
  * A site created through the admin console must come with the same starter content a first-run install
- * gets — a home page and a Home-link sidebar — so its hostname doesn't open on a "create this page" 404
- * with an empty nav. Guards the seeding hook in `handleSiteSave`.
+ * gets — a home page — so its hostname doesn't open on a "create this page" 404. No nav menu is seeded;
+ * the sidebar's built-in Home shortcut covers that link. Guards the seeding hook in `handleSiteSave`.
  */
 class NewSiteSeedTest {
     @Test
-    fun `creating a site seeds its home page and Home nav link`() = testApplication {
+    fun `creating a site seeds its home page`() = testApplication {
         environment {
             config = MapApplicationConfig(
                 "wikikt.defaultLocale" to "en",
@@ -54,7 +55,9 @@ class NewSiteSeedTest {
         val html = home.bodyAsText()
         assertTrue(html.contains("Customize Your Site"), "seeded home content from /seed/home.md is served")
 
-        // ...and its sidebar carries the seeded Home link with the MDI home icon.
-        assertTrue(html.contains("mdi-home"), "seeded Home nav item renders its MDI home icon")
+        // ...and its sidebar's Home link comes from the built-in shortcut, not a seeded menu item.
+        assertTrue(html.contains("wk-nav-home-link"), "built-in Home shortcut is the sidebar's home link")
+        // The shortcut wears mdi-home-outline; a seeded ":home: Home | /" item would render plain mdi-home.
+        assertFalse(html.contains("mdi-home\""), "no seeded Home menu item duplicating the shortcut")
     }
 }

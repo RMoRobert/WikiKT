@@ -397,6 +397,47 @@ class BackupServiceTest {
         val result = runCatching { env.backup.restore(env.siteId, zipPath, allowFull = true) }
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()!!.message!!.contains("schema version"), "clear schema mismatch error")
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("Upgrade WikiKT"), "points at the fix")
+    }
+
+    @Test
+    fun `full restore accepts a backup from an older schema version`() = runBlocking<Unit> {
+        // A pre-upgrade backup must stay restorable after the upgrade adds migrations: migrations are
+        // additive (docs/migrations.md), and insertRows leaves absent columns to their defaults. Take
+        // a real full backup, rewrite its manifest to claim an older schema version, and restore it.
+        val source = Env("full-older-src")
+        source.pages.create(
+            source.siteId,
+            CreatePageRequest(locale = "en", path = "kept", title = "Kept", content = "survives", contentFormat = "MARKDOWN"),
+            updatedBy = null,
+        )
+        val zipPath = Files.createTempFile("wikikt-older-test", ".zip")
+        Files.newOutputStream(zipPath).use { source.backup.writeFullBackup(source.siteId, it) }
+
+        val patched = Files.createTempFile("wikikt-older-patched", ".zip")
+        ZipFile(zipPath.toFile()).use { zip ->
+            java.util.zip.ZipOutputStream(Files.newOutputStream(patched)).use { out ->
+                for (entry in zip.entries().toList()) {
+                    out.putNextEntry(java.util.zip.ZipEntry(entry.name))
+                    val bytes = zip.getInputStream(entry).readBytes()
+                    if (entry.name == "manifest.json") {
+                        val manifest = String(bytes)
+                        out.write(manifest.replace(Regex("\"schemaVersion\"\\s*:\\s*\\d+"), "\"schemaVersion\":0").toByteArray())
+                    } else {
+                        out.write(bytes)
+                    }
+                    out.closeEntry()
+                }
+            }
+        }
+
+        val target = Env("full-older-dst")
+        val message = target.backup.restore(target.siteId, patched, allowFull = true)
+        assertTrue(message.contains("Full restore complete"), message)
+        assertTrue(message.contains("brought forward"), "the restore surfaces the version gap: $message")
+        target.sites.invalidateCache()
+        val restoredSiteId = target.sites.catchAll()!!.id
+        assertEquals("survives", target.pages.findByLocaleAndPath(restoredSiteId, "en", "kept")!!.content)
     }
 
     @Test

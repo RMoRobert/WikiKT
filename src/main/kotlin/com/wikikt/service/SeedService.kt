@@ -27,37 +27,29 @@ class SeedService(
     private val config: WikiKtConfig,
     private val sites: SiteService,
     private val pageService: PageService,
-    private val navService: NavService,
 ) {
     suspend fun seedIfEmpty() {
         seedGroups()
         seedAdminUser()
         val siteId = seedDefaultSite()
         seedHomePage(siteId)
-        seedNavigation(siteId)
     }
 
     /**
-     * Gives a freshly created site the same starter content a first-run install gets: a home page (from
-     * /seed/home.md) and a minimal sidebar with a Home link — so a new hostname greets visitors with a
-     * real page and menu instead of a "create this page" 404 and an empty nav. Idempotent (it reuses the
-     * guarded seeders below), so it's a no-op on a site that already has a home page or menus.
+     * Gives a freshly created site the same starter content a first-run install gets: a home page from
+     * /seed/home.md — so a new hostname greets visitors with a real page instead of a "create this page"
+     * 404. No navigation menu is seeded: the sidebar's Home shortcut (Administration > Navigation, on by
+     * default) already provides that link, so a seeded "Home" item would only duplicate it. Idempotent
+     * (it reuses the guarded seeder below), so it's a no-op on a site that already has a home page.
      */
     suspend fun seedNewSite(siteId: UInt) {
         seedHomePage(siteId)
-        seedNavigation(siteId)
     }
 
     /** The default catch-all site (created on first run); its id owns the seeded content. */
     private suspend fun seedDefaultSite(): UInt {
         sites.all().firstOrNull()?.let { return it.id }
         return sites.create(name = "Main site", hostname = null, isCatchAll = true).id
-    }
-
-    // A minimal default sidebar with just the Home link. Admins add more from Administration > Navigation.
-    private suspend fun seedNavigation(siteId: UInt) {
-        if (navService.listMenus(siteId).isNotEmpty()) return
-        navService.createMenu(siteId, scope = "", items = NavService.parseDefinition(":home: Home | /"))
     }
 
     private suspend fun seedGroups() {

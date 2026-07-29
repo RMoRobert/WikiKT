@@ -220,6 +220,10 @@ fun Route.configureAdminRouting() {
             ctx.settings.set(siteId, s.SITE_SIDEBAR_COLOR, if (sidebarColor.matches(HEX_COLOR)) sidebarColor else "")
             val sidebarColorDark = params["siteSidebarColorDark"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_SIDEBAR_COLOR_DARK, if (sidebarColorDark.matches(HEX_COLOR)) sidebarColorDark else "")
+            val sidebarLineColor = params["siteSidebarHeaderLineColor"].orEmpty().trim()
+            ctx.settings.set(siteId, s.SITE_SIDEBAR_HEADER_LINE_COLOR, if (sidebarLineColor.matches(HEX_COLOR)) sidebarLineColor else "")
+            val sidebarLineColorDark = params["siteSidebarHeaderLineColorDark"].orEmpty().trim()
+            ctx.settings.set(siteId, s.SITE_SIDEBAR_HEADER_LINE_COLOR_DARK, if (sidebarLineColorDark.matches(HEX_COLOR)) sidebarLineColorDark else "")
             val navHeadingColor = params["siteNavHeadingColor"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_NAV_HEADING_COLOR, if (navHeadingColor.matches(HEX_COLOR)) navHeadingColor else "")
             val navHeadingColorDark = params["siteNavHeadingColorDark"].orEmpty().trim()
@@ -2016,6 +2020,10 @@ internal suspend fun io.ktor.server.application.ApplicationCall.dashboardModel()
         "recentLogins" to recentLogins,
         "hasRecentLogins" to recentLogins.isNotEmpty(),
         "appVersion" to com.wikikt.BuildInfo.version,
+        // Which build, exactly: commit sha and (for stamped prod jars) build time. Null-valued keys
+        // render nothing — dev builds and source builds without git simply omit them.
+        "appGitSha" to com.wikikt.BuildInfo.gitSha.takeIf { it != "unknown" },
+        "appBuiltAt" to com.wikikt.BuildInfo.builtAt?.let { DateDisplay.format(it * 1000, formats) },
         "jvmVersion" to System.getProperty("java.version"),
         "dbEngine" to when (ctx.config.database.type) {
             com.wikikt.config.DatabaseType.POSTGRES -> "PostgreSQL"
@@ -2135,6 +2143,8 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         "siteHeaderColorDarkValue" to settings.get(siteId, s.SITE_HEADER_COLOR_DARK).orEmpty(),
         "siteSidebarColorValue" to settings.get(siteId, s.SITE_SIDEBAR_COLOR).orEmpty(),
         "siteSidebarColorDarkValue" to settings.get(siteId, s.SITE_SIDEBAR_COLOR_DARK).orEmpty(),
+        "siteSidebarHeaderLineColorValue" to settings.get(siteId, s.SITE_SIDEBAR_HEADER_LINE_COLOR).orEmpty(),
+        "siteSidebarHeaderLineColorDarkValue" to settings.get(siteId, s.SITE_SIDEBAR_HEADER_LINE_COLOR_DARK).orEmpty(),
         "siteNavHeadingColorValue" to settings.get(siteId, s.SITE_NAV_HEADING_COLOR).orEmpty(),
         "siteNavHeadingColorDarkValue" to settings.get(siteId, s.SITE_NAV_HEADING_COLOR_DARK).orEmpty(),
         "siteHeadingLineColorValue" to settings.get(siteId, s.SITE_HEADING_LINE_COLOR).orEmpty(),

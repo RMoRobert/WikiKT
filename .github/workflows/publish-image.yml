@@ -1,0 +1,88 @@
+# Builds the Docker image on GitHub's runners and publishes it to the GitHub Container Registry
+# (ghcr.io/<owner>/<repo>), so servers can pull a ready-made image instead of compiling WikiKT
+# themselves -- see docker/README.md ("Pull a prebuilt image from GHCR").
+#
+# Triggers:
+#   push to main   -> ghcr.io/<owner>/wikikt:main        (tip of development)
+#   push of v1.2.3 -> :1.2.3, :1.2, :1, and :latest      (a GitHub Release creates this tag for you)
+#   manual run     -> whatever ref you pick in the Actions tab
+name: Publish Docker image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# Newer push to the same ref makes an in-flight build obsolete; tag builds are never cancelled.
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # provided automatically; no secret to configure
+
+      # Derives the tag list and OCI labels from the git ref. `latest` follows the newest semver tag
+      # (flavor latest=auto) -- not the tip of main, so pulling :latest gets a released build.
+      - name: Derive tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Stamp tagged releases with the tag itself (v1.2.3 -> 1.2.3) so the admin console and backup
+          # metadata agree with the image tag. Left empty for branch builds, which keep the -SNAPSHOT
+          # version from build.gradle.kts -- helpful to distunguish that they are not a release.
+          build-args: |
+            WIKIKT_VERSION=${{ startsWith(github.ref, 'refs/tags/v') && steps.meta.outputs.version || '' }}
+            WIKIKT_GIT_SHA=${{ github.sha }}
+          # Gradle/Kotlin compilation is usually the slow part; the layer cache makes repeat builds much faster.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Only linux/amd64 for now. Adding linux/arm64 here could work, but the builder stage would
+          # compile Kotlin under emulation and be slower. Making the builder stage run
+          # natively (FROM --platform=$BUILDPLATFORM ... AS builder in the Dockerfile) would be the best
+          # way to add arm64, as the resulting JAR is architecture-independent.
+          platforms: linux/amd64
+
+      - name: Summary
+        run: |
+          echo "### Published" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

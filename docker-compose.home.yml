@@ -47,6 +47,9 @@ services:
     #   docker buildx build --platform linux/amd64 -t wikikt:latest --load .   # --platform: Mac->x86 host
     #   docker save wikikt:latest | gzip | ssh user@homebox 'gunzip | docker load'
     # image: wikikt:latest
+    # --- ...or pull a prebuilt image from the GitHub Container Registry (no build on this box) ---
+    # Comment out `build: .` above, uncomment the next line, and start without --build.
+    # image: ghcr.io/rmorobert/wikikt:latest
     # Pass the whole .env through to the app, so any WIKIKT_* setting from the reference table in
     # docs/install.md can be set there without editing this file. The `environment:` block below still
     # wins for anything it names, so the settings pinned here can't be weakened from .env.
@@ -116,7 +119,7 @@ services:
       - "8080:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3

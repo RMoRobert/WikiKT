@@ -79,6 +79,14 @@ data class WikiKtConfig(
      * session keys; development falls back to a built-in key with a warning.
      */
     val mfaEncryptionKey: ByteArray,
+    /**
+     * Hard kill switch for the release update check (`wikikt.updateCheck` / `WIKIKT_UPDATE_CHECK`).
+     * Set to `off` to guarantee the app never contacts api.github.com, regardless of what any admin
+     * enables in the web UI — an operator-level, airgap/compliance control like the asset-source
+     * knobs, which is why it's static config and not a database setting. When allowed (the default),
+     * checks still only happen after a root admin explicitly enables them on the Updates page.
+     */
+    val updateCheckAllowed: Boolean,
 )
 
 /** Where the git-sync working clone lives. The sync settings themselves (repo URL, mode, auth)
@@ -186,6 +194,8 @@ fun Application.loadWikiKtConfig(): WikiKtConfig {
         minPasswordLength = environment.config.envOrConfig("wikikt.security.minPasswordLength", "WIKIKT_MIN_PASSWORD_LENGTH")
             ?.toIntOrNull()?.coerceIn(1, PasswordPolicy.MAX_BYTES) ?: PasswordPolicy.DEFAULT_MIN_LENGTH,
         mfaEncryptionKey = environment.config.loadMfaKey(),
+        updateCheckAllowed = environment.config.envOrConfig("wikikt.updateCheck", "WIKIKT_UPDATE_CHECK")
+            ?.trim()?.lowercase() !in setOf("off", "false", "0", "disabled"),
     )
 }
 

@@ -1,0 +1,20 @@
+build/
+.gradle/
+.git/
+.gitignore
+# Agent worktrees: a full second checkout (plus its own build/ output) lives under here. The build/
+# and data/ patterns above only match at the context root, so without this the whole tree is copied in.
+.claude/
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.log
+data/
+docs/
+docker/
+*.md
+.env
+.env.local

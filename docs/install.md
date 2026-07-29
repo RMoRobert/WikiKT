@@ -9,9 +9,18 @@ your own reverse proxy -- see [docker/README.md](../docker/README.md#home-behind
 This guide covers the cloud options first (the only provider-specific parts are in steps 1 and 2) then
 covers running without Docker.
 
-Minimum size: **1 vCPU / 1 GB RAM** works for small wikis; 2 GB is suggested for most deployments for the
-JVM plus PostgreSQL. Disk requirements vary based on wiki size, and note that size grows with uploads and revision
-history if enabled.
+**Sizing:**
+
+*To run*: **1 vCPU / 1 GB RAM** works for small wikis; 2 GB is suggested for most deployments for the
+JVM plus PostgreSQL. Disk requirements vary based on wiki size, and note that size grows with uploads and
+revision history if enabled.
+
+*To build*: requires notably more resources than running; `up -d --build` compiles the Kotlin sources and
+assembles a ~110 MB self-contained JAR on the server, which runs two JVMs (Gradle plus the Kotlin compiler)
+and wants **~4 GB RAM**, or 2 GB with swap. Shared-core instance types (`e2-small`, `t3.micro`) may also run
+slowly if burst credits are all consumed. You may wish to consider using a pre-built image (currently under
+development) or building elswhere and shiipping it over as described in [Building elsewhere](#building-elsewhere)
+below.
 
 ## Option A: Cloud VM with Docker Compose (recommended)
 
@@ -117,9 +126,44 @@ the rest of what that needs.
 sudo docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-The first build takes a few minutes. Then open `https://wiki.example.com` and log in as `admin`
-with the password from `.env`. See [docker/README.md](../docker/README.md) for upgrades, logs,
-and backup practice.
+The first build takes a few minutes on a machine with cores and memory to spare. Then open
+`https://wiki.example.com` and log in as `admin` with the password from `.env`. See
+[docker/README.md](../docker/README.md) for upgrades, logs, and backup practice.
+
+### Building elsewhere
+
+On a VM sized for *running* WikiKT, `--build` may appear to hang partway through
+`RUN ./gradlew --no-daemon shadowJar`, typically around `shadowJar` itself, which is the memory-hungriest
+step. It is usually still making progress, just very slowly. If build appears stuck, you can run something
+like this to confirm which limit you are hitting:
+
+```bash
+free -h; vmstat 1 5; sudo dmesg -T | grep -iE 'oom|killed process' | tail
+```
+
+Nonzero `si`/`so` in `vmstat` means it is swapping, a high `st` column means the hypervisor is throttling
+you, and any `dmesg` OOM line means a JVM was killed outright. Cloud images generally ship with **no swap**,
+which turns a memory shortfall into a stall rather than a clean failure. Any of these fixes work:
+
+- **Add swap**: the least invasive fix on a 2 GB instance:
+  ```bash
+  sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+  ```
+  Add to `/etc/fstab` to survive a reboot.
+- **Cap the build's memory** so the two JVMs stop over-committing. Before building, append to
+  `gradle.properties`:
+  ```bash
+  printf 'org.gradle.jvmargs=-Xmx1200m\nkotlin.compiler.execution.strategy=in-process\norg.gradle.workers.max=1\n' >> gradle.properties
+  ```
+  `in-process` is the important part: it compiles Kotlin inside the Gradle JVM instead of starting a second one.
+- **Resize the VM for the build only**, then scale back down: stop the instance, change the machine type
+  (e.g. to one with 4 GB and a full vCPU), start it, build, and reverse it afterwards.
+- **Don't build on the server at all**: the most reliable option for a small instance, in either of two
+  forms. Pull a ready-made image from the GitHub Container Registry, which is a one-line change to the
+  Compose file (see [Pull a prebuilt image from GHCR](../docker/README.md#pull-a-prebuilt-image-from-ghcr));
+  or, if you build your own fork, build on a workstation and copy the image over with `docker save`/`docker
+  load` (see [Run from a prebuilt image](../docker/README.md#run-from-a-prebuilt-image-no-registry)).
+  Neither needs a JDK, Gradle, or build memory on the VM.
 
 ### Notes per provider
 
@@ -313,7 +357,7 @@ With Docker, add those three lines to your `.env` (see [`.env.example`](../.env.
 
 ## Two-factor authentication (2FA)
 
-WikiKT supports app-based two-factor authentication (TOTP — Google Authenticator, Aegis, 1Password, etc.).
+WikiKT supports app-based two-factor authentication (TOTP -- Google Authenticator, Aegis, 1Password, etc.).
 Any user can enable it under **Account | Settings | Security**: scan the QR code (or enter the setup key
 manually), confirm a 6-digit code, and save the one-time recovery codes shown once. After that, signing
 in requires the password *and* a current code (or a recovery code).

@@ -1,9 +1,9 @@
 # WikiKT Docker deployment
 
 The recommended production stack lives in [`docker-compose.prod.yml`](../docker-compose.prod.yml):
-**WikiKT + PostgreSQL + Caddy** (automatic HTTPS via Let's Encrypt). The image is built from the
-repo's [`Dockerfile`](../Dockerfile) and also includes the `git` binary, so the optiona Git Sync feature in
-WikiKT works out of box (otherwise it is not required).
+**WikiKT + PostgreSQL + Caddy** (automatic HTTPS via Let's Encrypt). The image is built
+from the repo's [`Dockerfile`](../Dockerfile) and also includes the `git` binary, so the optional Git
+Sync feature in WikiKT works out of box (otherwise it is not required).
 For deployment examples for common cloud environments (DigitalOcean, EC2, GCE) and non-Docker
 installs, see [docs/install.md](../docs/install.md).
 
@@ -21,10 +21,10 @@ cp .env.example .env && chmod 600 .env
 ```
 
 [`.env.example`](../.env.example) is the reference for this stack: it lists every variable the Compose
-file reads, each with a comment on what it does and whether it is required. At minimum you must set
-`WIKIKT_DOMAIN`, `POSTGRES_PASSWORD`, `WIKIKT_ADMIN_PASSWORD`, and the three key values — the app runs in
-production mode here, so it refuses to start with an unset session/MFA key or the default `changeme`
-password. Generate the keys with:
+file reads, each with a comment on what it does and whether it is required. At minimum, you must set
+`WIKIKT_DOMAIN`, `POSTGRES_PASSWORD`, `WIKIKT_ADMIN_PASSWORD`, and the three key values if running the app
+in production mode (as the example file does by default and will refuse to start with an unset session/MFA key or
+the default `changeme` password). Generate the keys with:
 
 ```bash
 echo "WIKIKT_SESSION_ENCRYPTION_KEY=$(openssl rand -hex 16)"
@@ -39,17 +39,16 @@ sizing, session lifetime, storage paths, the optional
 [asset delivery](../docs/install.md#asset-delivery) switches — can simply be added to `.env`.
 
 The one exception is the settings the Compose file pins in its own `environment:` block: production mode,
-`WIKIKT_TRUST_PROXY` / secure cookies, and the database wiring. Those take precedence over `.env` by
-design, so nothing dropped in that file can silently weaken the deployment's posture. Change them by
+`WIKIKT_TRUST_PROXY`/secure cookies, and the database wiring. Those take precedence over `.env` by
+design, so nothing dropped in that file can silently weaken the deployment's security posture. Change them by
 editing `docker-compose.prod.yml` directly.
 
-Two variables in `.env` are not WikiKT settings at all: `WIKIKT_DOMAIN` and `WIKIKT_EXTRA_DOMAINS` are read
-only by the Compose file to configure Caddy (see [DNS](#dns) and
-[Multiple sites](#multiple-sites-subdomains) below).
+Two variables in `.env` are not WikiKT settings at all: `WIKIKT_DOMAIN` and `WIKIKT_EXTRA_DOMAINS` are read-only
+for Docker Compose to configure Caddy (see [DNS](#dns) and [Multiple sites](#multiple-sites-subdomains) below).
 
 ## DNS
 
-Point every hostname you serve — the primary `WIKIKT_DOMAIN` and each name in `WIKIKT_EXTRA_DOMAINS` — at
+Point every hostname you serve -- the primary `WIKIKT_DOMAIN` and each name in `WIKIKT_EXTRA_DOMAINS` -- at
 the server *before* first start, since Caddy validates and issues a certificate per hostname:
 
 ```
@@ -63,7 +62,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 First build compiles the app, which may take a few minutes. Caddy then obtains the certificate and serves
-`https://wiki.example.com`. Log in as `admin` with the password from `.env`.
+`https://wiki.example.com` (of course, replace all examples with your real domain).
+Log in as `admin` with the password from `.env`.
 
 ### Services
 
@@ -136,11 +136,85 @@ image rather than build on the box, see the `docker save | docker load` comment 
 The **Upgrades**, **Backups**, and **Logs & health** sections below apply to this type of deployment too,
 in general; just substitute `-f docker-compose.home.yml` for `-f docker-compose.prod.yml`.
 
+## Pull a prebuilt image from GHCR
+
+Both Compose files default to `build: .`, which compiles WikiKT on the target/host. That needs
+considerably more memory than running it (see [docs/install.md](../docs/install.md#building-elsewhere)).
+The [publish-image workflow](../.github/workflows/publish-image.yml) builds on GitHub's runners and pushes
+to the GitHub Container Registry, so a small server can pull a finished image instead:
+
+```bash
+docker pull ghcr.io/rmorobert/wikikt:latest
+```
+
+To use it, comment out `build: .` in the Compose file, uncomment the `image:` line next to it, and start
+*without* `--build`:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Available tags:
+
+| Tag | What it is                                                               |
+|---|--------------------------------------------------------------------------|
+| `latest` | The newest released version -- recommended for most use cases            |
+| `1.2.3`, `1.2`, `1` | A specific release, pinned as loose/tight as you like                    |
+| `main` | Tip of the default branch; newer than any release and likely less tested |
+| `sha-abc1234` | An exact commit, for reproducing or rolling back to a known build        |
+
+Upgrading becomes a pull rather than a rebuild:
+
+```bash
+docker compose -f docker-compose.prod.yml pull wikikt && docker compose -f docker-compose.prod.yml up -d
+```
+
+**First-time setup (repo owner):** *(this is done in the official repo already, so this note is for
+developers who clone or fork for their own use)* The first workflow run creates the package as **private**, so pulls
+from a server will fail with "denied" or "manifest unknown" until it is published. On GitHub go to the
+package (Profile/repo | **Packages** | `wikikt`) → **Package settings** | **Change visibility** |
+**Public**. To deliberately keep it private instead, the server must authenticate before pulling:
+
+```bash
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+```
+
+using a personal access token with `read:packages`. Also link the package to the repository on that same
+settings page so it inherits the repo's README and permissions.
+
+### Publishing a release
+
+The version shown in **Administration** in the WikiKT UI (and recorded in backup archives) comes
+from `version` in `build.gradle.kts`, baked into `wikikt.properties` at build time. Released *images* are
+stamped from the git tag instead, i.e., a published image always reports its own tag. The workflow hands
+the tag to the Dockerfile's `WIKIKT_VERSION` build arg, which becomes `-PwikiktVersion` for Gradle. Branch
+builds pass nothing and keep the `-SNAPSHOT` version from `build.gradle.kts`, correctly distinguishing
+these from "real" relases. Bumping `build.gradle.kts` in the same commit is still good practice, however,
+so "manual" builds from source at that tag report the corresponding version accurately, too.
+
+**Steps:**
+
+1. Set `version = "0.2.0"` in `build.gradle.kts`, commit, and push.
+2. Create a GitHub **Release** with a new tag `v0.2.0` — this creates and pushes the tag, which triggers
+   the workflow. (Equivalently: `git tag v0.2.0 && git push origin v0.2.0`.)
+3. The workflow publishes `0.2.0`, `0.2`, `0`, and `latest`, all reporting version `0.2.0`.
+
+Keep the `v` prefix on the tag, as the workflow looks for `v*`, then `docker/metadata-action` strips it (so
+`v0.2.0` ultimately produces image tag `0.2.0`). If you create a Release from a tag that already exists (not
+recommended), no push event fires, but you can run the workflow manually from the **Actions** tab in that
+case.
+
+To build a stamped image yourself without the workflow, pass the same build argument:
+
+```bash
+docker build --build-arg WIKIKT_VERSION=0.2.0 -t wikikt:0.2.0 .
+```
+
 ## Run from a prebuilt image (no registry)
 
-Both compose files default to `build: .`, which compiles the app **on the target host**. To instead
-build the image once on your workstation and ship it to the server — no Docker registry, and no build
-toolchain (JDK/Gradle) needed on the box — use `docker save` / `docker load`:
+Both Compose files default to `build: .`, which compiles the app on the target host. To build
+the image on your workstation instead and ship it to the server -- no Docker registry, and no build
+toolchain (JDK/Gradle) needed on the box -- use `docker save` and `docker load`:
 
 ```bash
 # 1. Build on your workstation (repo root). The Dockerfile is multi-stage, so this runs the
@@ -162,7 +236,7 @@ docker save wikikt:latest | gzip | ssh user@server 'gunzip | docker load'
 ssh user@server 'docker images wikikt'
 ```
 
-Then point the compose file at that image instead of building: comment out `build: .` and use
+Then point the Compose file at that image instead of building: comment out `build: .` and use
 `image: wikikt:latest` (the [`docker-compose.home.yml`](../docker-compose.home.yml) already carries
 this as a comment; the same swap works in `docker-compose.prod.yml`). Start *without* `--build`:
 
@@ -184,7 +258,7 @@ at startup.
 
 ## Backups
 
-Two complementary layers:
+Two methods, depending on your needs:
 
 - **Application backups**: **Administration > Backup** in WikiKT gives a ZIP file of either content
   only or complete site (including accounts, configuration, etc.). Git Sync in (at least) push mode is another

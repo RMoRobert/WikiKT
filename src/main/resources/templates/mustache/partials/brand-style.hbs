@@ -10,6 +10,13 @@
     against the canvas. :not/:root[..] scoping keeps each override inside its own color mode. }}
 {{#siteSidebarColor}}<style>:root:not([data-bs-theme='dark']){--wk-sidebar-bg:{{siteSidebarColor}};{{^siteSidebarColorIsDark}}--wk-sidebar-fg:rgba(0,0,0,.82);--wk-sidebar-fg-muted:rgba(0,0,0,.55);--wk-sidebar-hover-bg:rgba(0,0,0,.07);--wk-sidebar-active-bg:rgba(0,0,0,.12);--wk-sidebar-line:rgba(0,0,0,.2);--wk-sidebar-edge:rgba(0,0,0,.15);{{/siteSidebarColorIsDark}}}</style>{{/siteSidebarColor}}
 {{#siteSidebarColorDark}}<style>:root[data-bs-theme='dark']{--wk-sidebar-bg:{{siteSidebarColorDark}};{{^siteSidebarColorDarkIsDark}}--wk-sidebar-fg:rgba(0,0,0,.82);--wk-sidebar-fg-muted:rgba(0,0,0,.55);--wk-sidebar-hover-bg:rgba(0,0,0,.07);--wk-sidebar-active-bg:rgba(0,0,0,.12);--wk-sidebar-line:rgba(0,0,0,.2);--wk-sidebar-edge:rgba(0,0,0,.15);{{/siteSidebarColorDarkIsDark}}}</style>{{/siteSidebarColorDark}}
+{{! Divider where the sidebar's top edge meets the header bar, one per color mode. The whole border
+    shorthand is replaced (keeping site.css's --bs-border-width) rather than the --wk-sidebar-line color
+    it defaults to, so the dividers *inside* the sidebar — nav-divider rules, the "Edit menu" separator —
+    keep their background-derived tint. Set this when a site paints the header and the sidebar the same
+    color and the seam between them disappears. }}
+{{#siteSidebarHeaderLineColor}}<style>:root:not([data-bs-theme='dark']){--wk-sidebar-header-line:var(--bs-border-width) solid {{siteSidebarHeaderLineColor}};}</style>{{/siteSidebarHeaderLineColor}}
+{{#siteSidebarHeaderLineColorDark}}<style>:root[data-bs-theme='dark']{--wk-sidebar-header-line:var(--bs-border-width) solid {{siteSidebarHeaderLineColorDark}};}</style>{{/siteSidebarHeaderLineColorDark}}
 {{! Sidebar menu heading color, one per color mode. Emitted independently of the sidebar background
     blocks above — a site can recolor its headings without setting any sidebar color, and site.css falls
     back to the background-derived muted tint when these are unset. }}

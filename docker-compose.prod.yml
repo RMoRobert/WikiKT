@@ -20,7 +20,12 @@ services:
     restart: unless-stopped
 
   wikikt:
+    # Compiles WikiKT on this machine, which needs far more memory than running it does. To pull a
+    # prebuilt image from the GitHub Container Registry instead -- no JDK, Gradle, or build memory
+    # required on the server -- comment out `build: .`, uncomment the `image:` line, and start without
+    # --build. See docker/README.md ("Pull a prebuilt image from GHCR").
     build: .
+    # image: ghcr.io/rmorobert/wikikt:latest
     # Pass the whole .env through to the app, so any WIKIKT_* setting from the reference table in
     # docs/install.md can be set there without editing this file. The `environment:` block below still
     # wins for anything it names -- the hardened settings (production mode, TLS posture, the database
@@ -65,7 +70,7 @@ services:
       - "8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3

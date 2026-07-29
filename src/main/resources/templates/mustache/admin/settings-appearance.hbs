@@ -78,6 +78,16 @@
             <p class="form-text">The sidebar color used when the site is in dark mode. Leave blank for the default dark surface.</p>
         </div>
         <div class="mb-3">
+            <label class="form-label">Sidebar divider color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarHeaderLineColor" value="{{siteSidebarHeaderLineColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">The thin line along the top of the navigation sidebar, where it meets the header bar, in light mode. Useful when the header and sidebar colors match and the seam between them disappears. Leave blank to keep the tint derived from the sidebar color.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Sidebar divider color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarHeaderLineColorDark" value="{{siteSidebarHeaderLineColorDarkValue}}" placeholder="#212529" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">The sidebar divider color used when the site is in dark mode.</p>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Sidebar menu header color <span class="text-secondary">(optional)</span></label>
             <input class="form-control" type="text" name="siteNavHeadingColor" value="{{siteNavHeadingColorValue}}" placeholder="#ffffff" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
             <p class="form-text">A hex color for <em>Header</em> items in the sidebar menu (the group labels you add under <a href="/a/navigation">Navigation</a>) in light mode. Leave blank to keep the muted tint derived from the sidebar color.</p>

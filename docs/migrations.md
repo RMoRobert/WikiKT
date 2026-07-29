@@ -97,6 +97,14 @@ your tables and migrations are in sync.
 
 ## Hard rules
 
+- **Migrations must be additive and backward-tolerant within a major version** — new tables, new
+  nullable/defaulted columns, new indexes. No `DROP COLUMN`, no type narrowing, no `NOT NULL`
+  without a default, no renames. Two things depend on this: a backup taken at an older schema
+  version restores onto a newer server (absent columns take their defaults — `BackupService`
+  enforces `schemaVersion <= current`), and rolling back to an older app image after a failed
+  upgrade leaves a schema the old code still runs against (migrations are forward-only; there are
+  no down-migrations). Destructive changes require a major-version bump and a `minUpgradeFrom`
+  bound in the release metadata.
 - **Never edit a migration that has shipped.** Its checksum isn't enforced, but changing it means
   existing databases won't pick up the change. Add a new migration instead.
 - **Never add new tables to V1 (`baseline`).** Once V1 has shipped to a real database it is frozen;

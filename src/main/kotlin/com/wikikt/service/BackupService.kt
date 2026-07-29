@@ -453,9 +453,14 @@ class BackupService(
         val archive = withContext(Dispatchers.IO) { readFullArchive(zipPath) }
         try {
             val currentSchema = MIGRATIONS.maxOf { it.version }
-            require(archive.manifest.schemaVersion == currentSchema) {
-                "This backup was taken at schema version ${archive.manifest.schemaVersion} but this " +
-                    "server runs version $currentSchema. Take a fresh backup on a matching version."
+            // Older backups restore fine: migrations already brought the live schema forward before
+            // this runs, and insertRows leaves absent columns to their defaults — which works because
+            // migrations are required to be additive within a major version (see docs/migrations.md).
+            // A NEWER backup genuinely cannot restore: its rows may carry columns this build has
+            // never heard of, so data would be silently dropped.
+            require(archive.manifest.schemaVersion <= currentSchema) {
+                "This backup was taken at schema version ${archive.manifest.schemaVersion}, newer than " +
+                    "this server's version $currentSchema. Upgrade WikiKT before restoring it."
             }
 
             // Replace every table in one transaction: wipe children-first, insert parents-first with
@@ -505,8 +510,14 @@ class BackupService(
             sites.invalidateCache() // the sites table was replaced; host resolution must reload
             settings.invalidateCache() // app_settings rows were replaced underneath the cache
             searchIndex.reindexMissing() // rebuild any missing index rows across all restored sites
+            val versionGapNote = if (archive.manifest.schemaVersion < currentSchema) {
+                " This backup was taken at schema version ${archive.manifest.schemaVersion}; this server is at " +
+                    "$currentSchema, so restored data was brought forward (new columns took their defaults)."
+            } else {
+                ""
+            }
             return "Full restore complete: $rows rows across ${archive.tables.size} tables and $files asset files. " +
-                "All users (including you) must sign in again."
+                "All users (including you) must sign in again.$versionGapNote"
         } finally {
             withContext(Dispatchers.IO) {
                 (archive.currentFiles.values + archive.revFiles.values + archive.pendingFiles.values)

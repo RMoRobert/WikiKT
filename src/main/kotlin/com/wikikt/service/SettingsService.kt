@@ -54,6 +54,12 @@ class SettingsService(private val database: R2dbcDatabase) {
         // tints are auto-chosen for contrast from the color's luminance (partials/brand-style.hbs).
         const val SITE_SIDEBAR_COLOR = "site.sidebarColor"
         const val SITE_SIDEBAR_COLOR_DARK = "site.sidebarColorDark"
+        // Optional color for the divider along the sidebar's top edge, where it meets the top header bar
+        // (--wk-sidebar-header-line in site.css), one per color mode. Unset, the line keeps the tint
+        // derived from the sidebar background — which vanishes when a site gives the header and the
+        // sidebar the same color, so this is the knob that puts the seam back (or recolors it).
+        const val SITE_SIDEBAR_HEADER_LINE_COLOR = "site.sidebarHeaderLineColor"
+        const val SITE_SIDEBAR_HEADER_LINE_COLOR_DARK = "site.sidebarHeaderLineColorDark"
         // Optional text color for `header` items in the sidebar menu (the group labels added from
         // Administration > Navigation), one per color mode. Unset, they keep the muted tint derived from
         // the sidebar background — so these override only the headings, not the links around them.
@@ -329,6 +335,15 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val DEFAULT_GIT_SYNC_INTERVAL_MINUTES = 0
 
         /**
+         * Release update check opt-in (Administration > Updates, root only). Instance-wide, so it's
+         * read/written via [instanceAnchorSiteId], not the admin's selected site. Tri-state: absent =
+         * never asked (the page shows a consent card and performs NO network call), "true" = enabled,
+         * "false" = explicitly declined. The WIKIKT_UPDATE_CHECK=off config kill switch overrides this
+         * entirely (see WikiKtConfig.updateCheckAllowed).
+         */
+        const val UPDATE_CHECK_ENABLED = "update.checkEnabled"
+
+        /**
          * Settings whose values are plaintext credentials. A full backup NEVER writes these into its
          * database dump; they're either dropped (default) or carried separately, password-encrypted, in
          * `secrets.json` (see [BackupService] / [BackupCrypto]). Everything else — including one-way
@@ -422,6 +437,25 @@ class SettingsService(private val database: R2dbcDatabase) {
      * then treated as external, matching the simpler `site` mode.
      */
     @Volatile var instanceHostsProvider: (suspend () -> Set<String>)? = null
+
+    /**
+     * The site row that *instance-wide* (not per-site) settings are anchored to. `app_settings` is
+     * keyed (siteId, key) with a real FK into `sites`, so instance-scoped values — like the update
+     * check opt-in — need *some* site row; the catch-all is used because SiteService.delete refuses
+     * to remove it (mirrors SiteService.catchAll: the flagged row, else the first). Caveat: an admin
+     * re-flagging which site is the catch-all relocates the anchor, which for these keys just means
+     * re-consenting once. Promote to a dedicated `system_settings` table if this grows past a few
+     * keys (and remember BACKUP_TABLES + MigrationDriftTest if it does).
+     */
+    suspend fun instanceAnchorSiteId(): UInt = suspendTransaction(database) {
+        com.wikikt.db.SitesTable.selectAll()
+            .orderBy(com.wikikt.db.SitesTable.isCatchAll, org.jetbrains.exposed.v1.core.SortOrder.DESC)
+            .orderBy(com.wikikt.db.SitesTable.id, org.jetbrains.exposed.v1.core.SortOrder.ASC)
+            .limit(1)
+            .map { it[com.wikikt.db.SitesTable.id].value }
+            .toList()
+            .firstOrNull()
+    } ?: error("No sites exist; the seed should have created one")
 
     private suspend fun all(siteId: UInt): Map<String, String> {
         cache[siteId]?.let { return it }
@@ -570,6 +604,10 @@ class SettingsService(private val database: R2dbcDatabase) {
             "siteSidebarColorIsDark" to (s[SITE_SIDEBAR_COLOR]?.ifBlank { null }?.let { isDarkColor(it) } ?: true),
             "siteSidebarColorDark" to (s[SITE_SIDEBAR_COLOR_DARK]?.ifBlank { null }),
             "siteSidebarColorDarkIsDark" to (s[SITE_SIDEBAR_COLOR_DARK]?.ifBlank { null }?.let { isDarkColor(it) } ?: true),
+            // Divider between the header bar and the sidebar, per color mode. A line, not a surface, so
+            // (like the heading color) it needs no *IsDark companion.
+            "siteSidebarHeaderLineColor" to (s[SITE_SIDEBAR_HEADER_LINE_COLOR]?.ifBlank { null }),
+            "siteSidebarHeaderLineColorDark" to (s[SITE_SIDEBAR_HEADER_LINE_COLOR_DARK]?.ifBlank { null }),
             // Sidebar menu heading color per color mode. No *IsDark companion: this is a foreground, not a
             // surface, so nothing has to be flipped for contrast against it.
             "siteNavHeadingColor" to (s[SITE_NAV_HEADING_COLOR]?.ifBlank { null }),

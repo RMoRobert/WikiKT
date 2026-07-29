@@ -23,7 +23,31 @@ plugins {
 }
 
 group = "com.wikikt"
-version = "1.0.0-SNAPSHOT"
+
+// The version baked into wikikt.properties and shown in the admin console (and recorded in backups).
+// Overridable so release builds can be stamped with the git tag rather than this literal: the publish
+// workflow passes the tag through the Dockerfile's WIKIKT_VERSION build arg, which becomes
+// -PwikiktVersion here. Untagged and local builds fall back to the value below, so `./gradlew run`
+// keeps reporting -SNAPSHOT. Bump this when cutting a release so source builds match the tag too.
+version = providers.gradleProperty("wikiktVersion")
+    .orElse(providers.environmentVariable("WIKIKT_VERSION"))
+    .getOrElse("0.9.0-SNAPSHOT")
+
+// The commit the build was made from, kept separate from `version` (BuildInfo.assetVersion embeds the
+// version in `?v=` URL query strings, so the version must stay a clean X.Y.Z[-suffix]). Same override
+// chain as the version: the publish workflow passes the commit through the Dockerfile's
+// WIKIKT_GIT_SHA build arg (the Docker build context has no .git/, so it can't be read there); local
+// builds read it from git; anything else reports "unknown".
+val wikiktGitSha: String = providers.gradleProperty("wikiktGitSha")
+    .orElse(providers.environmentVariable("WIKIKT_GIT_SHA"))
+    .orNull?.trim()?.ifBlank { null }
+    ?: runCatching {
+        providers.exec {
+            commandLine("git", "rev-parse", "--short=12", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim()
+    }.getOrNull()?.ifBlank { null }
+    ?: "unknown"
 
 application {
     mainClass = "io.ktor.server.netty.EngineMain"
@@ -160,8 +184,13 @@ gradle.taskGraph.whenReady {
 
 tasks.processResources {
     // Bake the project version into a classpath resource so it's readable at runtime (dev + jar).
+    // Recorded as a task input because expand() values are invisible to up-to-date checks: without it,
+    // changing the version alone leaves this task UP-TO-DATE and bakes the *previous* version into the
+    // jar (and so into the admin console and backup metadata).
+    inputs.property("wikiktVersion", project.version.toString())
+    inputs.property("wikiktGitSha", wikiktGitSha)
     filesMatching("wikikt.properties") {
-        expand("version" to project.version)
+        expand("version" to project.version, "gitSha" to wikiktGitSha)
     }
 
     // Minifiy static/site.css and first-party static JS if building prod JAR; keep as-is for dev for
@@ -191,7 +220,7 @@ tasks.processResources {
             }
         logger.lifecycle("Minified first-party static JS: $jsBefore -> $jsAfter bytes")
 
-        // Stamp the build time into wikikt.properties (prod jars only). BuildInfo.assetVersion appends
+        // Stamp the build time into wikikt.properties (prod JARs only). BuildInfo.assetVersion appends
         // it to the version for the ?v= cache-busting token on /static URLs, so two prod builds of the
         // same -SNAPSHOT version still bust caches. Living in this doLast keeps dev/test inputs stable
         // (no per-build churn), and an UP-TO-DATE shadowJar keeps its previous stamp. Stamp only

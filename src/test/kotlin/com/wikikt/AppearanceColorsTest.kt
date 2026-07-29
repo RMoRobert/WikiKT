@@ -17,8 +17,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Per-color-mode appearance settings: header bar colors, the search box surface preference, and the
- * sidebar menu heading color.
+ * Per-color-mode appearance settings: header bar colors, the search box surface preference, the
+ * header/sidebar divider, and the sidebar menu heading color.
  *
  * All are resolved server-side but consumed by CSS that branches on the *live* root theme, so the
  * assertions here are on what the page hands the browser — the mode-scoped `<style>` blocks from
@@ -104,6 +104,48 @@ class AppearanceColorsTest {
         client.get("/a").bodyAsText().let { html ->
             assertFalse(html.contains("blue; }"), "invalid heading color rejected")
             assertFalse(html.contains("--wk-sidebar-heading-fg"), "invalid heading color clears the override")
+        }
+    }
+
+    @Test
+    fun `sidebar divider color is per color mode and leaves the in-sidebar dividers alone`() = testApplication {
+        environment { config = testConfig("sidebar-divider") }
+        application { configure() }
+        val client = createClient { install(HttpCookies); followRedirects = false }
+        val csrf = login(client)
+
+        // Unset: nothing is emitted, so site.css's --wk-sidebar-line-derived hairline stands.
+        assertFalse(
+            client.get("/a").bodyAsText().contains("--wk-sidebar-header-line"),
+            "no divider override emitted when unset",
+        )
+
+        saveAppearance(client, csrf, "siteSidebarHeaderLineColor" to "#aa0000", "siteSidebarHeaderLineColorDark" to "#00bb00")
+        client.get("/a").bodyAsText().let { html ->
+            assertTrue(
+                html.contains(":root:not([data-bs-theme='dark']){--wk-sidebar-header-line:var(--bs-border-width) solid #aa0000;}"),
+                "light-mode divider scoped to light mode, keeping the site's border width",
+            )
+            assertTrue(
+                html.contains(":root[data-bs-theme='dark']{--wk-sidebar-header-line:var(--bs-border-width) solid #00bb00;}"),
+                "dark-mode divider scoped to dark mode",
+            )
+            // The menu dividers and "Edit menu" separator ride --wk-sidebar-line, which must stay untouched.
+            assertFalse(html.contains("--wk-sidebar-line:"), "in-sidebar dividers keep their derived tint")
+        }
+
+        // One mode alone is fine: the other keeps falling back.
+        saveAppearance(client, csrf, "siteSidebarHeaderLineColor" to "#aa0000", "siteSidebarHeaderLineColorDark" to "")
+        client.get("/a").bodyAsText().let { html ->
+            assertTrue(html.contains("solid #aa0000;"), "light-mode color survives alone")
+            assertFalse(html.contains(":root[data-bs-theme='dark']{--wk-sidebar-header-line"), "dark mode still falls back")
+        }
+
+        // Junk is not injected as CSS.
+        saveAppearance(client, csrf, "siteSidebarHeaderLineColor" to "red; }")
+        client.get("/a").bodyAsText().let { html ->
+            assertFalse(html.contains("red; }"), "invalid divider color rejected")
+            assertFalse(html.contains("--wk-sidebar-header-line"), "invalid divider color clears the override")
         }
     }
 
