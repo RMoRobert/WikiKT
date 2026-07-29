@@ -67,7 +67,7 @@ session keys -- will log fatal errors instead of bypassable warnings.
 ## Deployment
 
 The recommended production stack is **Docker Compose**: WikiKT + PostgreSQL + Caddy with automatic HTTPS
-(Let's Encrypt). It runs the same on a DigitalOcean Droplet, Amazon EC2, Google Compute Engine, or
+(via Let's Encrypt). It should work about the same on a DigitalOcean Droplet, Amazon EC2, Google Compute Engine, or
 most self-hosted Linux boxes or similar. See [docs/install.md](docs/install.md) for common cloud deployment examples and 
 non-Docker (fat JAR + systemd) alternative.
 
@@ -83,6 +83,8 @@ itself runs via Gradle.
 
 ## Documentation
 
-* [Installation & deployment](docs/install.md) — DigitalOcean / EC2 / GCE walkthroughs, self-hosting, env-var reference
-* [Docker stack details](docker/README.md) — the production compose file: configuration, upgrades, backups
-* [Database migrations](docs/migrations.md) — how the R2DBC-native migration runner works and how to add a migration
+* [Installation & deployment](docs/install.md): DigitalOcean, EC2, Google Cloud, etc. walkthroughs; self-hosting, environment variable reference
+* [Docker stack details](docker/README.md): Information on recommended production Compose file configuration, upgrades, and backups
+
+For developers:
+* [Database migrations](docs/migrations.md): How the R2DBC-native migration runner works and how to add a migration
