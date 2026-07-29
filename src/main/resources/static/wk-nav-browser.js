@@ -4,22 +4,37 @@
 (function () {
   'use strict';
 
-  // --- Static ⇄ Browse switch (both mode); remembers the choice per browser in the wk-nav-view cookie. ---
+  // --- Main Menu ⇄ Browse picker (both mode); remembers the choice per browser in the wk-nav-view cookie. ---
+  // The picker is a Bootstrap dropdown. Its trigger icon is fixed (it names the control, not the
+  // selection); which view is current lives in the menu's .active item and in the trigger's
+  // title/aria-label, plus the label the trigger shows when there's no Home button beside it.
   function switchInit(side) {
     if (side.dataset.navSwitchWired) return;
     side.dataset.navSwitchWired = '1';
-    // [data-nav-view] filters out the optional Home shortcut, which shares the button styling but is a
-    // plain link to the home page rather than a pane selector.
-    var btns = Array.prototype.slice.call(side.querySelectorAll('.wk-nav-switch-btn[data-nav-view]'));
+    var items = Array.prototype.slice.call(side.querySelectorAll('.wk-nav-view-menu [data-nav-view]'));
     var panes = Array.prototype.slice.call(side.querySelectorAll('.wk-nav-pane'));
-    if (!btns.length) return;
+    var trigger = side.querySelector('[data-nav-view-trigger]');
+    if (!items.length || !trigger) return;
+    var triggerLabel = trigger.querySelector('.wk-nav-view-label');
+
     function show(view) {
       panes.forEach(function (p) { p.classList.toggle('is-active', p.getAttribute('data-nav-view') === view); });
-      btns.forEach(function (b) { b.classList.toggle('is-active', b.getAttribute('data-nav-view') === view); });
+      items.forEach(function (it) {
+        var on = it.getAttribute('data-nav-view') === view;
+        // .active is Bootstrap's selected-item style and what the CSS hangs the check mark on;
+        // aria-current is the matching state for screen readers. Set together so they can't drift.
+        it.classList.toggle('active', on);
+        if (on) it.setAttribute('aria-current', 'true'); else it.removeAttribute('aria-current');
+        if (!on) return;
+        var label = it.getAttribute('data-nav-label');
+        if (triggerLabel) triggerLabel.textContent = label;
+        trigger.setAttribute('title', 'Navigation view: ' + label);
+        trigger.setAttribute('aria-label', 'Navigation view: ' + label);
+      });
       try { document.cookie = 'wk-nav-view=' + view + '; path=/; max-age=31536000; SameSite=Lax'; } catch (e) {}
     }
-    btns.forEach(function (b) {
-      b.addEventListener('click', function () { show(b.getAttribute('data-nav-view')); });
+    items.forEach(function (it) {
+      it.addEventListener('click', function () { show(it.getAttribute('data-nav-view')); });
     });
   }
 

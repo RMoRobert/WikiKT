@@ -1233,11 +1233,13 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     body:has(.wiki-layout > .wiki-sidebar) .wk-crumbbar > .container { width: auto; margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
     body:has(.wiki-layout > .wiki-sidebar) .site-footer { margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
 }
-/* .wk-nav-home-link (the switch-less "Home" shortcut) is listed alongside the menu's own links rather
-   than styled separately: it sits above the <nav> panes, but it's meant to be indistinguishable from a
-   hand-added first menu item. */
+/* The "Home" shortcut is listed alongside the menu's own links rather than styled separately: it sits
+   above the <nav> panes, but it's meant to be indistinguishable from a hand-added first menu item.
+   Both its placements are here — .wk-nav-home-link standing alone, .wk-nav-home-btn sharing the control
+   row with the view picker — so neither can drift into looking like chrome. */
 .wiki-sidebar nav a,
 .wiki-sidebar .wk-nav-home-link,
+.wiki-sidebar .wk-nav-home-btn,
 .wiki-sidebar .nav-heading {
     display: block;
     padding: 0.65rem 0.5rem;
@@ -1249,7 +1251,8 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    an inline icon would demand. flex-start (not center) keeps the icon beside the *first* line when a
    long label wraps. */
 .wiki-sidebar nav a,
-.wiki-sidebar .wk-nav-home-link {
+.wiki-sidebar .wk-nav-home-link,
+.wiki-sidebar .wk-nav-home-btn {
     display: flex;
     align-items: flex-start;
     line-height: 1.35;
@@ -1258,12 +1261,14 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     font-size: 0.85rem;
 }
 .wiki-sidebar nav a:hover,
-.wiki-sidebar .wk-nav-home-link:hover { background: var(--wk-sidebar-hover-bg); }
+.wiki-sidebar .wk-nav-home-link:hover,
+.wiki-sidebar .wk-nav-home-btn:hover { background: var(--wk-sidebar-hover-bg); }
 /* Item icons read a touch larger than the label text, with a small gap before it. line-height 1 keeps
    the glyph's own leading (1.5 inherited = ~29px at this size) from making icon rows taller than
    plain-text ones. */
 .wiki-sidebar nav a .mdi,
-.wiki-sidebar .wk-nav-home-link .mdi { font-size: 1.2rem; line-height: 1; margin-right: 0.8rem; }
+.wiki-sidebar .wk-nav-home-link .mdi,
+.wiki-sidebar .wk-nav-home-btn .mdi { font-size: 1.2rem; line-height: 1; margin-right: 0.8rem; }
 .wiki-sidebar .nav-heading {
     font-weight: 400;
     font-size: 0.8rem;
@@ -1765,63 +1770,71 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .wiki-sidebar .nav-parent.active { color: var(--wk-sidebar-fg); background: var(--wk-sidebar-active-bg); }
 
 /* --- Sidebar navigation modes: static ⇄ tree view switch + drill-down page browser (wk-nav-browser.js) --- */
-/* View switch (both mode): a segmented control pinned at the top of the sidebar. */
+/* Top-of-sidebar control row (both mode): the optional Home shortcut, then the view picker. Both sit
+   flat on the sidebar — a permanent fill on either would read as "selected" when it only means
+   "available", and the sidebar already spends its two fills on hover and current-page. align-items
+   :stretch keeps them the same height whatever each holds. */
 .wiki-sidebar .wk-nav-switch {
     display: flex;
-    gap: 0.2rem;
-    padding: 0.2rem;
+    align-items: stretch;
+    gap: 0.4rem;
     margin-bottom: 0.6rem;
-    background: var(--wk-sidebar-hover-bg);
-    border-radius: 0.4rem;
 }
-/* The two view buttons split whatever the Home shortcut leaves. min-width:0 lets them shrink past
-   their labels rather than pushing the control wider than the column. */
-.wiki-sidebar .wk-nav-switch-views {
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    gap: 0.2rem;
-}
-.wiki-sidebar .wk-nav-switch-btn {
-    flex: 1 1 0;
-    min-width: 0;
+/* .wk-nav-home-btn is the in-row placement of the same Home shortcut .wk-nav-home-link renders on its
+   own (the class name predates it looking like a link); it's styled by the nav-link rules further up
+   rather than by anything of its own, so the two placements are indistinguishable from a hand-added
+   first menu item — including taking the current-page fill only when you're actually on /home. All it
+   needs here is to claim the row's slack. */
+.wiki-sidebar .wk-nav-switch .wk-nav-home-btn { flex: 1 1 auto; min-width: 0; }
+/* The picker is the quiet half of the pair: flat until you touch it. Same behaviour as .nav-icon in
+   the top bar (hover AND focus-visible, so the clue isn't pointer-only) — mirrored rather than shared
+   because that rule is scoped to the navbar and keyed to the navbar tint. .show keeps the fill while
+   the menu is open so the button doesn't read as detached from it. Bootstrap has no flat/ghost button
+   variant to inherit any of this from. */
+.wiki-sidebar .wk-nav-view-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.25rem;
-    padding: 0.3rem 0.4rem;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
     border: 0;
-    border-radius: 0.3rem;
+    border-radius: var(--bs-border-radius);
     background: transparent;
     color: var(--wk-sidebar-fg-muted);
     font-size: 0.8rem;
-    /* Labels are single-line: two words on one button and one on the other read as a lopsided control,
-       and there's no room for a second line above the panes. Overflow only bites at font metrics far
-       wider than the stack's — everything here scales with rem, so zoom alone never triggers it. */
     white-space: nowrap;
     overflow: hidden;
     cursor: pointer;
 }
-.wiki-sidebar .wk-nav-switch-btn .mdi { flex: none; font-size: 1.05rem; }
-.wiki-sidebar .wk-nav-switch-btn:hover { color: var(--wk-sidebar-fg); }
-.wiki-sidebar .wk-nav-switch-btn.is-active {
-    background: var(--wk-sidebar-bg);
+.wiki-sidebar .wk-nav-view-btn .mdi { flex: none; font-size: 1.05rem; }
+.wiki-sidebar .wk-nav-view-btn:hover,
+.wiki-sidebar .wk-nav-view-btn:focus-visible,
+.wiki-sidebar .wk-nav-view-btn.show {
+    background: var(--wk-sidebar-hover-bg);
     color: var(--wk-sidebar-fg);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
-/* Home shortcut folded into the switch: icon-only and non-flexing, so the two view labels keep as much
-   of the 16rem column as possible. The hairline marks it as a link out of the control rather than a
-   third pane — it never takes .is-active, so only one thing in the row ever looks selected. */
-.wiki-sidebar .wk-nav-switch .wk-nav-home-btn {
-    flex: 0 0 auto;
-    padding: 0.3rem 0.45rem;
-    border-radius: 0.3rem 0 0 0.3rem;
-    border-right: var(--bs-border-width) solid var(--wk-sidebar-line);
-    text-decoration: none;
+/* With Home turned off the picker is the row's only child, so it takes the width and shows its label
+   instead of leaving a lone icon button adrift in an empty row. */
+.wiki-sidebar .wk-nav-view-picker { flex: 0 0 auto; display: flex; }
+.wiki-sidebar .wk-nav-view-btn { flex: 1 1 auto; }
+.wiki-sidebar .wk-nav-view-label { display: none; }
+.wiki-sidebar .wk-nav-view-picker:only-child { flex: 1 1 auto; min-width: 0; }
+.wiki-sidebar .wk-nav-view-picker:only-child .wk-nav-view-label { display: inline; }
+/* Bootstrap's caret is a border triangle sized in em; at this font size it needs the nudge to sit on
+   the icon's optical centre rather than the text baseline it's designed against. */
+.wiki-sidebar .wk-nav-view-btn.dropdown-toggle::after { margin-left: 0.1rem; vertical-align: 0.08em; }
+/* Menu rows: icon, label, then the check pushed to the trailing edge — same shape as the language
+   switcher's items in partials/header.hbs. Bootstrap ships no checked-menu-item component, so .active
+   is the framework's own selection style and the check is this app's convention on top; hanging the
+   check off :not(.active) keeps the two from drifting. visibility (not display) reserves the column so
+   labels don't shift by a glyph's width as the selection moves. */
+.wiki-sidebar .wk-nav-view-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
-.wiki-sidebar .wk-nav-switch .wk-nav-home-btn .mdi { font-size: 1.15rem; }
-/* Three items in the row instead of two — buy the labels back the padding. */
-.wiki-sidebar .wk-nav-switch.has-home .wk-nav-switch-views .wk-nav-switch-btn { padding-inline: 0.25rem; gap: 0.2rem; }
+.wiki-sidebar .wk-nav-view-menu .wk-nav-view-check { margin-left: auto; }
+.wiki-sidebar .wk-nav-view-menu .dropdown-item:not(.active) .wk-nav-view-check { visibility: hidden; }
 
 /* Panes: only the active one is shown. Single-mode sidebars have one pane, always active. */
 .wiki-sidebar .wk-nav-pane { display: none; }

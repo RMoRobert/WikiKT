@@ -9,15 +9,42 @@
 {{#showSidebar}}
 <aside class="wiki-sidebar" id="wikiSidebar">
     {{#navShowToggle}}
-    {{! Static ⇄ tree switch (both mode). wk-nav-browser.js remembers the choice in the wk-nav-view cookie.
-        The optional Home shortcut (navShowHome) rides along at the left as an icon-only button: it's a
-        link, not a third view, so it sits OUTSIDE the tablist and behind a divider, and it stays
-        label-less both to say "not a pane" and to leave the two view labels room in a 16rem column. }}
-    <div class="wk-nav-switch{{#navShowHome}} has-home{{/navShowHome}}">
-        {{#navShowHome}}<a class="wk-nav-switch-btn wk-nav-home-btn" href="{{navHomeUrl}}" title="Home" aria-label="Home"{{#navHomeActive}} aria-current="page"{{/navHomeActive}}><i class="mdi mdi-home-outline" aria-hidden="true"></i></a>{{/navShowHome}}
-        <div class="wk-nav-switch-views" role="tablist" aria-label="Navigation view">
-            <button type="button" class="wk-nav-switch-btn{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static" aria-label="Main navigation menu tree"><i class="mdi mdi-menu" aria-hidden="true"></i> Main Menu</button>
-            <button type="button" class="wk-nav-switch-btn{{#navTreeActive}} is-active{{/navTreeActive}}" data-nav-view="tree" aria-label="Browse pages"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i> Browse</button>
+    {{! Control row for `both` mode: the optional Home shortcut (navShowHome), then a picker for which
+        pane is showing. wk-nav-browser.js remembers the choice in the wk-nav-view cookie.
+
+        Home takes the label and the width — it's the one thing here a visitor is most likely to want,
+        and a labelled target beats a mystery glyph. It wears the sidebar's own nav-link styling (same
+        as the switch-less .wk-nav-home-link placement below), so it reads as somewhere you can go and
+        only fills in when you're actually on /home. The view picker beside it is a menu button whose
+        icon stands for the control, NOT for the current view: mirroring the selection would put a
+        hamburger here whenever the curated menu is showing, which is the same glyph the mobile header
+        uses to mean "open the sidebar". The pane below already shows which view you're in, so the
+        state lives in title/aria-label and the menu's own check instead.
+
+        Menu markup follows the language switcher in partials/header.hbs — Bootstrap has no checked-item
+        component, so its `.active` + aria-current is the selection signal and the trailing mdi-check is
+        this app's convention on top of it. Leading icon + trailing check also keeps one glyph either
+        side of the label rather than two before it.
+
+        With Home switched off the picker is the row's only child, and the CSS lets it take the full
+        width and show its label — a lone icon button floating in an empty row helps nobody. }}
+    <div class="wk-nav-switch">
+        {{#navShowHome}}<a class="wk-nav-home-btn{{#navHomeActive}} active{{/navHomeActive}}" href="{{navHomeUrl}}"{{#navHomeActive}} aria-current="page"{{/navHomeActive}}><i class="mdi mdi-home-outline" aria-hidden="true"></i>Home</a>{{/navShowHome}}
+        <div class="dropdown wk-nav-view-picker">
+            <button type="button" class="wk-nav-view-btn dropdown-toggle" data-bs-toggle="dropdown" data-nav-view-trigger aria-expanded="false"
+                    title="Navigation view mode: {{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}"
+                    aria-label="Navigation view mode: {{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}">
+                <i class="mdi mdi-tune-variant" aria-hidden="true"></i>
+                <span class="wk-nav-view-label">{{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}</span>
+            </button>
+            {{! -end so the menu grows leftwards from the trigger: the picker sits at the right of a
+                fixed-width column whose desktop form scrolls (overflow-y:auto, which forces
+                overflow-x too), so a menu opening rightwards would be the one thing here that can
+                clip. }}
+            <ul class="dropdown-menu dropdown-menu-end wk-nav-view-menu">
+                <li><button type="button" class="dropdown-item{{#navStaticActive}} active{{/navStaticActive}}"{{#navStaticActive}} aria-current="true"{{/navStaticActive}} data-nav-view="static" data-nav-label="Main Menu"><i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i>Main Menu<i class="mdi mdi-check wk-nav-view-check" aria-hidden="true"></i></button></li>
+                <li><button type="button" class="dropdown-item{{#navTreeActive}} active{{/navTreeActive}}"{{#navTreeActive}} aria-current="true"{{/navTreeActive}} data-nav-view="tree" data-nav-label="Browse"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i>Browse<i class="mdi mdi-check wk-nav-view-check" aria-hidden="true"></i></button></li>
+            </ul>
         </div>
     </div>
     {{/navShowToggle}}

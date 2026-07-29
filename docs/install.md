@@ -1,11 +1,11 @@
 # Installing WikiKT
 
 The recommended installation path uses **Docker Compose** running the app, PostgreSQL, and Caddy
-(automatic HTTPS). This should deploy the same in any supporrted environment, including a Linux VM
-(or bare metal) with Docker works, a DigitalOcean Droplet, an Amazon EC2 instance,
-a Google Compute Engine VM, or a home server (although non-Internet-facing servers may prefer a simpler option;
-see other Docker Compose example files for more). This guide covers the cloud options first (the only provider-specific parts are in
-steps 1 and 2) then covers running without Docker.
+(automatic HTTPS). This should deploy the same in any supported environment, including a Linux
+VM (or bare metal) with Docker, a DigitalOcean Droplet, an Amazon EC2 instance, a Google Compute
+Engine VM, or a home server (although non-Internet-facing servers may prefer a simpler option;
+see other Docker Compose example files for more). This guide covers the cloud options first (the only
+provider-specific parts are in  steps 1 and 2) then covers running without Docker.
 
 Minimum size: **1 vCPU / 1 GB RAM** works for small wikis; 2 GB is suggested for most deployments for the
 JVM plus PostgreSQL. Disk requirements vary based on wiki size, and note that size grows with uploads and revision
@@ -17,8 +17,9 @@ history if enabled.
 
 - **DigitalOcean**: Create a Droplet with Ubuntu LTS, Basic plan (1–2 GB). Under *Networking*,
   allow inbound **22, 80, 443** (Cloud Firewall or leave the default open Droplet).
-- **Amazon EC2**: Launch an instance with Ubuntu LTS, `t3.small` (or `t3.micro` to start). In the
-  security group, allow inbound **22 (your IP), 80, 443 (anywhere)**.
+- **Amazon EC2**: Launch an instance with Ubuntu LTS, `t3.small` to `c5.large` suggested (although
+- `t3.micro` may work for small deployments). In the security group, allow 
+   inbound **22 (your IP), 80, 443 (anywhere)**.
 - **Google Compute Engine**: Create a VM with Ubuntu LTS, `e2-small`. Tick *Allow HTTP/HTTPS
   traffic* (or add firewall rules for 80/443).
 
@@ -30,17 +31,20 @@ Create an `A` record for your wiki's hostname and point it at the VM's public IP
 A   wiki.example.com   203.0.113.10
 ```
 
+If you plant to use multiple sites on the same instance, be sure to create a record for each (e.g.,
+site1.example.com and site2.example.com).
+
 Do this before first start, as Caddy needs the name to resolve to obtain the HTTPS certificate.
 
 ### 3. Install Docker
 
-SSH in and run Docker's official convenience script (or manually instal):
+SSH in and run Docker's official convenience script to install (or install manually if preferred):
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 ```
 
-### 4. Obtain WikiKT and configure
+### 4. Download WikiKT and configure
 
 ```bash
 git clone <your-wikikt-repo-url> wikikt && cd wikikt
@@ -75,7 +79,7 @@ and backup practice.
   Backup** in WikiKT covers the application layer, and the Git Sync (push mode or bidirectional) option
   in Administration settings can keep an off-site content mirror.
 
-## Option B — Self-hosted without Docker
+## Option B: Self-hosted without Docker
 
 Requirements: **JDK 21** and **git** (git is necessary only if using Git Sync option in Administration settings).
 
@@ -105,7 +109,7 @@ export WIKIKT_SESSION_SECURE_COOKIE=true
 export WIKIKT_PUBLIC_URL=https://wiki.example.com
 ```
 
-A minimal systemd unit:
+A minimal systemd unit example:
 
 ```ini
 [Unit]
@@ -165,9 +169,9 @@ server {
 }
 ```
 
-To back up every site at once, use the **full** backup (Administration | Storage and backup); the
-**content** backup covers only the site you're currently managing. Deleting a site removes all of its
-content — see the confirmation prompt.
+To back up every site at once, use the *full* backup (Administration | Storage and backup); the
+*content* backup covers only the site you're currently managing. Deleting a site removes all of its
+content, as noted in the confirmation prompt.
 
 ## Environment variable reference
 
@@ -198,8 +202,8 @@ content — see the confirmation prompt.
 
 ## Asset delivery
 
-WikiKT's front-end libraries and webfonts load from public CDNs by default. Every one of them is also
-bundled in the JAR, so you can serve them yourself if you prefer a fully local or self-served setup.
+WikiKT's front-end libraries and webfonts load from public CDNs by default. Most are also
+bundled in the JAR, so you can serve them yourself if you prefer a fully local/self-served setup.
 
 Three settings, one for each general category of assets, control this. Each accepts `cdn` (default)
 or `local`; the default (none or invalid value specified) results in `cdn`.
@@ -210,12 +214,13 @@ or `local`; the default (none or invalid value specified) results in `cdn`.
 | `wikikt.ui.iconFontSource` | `WIKIKT_UI_ICON_FONT_SOURCE` | Material Design Icons | ~750 KB | `cdn.jsdelivr.net` | `/static/vendor/mdi/` |
 | `wikikt.ui.emojiFontSource` | `WIKIKT_UI_EMOJI_FONT_SOURCE` | Noto Color Emoji | ~2 MB | `fonts.googleapis.com` | `/static/vendor/noto-emoji/` |
 
-They are separate rather than one switch because the sizes differ by an order of magnitude, and so do
-the consequences of a blocked CDN: missing **icons** might leave unexpected gaps in the UI while otherwise
-functioning, while a missing emoji font degrades gracefully to the OS defaults.
+They are separate settings rather than one overarching setting because the sizes differ by an order
+of magnitude, and so do the consequences of a blocked CDN: missing *icons* might leave unexpected gaps
+in the UI (thoiugh otherwise functioning), while a missing emoji font degrades gracefully to the OS defaults.
 
 The current state of all three is shown read-only under **Administration | Settings | Appearance |
-Asset delivery**. (Read-only because it can only be configured at deployment for instance, not per site after deployment.)
+Asset delivery**. (Read-only because it can only be configured at deployment for instance, not per
+site after deployment.)
 
 With Docker, add those three lines to your `.env` (see [`.env.example`](../.env.example)) and re-run
 `docker compose up -d`. In a yaml config file, set the `wikikt.ui.*` keys instead.
