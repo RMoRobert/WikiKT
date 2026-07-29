@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Updates | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <h1>Updates</h1>
+
+    {{! Running build info -- always shown, whatever the check state. }}
+    <div class="card mb-4">
+        <div class="card-body d-flex align-items-center gap-3">
+            <i class="mdi mdi-package-variant-closed fs-1 text-secondary" aria-hidden="true"></i>
+            <div>
+                <div class="fw-bold">WikiKT {{appVersion}}{{#appGitSha}} <span class="fw-normal text-secondary" title="Git commit">{{appGitSha}}</span>{{/appGitSha}}</div>
+                <div class="small text-secondary">{{#appBuiltAt}}Built {{appBuiltAt}} &middot; {{/appBuiltAt}}<a href="{{releasesUrl}}" target="_blank" rel="noopener">Release history</a></div>
+            </div>
+        </div>
+    </div>
+
+    {{#stateDevBuild}}
+    <div class="alert alert-secondary" role="alert"><i class="mdi mdi-wrench-outline" aria-hidden="true"></i>
+        You are using a development build (<code>{{appVersion}}</code>). Check disabled; only stamped
+        release builds have a published version to compare against.</div>
+    {{/stateDevBuild}}
+
+    {{#stateDisabled}}
+    <div class="alert alert-secondary" role="alert"><i class="mdi mdi-cancel" aria-hidden="true"></i>
+        Update checks are disabled by the server configuration (<code>WIKIKT_UPDATE_CHECK=off</code>).
+        Check the <a href="{{releasesUrl}}" target="_blank" rel="noopener" class="alert-link">releases page</a>
+        to see current release.</div>
+    {{/stateDisabled}}
+
+    {{#stateConsent}}
+    <div class="card border-primary mb-4">
+        <div class="card-header"><i class="mdi mdi-update" aria-hidden="true"></i> Check for new releases?</div>
+        <div class="card-body">
+            <p>WikiKT can check for new releases when you open this page. This sends at most
+                one HTTPS request per day to <code>api.github.com</code>. It does not send any information
+                about your site to the server.</p>
+            <form method="post" action="/a/updates/settings" class="d-inline">
+                {{{csrfField}}}
+                <button type="submit" class="btn btn-primary" name="updateChecks" value="enable">Enable automatic update checks</button>
+                <button type="submit" class="btn btn-outline-secondary" name="updateChecks" value="disable">Disable automatic update checks</button>
+            </form>
+        </div>
+    </div>
+    {{/stateConsent}}
+
+    {{#stateDeclined}}
+    <div class="alert alert-secondary" role="alert"><i class="mdi mdi-bell-off-outline" aria-hidden="true"></i>
+        Automatic checks for updates are turned off.
+        <form method="post" action="/a/updates/settings" class="d-inline ms-2">
+            {{{csrfField}}}
+            <button type="submit" class="btn btn-sm btn-outline-primary" name="updateChecks" value="enable">Enable automatic update checks</button>
+        </form>
+    </div>
+    {{/stateDeclined}}
+
+    {{#stateUpToDate}}
+    <div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i>
+        You are running the latest release. Checked {{checkedAt}}.</div>
+    {{/stateUpToDate}}
+
+    {{#stateFailed}}
+    <div class="alert alert-warning" role="alert"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i>
+        {{failMessage}} Last attempt {{checkedAt}}. If this server has no outbound internet access, set
+        <code>WIKIKT_UPDATE_CHECK=off</code> to silence this check.</div>
+    {{/stateFailed}}
+
+    {{#stateAvailable}}
+    <div class="alert alert-info" role="alert"><i class="mdi mdi-arrow-up-circle-outline" aria-hidden="true"></i>
+        <b>WikiKT {{latestVersion}} is available</b>. You are running {{appVersion}}.
+        <a href="{{latestUrl}}" target="_blank" rel="noopener" class="alert-link">View release details</a>. Last checked: {{checkedAt}}.</div>
+
+    <div class="card mb-4">
+        <div class="card-header"><i class="mdi mdi-console" aria-hidden="true"></i> How to upgrade</div>
+        <div class="card-body">
+            <p class="mb-2">Take a <a href="/a/backup/export">backup</a> first. Then, on the server, from the
+                directory holding your Compose file:</p>
+            <p class="mb-1 fw-semibold">Using the prebuilt image (the default production setup):</p>
+            <pre class="bg-body-tertiary p-2 rounded"><code>sudo docker compose -f docker-compose.prod.yml pull wikikt
+sudo docker compose -f docker-compose.prod.yml up -d</code></pre>
+            <p class="mb-1 fw-semibold">Building from source (if your Compose file uses <code>build: .</code>):</p>
+            <pre class="bg-body-tertiary p-2 rounded"><code>git pull
+sudo docker compose -f docker-compose.prod.yml up -d --build wikikt</code></pre>
+            <p class="form-text mb-0">Running <code>docker-compose.home.yml</code> or a plain jar instead? See the upgrade
+                notes in <code>docker/README.md</code> and <code>docs/install.md</code>. Database migrations run
+                automatically at startup; database, uploads, and certificates persist in their volumes.</p>
+        </div>
+    </div>
+    {{/stateAvailable}}
+
+    {{#checksEnabled}}
+    <div class="d-flex gap-2 align-items-center">
+        <form method="post" action="/a/updates/check">
+            {{{csrfField}}}
+            <button type="submit" class="btn btn-outline-secondary"><i class="mdi mdi-refresh" aria-hidden="true"></i> Check now</button>
+        </form>
+        <form method="post" action="/a/updates/settings">
+            {{{csrfField}}}
+            <button type="submit" class="btn btn-link text-secondary" name="updateChecks" value="disable">Disable update checks</button>
+        </form>
+    </div>
+    {{/checksEnabled}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

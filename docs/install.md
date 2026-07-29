@@ -15,12 +15,13 @@ covers running without Docker.
 JVM plus PostgreSQL. Disk requirements vary based on wiki size, and note that size grows with uploads and
 revision history if enabled.
 
-*To build*: requires notably more resources than running; `up -d --build` compiles the Kotlin sources and
-assembles a ~110 MB self-contained JAR on the server, which runs two JVMs (Gradle plus the Kotlin compiler)
-and wants **~4 GB RAM**, or 2 GB with swap. Shared-core instance types (`e2-small`, `t3.micro`) may also run
-slowly if burst credits are all consumed. You may wish to consider using a pre-built image (currently under
-development) or building elswhere and shiipping it over as described in [Building elsewhere](#building-elsewhere)
-below.
+*To build (optional)*: the recommended prod Compose file pulls a **prebuilt image** from the GitHub
+Container Registry, so the server never compiles anything and the *run* sizing above is all you need.
+Building from source instead (`up -d --build`, the default in `docker-compose.home.yml`) requires
+notably more resources: it compiles the Kotlin sources and assembles a ~110 MB self-contained JAR on
+the server, running two JVMs (Gradle plus the Kotlin compiler), and wants **~4 GB RAM**, or 2 GB with
+swap. Shared-core instance types (`e2-small`, `t3.micro`) may also run slowly if burst credits are all
+consumed. See [Building elsewhere](#building-elsewhere) below for the options.
 
 ## Option A: Cloud VM with Docker Compose (recommended)
 
@@ -123,15 +124,34 @@ the rest of what that needs.
 ### 5. Start
 
 ```bash
-sudo docker compose -f docker-compose.prod.yml up -d --build
+sudo docker compose -f docker-compose.prod.yml up -d
 ```
 
-The first build takes a few minutes on a machine with cores and memory to spare. Then open
-`https://wiki.example.com` and log in as `admin` with the password from `.env`. See
+First start pulls the prebuilt app image from the GitHub Container Registry (to compile from source on
+the server instead, see [Building elsewhere](#building-elsewhere) — then start with `--build`). Then
+open `https://wiki.example.com` and log in as `admin` with the password from `.env`. See
 [docker/README.md](../docker/README.md) for upgrades, logs, and backup practice.
+
+### Updating
+
+WikiKT can tell you when a new release is out: as a root admin, open **Administration > Updates** and
+enable update checks (opt-in; one anonymous request a day to `api.github.com`, nothing about your
+instance is sent; `WIKIKT_UPDATE_CHECK=off` disables it entirely). Installing the update is manual.
+With the prebuilt image (the default here), it is a pull and restart:
+
+```bash
+sudo docker compose -f docker-compose.prod.yml pull wikikt
+sudo docker compose -f docker-compose.prod.yml up -d
+```
+
+If you build from source, `git pull` then rebuild with `--build` instead — see the
+[Upgrades](../docker/README.md#upgrades) section of docker/README.md. Volumes (database, uploads,
+certificates) persist, and schema migrations run automatically at startup; taking a backup first
+(**Administration > Backup**) is always a good idea.
 
 ### Building elsewhere
 
+*(Only relevant if you build from source rather than pulling the prebuilt image.)*
 On a VM sized for *running* WikiKT, `--build` may appear to hang partway through
 `RUN ./gradlew --no-daemon shadowJar`, typically around `shadowJar` itself, which is the memory-hungriest
 step. It is usually still making progress, just very slowly. If build appears stuck, you can run something
@@ -305,6 +325,7 @@ each works in any deployment style — Docker `.env`, a systemd `EnvironmentFile
 | `WIKIKT_UI_ASSET_SOURCE` | `cdn` (default) or `local`; sources for Bootstrap and highlight.js. See [Asset delivery](#asset-delivery).                                                                                                                                        |
 | `WIKIKT_UI_ICON_FONT_SOURCE` | `cdn` (default) or `local`; sources for Material Design Icons webfont.                                                                                                                                                                        |
 | `WIKIKT_UI_EMOJI_FONT_SOURCE` | `cdn` (default) or `local`; source for emoji webfont.                                                                                                                                                                                          |
+| `WIKIKT_UPDATE_CHECK` | Set to `off` to guarantee the app never contacts `api.github.com` for release update checks, regardless of what an admin enables under Administration > Updates. Checks are opt-in (per admin consent) even when this is unset.                    |
 
 ### Compose-only variables (not WikiKT settings)
 

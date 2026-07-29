@@ -263,16 +263,17 @@ fun parseId(value: String): UInt = value.toUIntOrNull()
  * not one is wired today. Wired ones mostly mirror WikiJS 2.x — a=admin, c=comments, e=editor, f=assets,
  * h=history, i=by-id, p=profile, t=tags, u=upload/API, w=personal-wiki — except `s`, which WikiJS uses
  * for page source but we use for **search** (WikiKT has no source view yet; `r` is held for one if it
- * ever lands). This set is only the specific longer names we also hold: routes we use today, plus
- * `_assets`, `favicon`(.ico), `graphql`, `healthz`, `register` held for possible future use.
+ * ever lands). This set is only the specific longer names we also hold: routes we use today (including
+ * `healthz`, the container liveness probe), plus `_assets`, `favicon`(.ico), `graphql`, `register`
+ * held for possible future use.
  *
  * NOTE: `home` is deliberately NOT reserved, although it is special. It needs to be a real, editable page
  * that `/` and `/{locale}` redirect to. Its canonical URL is `/{locale}/home`.
  */
 val RESERVED_PATH_SEGMENTS = setOf(
-    "login", "logout", "static", "new", "preview",
+    "login", "logout", "static", "new", "preview", "healthz",
     // Held for future use if needed; no route wired yet.
-    "_assets", "favicon", "graphql", "healthz", "register",
+    "_assets", "favicon", "graphql", "register",
 )
 
 /**

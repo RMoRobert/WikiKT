@@ -30,6 +30,7 @@ import io.ktor.server.response.ApplicationSendPipeline
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondRedirect
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.delay
@@ -132,6 +133,14 @@ fun Application.module() {
         get("/logo.svg") {
             val bytes = call.application.environment.classLoader.getResourceAsStream("static/logo.svg")?.readBytes()
             if (bytes != null) call.respondBytes(bytes, ContentType.Image.SVG) else call.respond(HttpStatusCode.NotFound)
+        }
+
+        // Liveness probe for the container healthcheck (and any external monitor): no database, no
+        // session, no site resolution -- just checks for "is the server process serving HTTP?". Kept
+        // separate from `/` (which does a DB-backed settings read and redirects) so health polling
+        // is cheap, versionless, and unauthenticated.
+        get("/healthz") {
+            call.respondText("ok", ContentType.Text.Plain)
         }
 
         get("/") {

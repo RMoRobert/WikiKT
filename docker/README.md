@@ -58,12 +58,13 @@ A   wiki.example.com   <your-server-ip>
 ## Start
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-First build compiles the app, which may take a few minutes. Caddy then obtains the certificate and serves
-`https://wiki.example.com` (of course, replace all examples with your real domain).
-Log in as `admin` with the password from `.env`.
+First start pulls the prebuilt app image from the GitHub Container Registry (see
+[Pull a prebuilt image from GHCR](#pull-a-prebuilt-image-from-ghcr), including how to build from
+source instead). Caddy then obtains the certificate and serves `https://wiki.example.com` (of course,
+replace all examples with your real domain). Log in as `admin` with the password from `.env`.
 
 ### Services
 
@@ -138,21 +139,22 @@ in general; just substitute `-f docker-compose.home.yml` for `-f docker-compose.
 
 ## Pull a prebuilt image from GHCR
 
-Both Compose files default to `build: .`, which compiles WikiKT on the target/host. That needs
-considerably more memory than running it (see [docs/install.md](../docs/install.md#building-elsewhere)).
-The [publish-image workflow](../.github/workflows/publish-image.yml) builds on GitHub's runners and pushes
-to the GitHub Container Registry, so a small server can pull a finished image instead:
+The [publish-image workflow](../.github/workflows/publish-image.yml) builds WikiKT on GitHub's runners
+and pushes it to the GitHub Container Registry. **`docker-compose.prod.yml` uses this image by
+default** (`image: ghcr.io/rmorobert/wikikt:latest`), so a small server never compiles anything;
+`docker-compose.home.yml` defaults to `build: .` (compiling on the box) and carries the GHCR image as a
+commented alternative. Building from source needs considerably more memory than running the app (see
+[docs/install.md](../docs/install.md#building-elsewhere)).
+
+To build from source with the prod file instead, comment out its `image:` line, uncomment `build: .`,
+and start with `--build`:
 
 ```bash
-docker pull ghcr.io/rmorobert/wikikt:latest
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-To use it, comment out `build: .` in the Compose file, uncomment the `image:` line next to it, and start
-*without* `--build`:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d
-```
+To switch home to the registry image, do the reverse there: comment out `build: .`, uncomment the
+`image: ghcr.io/...` line, and start *without* `--build`.
 
 Available tags:
 
@@ -212,9 +214,10 @@ docker build --build-arg WIKIKT_VERSION=0.2.0 -t wikikt:0.2.0 .
 
 ## Run from a prebuilt image (no registry)
 
-Both Compose files default to `build: .`, which compiles the app on the target host. To build
-the image on your workstation instead and ship it to the server -- no Docker registry, and no build
-toolchain (JDK/Gradle) needed on the box -- use `docker save` and `docker load`:
+`docker-compose.home.yml` defaults to `build: .`, which compiles the app on the target host (the prod
+file pulls from GHCR by default). To build the image on your workstation instead and ship it to the
+server -- no Docker registry, and no build toolchain (JDK/Gradle) needed on the box -- use
+`docker save` and `docker load`:
 
 ```bash
 # 1. Build on your workstation (repo root). The Dockerfile is multi-stage, so this runs the
@@ -248,13 +251,29 @@ To upgrade later, repeat steps 1–2 to load a newer `wikikt:latest`, then run `
 
 ## Upgrades
 
+**Update notifications:** a root admin can enable release checks under **Administration > Updates**
+in the WikiKT UI. When enabled, opening that page (at most once a day) compares the running version
+against the latest GitHub release and shows the upgrade steps; it is opt-in, contacts only
+`api.github.com`, and sends nothing about your instance. `WIKIKT_UPDATE_CHECK=off` disables it
+entirely. The upgrade itself is the manual step below.
+
+If you run the **prebuilt image** (the prod default), upgrading is a pull:
+
 ```bash
-docker compose -f docker-compose.prod.yml build --pull wikikt
+docker compose -f docker-compose.prod.yml pull wikikt
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-Database, uploads, and certificates persist in their volumes. Schema migrations run automatically
-at startup.
+If you **build from source** (the home default), fetch the new code and rebuild:
+
+```bash
+git pull
+docker compose -f docker-compose.home.yml build --pull wikikt
+docker compose -f docker-compose.home.yml up -d
+```
+
+Either way: database, uploads, and certificates persist in their volumes, and schema migrations run
+automatically at startup. Taking a backup first (**Administration > Backup**) is always a good idea.
 
 ## Backups
 

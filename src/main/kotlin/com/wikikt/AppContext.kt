@@ -17,6 +17,7 @@ import com.wikikt.service.GroupService
 import com.wikikt.service.InfoboxService
 import com.wikikt.service.MfaService
 import com.wikikt.service.PageService
+import com.wikikt.service.UpdateService
 import com.wikikt.service.PageRenderService
 import com.wikikt.service.PasswordResetService
 import com.wikikt.service.FragmentService
@@ -60,6 +61,7 @@ class AppContext(
     val renderCache: PageRenderService,
     val infobox: InfoboxService,
     val gitSync: GitSyncService,
+    val update: UpdateService,
     val backup: BackupService,
     val emailTemplates: EmailTemplateService,
     val email: EmailService,
@@ -139,7 +141,7 @@ suspend fun Application.createAppContext(): AppContext {
     require(java.nio.file.Files.isWritable(assetDir)) { "Asset storage dir is not writable: $assetDir" }
     val assets = AssetService(database, assetDir)
 
-    val seed = SeedService(database, config, sites, pages, nav)
+    val seed = SeedService(database, config, sites, pages)
     seed.seedIfEmpty()
 
     // Search index + render cache: both are rebuilt when a page's live content changes (one page) or a
@@ -181,6 +183,9 @@ suspend fun Application.createAppContext(): AppContext {
     // that they all exist (gitSync is the last, so this can't move earlier alongside the content services).
     sites.wireCascade(pages, assets, fragments, nav, settings, gitSync)
     val backup = BackupService(database, sites, pages, assets, fragments, nav, importer, settings, searchIndex, assetDir)
+    // Release update check (Administration > Updates). Lazy: only fetches when a root admin views the
+    // page after opting in; WIKIKT_UPDATE_CHECK=off makes the network path unreachable entirely.
+    val update = UpdateService(settings, config.updateCheckAllowed)
 
     // Email: templates (defaults + per-site overrides) render into messages that the queue-backed
     // EmailService enqueues; a background worker (Application.startEmailWorker) drains the queue over SMTP.
@@ -209,6 +214,7 @@ suspend fun Application.createAppContext(): AppContext {
         renderCache = renderCache,
         infobox = infobox,
         gitSync = gitSync,
+        update = update,
         backup = backup,
         emailTemplates = emailTemplates,
         email = email,

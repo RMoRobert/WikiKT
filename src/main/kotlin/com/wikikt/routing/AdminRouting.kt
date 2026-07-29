@@ -15,6 +15,8 @@ import com.wikikt.model.UpdateUserRequest
 import com.wikikt.model.toDto
 import com.wikikt.service.InfoboxService
 import com.wikikt.service.SafeRegex
+import com.wikikt.service.UpdateCheck
+import com.wikikt.service.UpdateService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.mustache.MustacheContent
@@ -339,6 +341,46 @@ fun Route.configureAdminRouting() {
                 return@get
             }
             call.respond(MustacheContent("admin/storage.hbs", call.storageModel()))
+        }
+
+        // --- Updates (root only): instance-wide, so gated on root permissions. ---
+        // The GET itself performs the (cached, lazy) release check when checks are enabled, by
+        // design: no background poller, no nagging; the network call made only when a
+        // root admin looks at this page.
+        get("/updates") {
+            if (!call.requireRoot()) {
+                call.respondForbidden()
+                return@get
+            }
+            call.respond(MustacheContent("admin/updates.hbs", call.updatesModel()))
+        }
+
+        // Consent toggle for auto update check: "enable"/"disable" from the two buttons (or the settings form).
+        post("/updates/settings") {
+            if (!call.requireRoot()) {
+                call.respondForbidden()
+                return@post
+            }
+            val params = call.receiveParameters()
+            if (!call.validateFormCsrf(params)) return@post
+            when (params["updateChecks"]) {
+                "enable" -> call.appContext.update.setOptIn(true)
+                "disable" -> call.appContext.update.setOptIn(false)
+            }
+            // PRG: enabling means the next GET performs the first check; a refresh must not re-post.
+            call.respondRedirect("/a/updates")
+        }
+
+        // "Check now": bypasses the cache TTL (itself rate-limited inside UpdateService).
+        post("/updates/check") {
+            if (!call.requireRoot()) {
+                call.respondForbidden()
+                return@post
+            }
+            val params = call.receiveParameters()
+            if (!call.validateFormCsrf(params)) return@post
+            call.appContext.update.check(force = true)
+            call.respondRedirect("/a/updates")
         }
 
         post("/git-sync") {
@@ -2032,6 +2074,49 @@ internal suspend fun io.ktor.server.application.ApplicationCall.dashboardModel()
     )
 }
 
+/**
+ * Model for Administration > Updates (root only). Exactly one `state*` flag is true; the template
+ * renders one card per state. When checks are enabled and the cache is stale, building this model
+ * performs the actual (network) check — see the route comment.
+ */
+internal suspend fun io.ktor.server.application.ApplicationCall.updatesModel(): Map<String, Any?> {
+    val ctx = appContext
+    val formats = displayFormats()
+    val check = ctx.update.check()
+    val optIn = ctx.update.optIn()
+    fun checkedAtOf(at: Long) = DateDisplay.format(at, formats)
+    val state = when (check) {
+        is UpdateCheck.Disabled -> mapOf("stateDisabled" to true)
+        is UpdateCheck.NotApplicable -> mapOf("stateDevBuild" to true)
+        is UpdateCheck.NotEnabled -> mapOf(
+            // Tri-state consent: never asked -> the consent card; explicitly declined -> the re-enable card.
+            "stateConsent" to (optIn == null),
+            "stateDeclined" to (optIn == false),
+        )
+        is UpdateCheck.UpToDate -> mapOf("stateUpToDate" to true, "checkedAt" to checkedAtOf(check.checkedAt))
+        is UpdateCheck.Failed -> mapOf(
+            "stateFailed" to true,
+            "failMessage" to check.message,
+            "checkedAt" to checkedAtOf(check.checkedAt),
+        )
+        is UpdateCheck.Available -> mapOf(
+            "stateAvailable" to true,
+            "latestVersion" to check.release.version.toString(),
+            "latestTag" to check.release.tag,
+            "latestUrl" to check.release.htmlUrl,
+            "checkedAt" to checkedAtOf(check.checkedAt),
+        )
+    }
+    return adminBaseModel() + mapOf(
+        "appVersion" to com.wikikt.BuildInfo.version,
+        "appGitSha" to com.wikikt.BuildInfo.gitSha.takeIf { it != "unknown" },
+        "appBuiltAt" to com.wikikt.BuildInfo.builtAt?.let { DateDisplay.format(it * 1000, formats) },
+        "releasesUrl" to UpdateService.RELEASES_PAGE_URL,
+        // The Check now button renders only in states where checks are actually running.
+        "checksEnabled" to (optIn == true && check !is UpdateCheck.Disabled && check !is UpdateCheck.NotApplicable),
+    ) + state
+}
+
 /** Model for the Administration > Settings page. */
 private val HEX_COLOR = Regex("^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
 
@@ -2477,6 +2562,7 @@ internal suspend fun io.ktor.server.application.ApplicationCall.mailTemplateMode
 private val ADMIN_NAV_SECTIONS = listOf(
     "dashboard", "sites", "general", "appearance", "locale", "rendering", "navigation",
     "pages", "fragments", "infoboxes", "users", "groups", "apikeys", "registration", "storage", "security", "mail",
+    "updates",
 )
 
 // --- Infobox admin helpers ---
@@ -2623,6 +2709,7 @@ private fun adminActiveSection(path: String): String = when {
     path.startsWith("/a/storage") || path.startsWith("/a/git-sync") || path.startsWith("/a/backup") -> "storage"
     path.startsWith("/a/security") -> "security"
     path.startsWith("/a/mail") -> "mail"
+    path.startsWith("/a/updates") -> "updates"
     else -> "dashboard"
 }
 
@@ -2660,6 +2747,9 @@ internal suspend fun io.ktor.server.application.ApplicationCall.adminBaseModel()
         "navSecGroups" to canGroups,
         // The Authentication group shows if the user can reach any item under it.
         "navSecAuth" to (canUsers || canGroups),
+        // Root-only items (Updates). Separate from navSecSite (manage:groups): a delegated group
+        // admin must not be shown links that 403 on click.
+        "navSecRoot" to ctx.permissions.isRoot(userId),
         "csrfField" to csrfField(),
         // The primary locale, for admin JS (e.g. the nav editor's page picker builds targets from it).
         "defaultLocale" to ctx.config.defaultLocale,
