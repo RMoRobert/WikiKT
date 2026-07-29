@@ -32,13 +32,20 @@ echo "WIKIKT_SESSION_SIGN_KEY=$(openssl rand -hex 32)"
 echo "WIKIKT_MFA_KEY=$(openssl rand -hex 32)"
 ```
 
-Note that `.env` is *not* passed to the container wholesale: the Compose file's `environment:` block lists
-the variables it reads, and only those. `.env.example` covers exactly that set (including the optional
-[asset delivery](../docs/install.md#asset-delivery) switches, which let the front-end libraries and
-webfonts be served from your own container instead of public CDNs). To set anything else from the
+`.env.example` covers the variables most deployments need, but it is not a closed set: the `wikikt` service
+reads the whole file via `env_file`, so anything in the
 [environment variable reference](../docs/install.md#environment-variable-reference) — connection-pool
-sizing, session lifetime, storage paths — add the line to the `wikikt` service's `environment:` block in
-`docker-compose.prod.yml`, either as a literal value or as `${VAR}` if you would rather keep it in `.env`.
+sizing, session lifetime, storage paths, the optional
+[asset delivery](../docs/install.md#asset-delivery) switches — can simply be added to `.env`.
+
+The one exception is the settings the Compose file pins in its own `environment:` block: production mode,
+`WIKIKT_TRUST_PROXY` / secure cookies, and the database wiring. Those take precedence over `.env` by
+design, so nothing dropped in that file can silently weaken the deployment's posture. Change them by
+editing `docker-compose.prod.yml` directly.
+
+Two variables in `.env` are not WikiKT settings at all: `WIKIKT_DOMAIN` and `WIKIKT_EXTRA_DOMAINS` are read
+only by the Compose file to configure Caddy (see [DNS](#dns) and
+[Multiple sites](#multiple-sites-subdomains) below).
 
 ## DNS
 
@@ -148,7 +155,7 @@ docker build -t wikikt:latest .
 docker save wikikt:latest | gzip | ssh user@server 'gunzip | docker load'
 
 #    …or via a file:  docker save wikikt:latest | gzip > wikikt.tar.gz
-#                or:  docker save -o wikikit-image.tar wikikt:latest
+#                or:  docker save -o wikikt-image.tar wikikt:latest
 #    then copy to server (e.g., scp) and, on the server:  gunzip -c wikikt.tar.gz | docker load
 
 # 3. Confirm it landed:
@@ -179,9 +186,9 @@ at startup.
 
 Two complementary layers:
 
-- **Application backups**: **Administration > Backup** in WikiKIT gives a ZIP file of either content
+- **Application backups**: **Administration > Backup** in WikiKT gives a ZIP file of either content
   only or complete site (including accounts, configuration, etc.). Git Sync in (at least) push mode is another
-- option for a continuous off-site mirror of content.
+  option for a continuous off-site mirror of content.
 - **Infrastructure backups**: snapshot the volumes, or execute a command like
   `docker compose -f docker-compose.prod.yml exec postgres pg_dump -U wikikt wikikt > backup.sql`.
 

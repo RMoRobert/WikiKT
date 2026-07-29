@@ -47,6 +47,12 @@ services:
     #   docker buildx build --platform linux/amd64 -t wikikt:latest --load .   # --platform: Mac->x86 host
     #   docker save wikikt:latest | gzip | ssh user@homebox 'gunzip | docker load'
     # image: wikikt:latest
+    # Pass the whole .env through to the app, so any WIKIKT_* setting from the reference table in
+    # docs/install.md can be set there without editing this file. The `environment:` block below still
+    # wins for anything it names, so the settings pinned here can't be weakened from .env.
+    env_file:
+      - path: .env
+        required: false
     environment:
       WIKIKT_ENV: production
       WIKIKT_ADMIN_PASSWORD: ${WIKIKT_ADMIN_PASSWORD:?set WIKIKT_ADMIN_PASSWORD in .env}

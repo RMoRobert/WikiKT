@@ -52,7 +52,7 @@ If you are using a custom fork or clone, replace `<git-url>` below with the URL 
 use `https://github.com/RMoRobert/WikiKT.git` for the official repo (or switch to desired branch).
 
 The Docker stack is configured by a `.env` file sitting next to the Compose file (or however you prefer to set
-the same enviornment variables). The repo ships [`.env.example`](../.env.example) as an annotated template of the
+the same environment variables). The repo ships [`.env.example`](../.env.example) as an annotated template of the
 supported variables, which you may copy (`cp .env.example .env`) and fill in as desired. Alternatively, pasting
 the below into the shell will create this file with appropriate values in one step for you:
 
@@ -68,9 +68,22 @@ WIKIKT_ADMIN_PASSWORD=<choose-a-strong-admin-password>
 EOF
 chmod 600 .env
 ```
+
+Substitute your own values for the two placeholders before running it — `<git-url>` and, more easily
+missed, `<choose-a-strong-admin-password>`. The latter is inside the here-document, so the shell does not
+complain about it: leave it as-is and your wiki's admin password becomes that literal string. For the same
+reason, pick a password without `$` or backticks, or the shell will expand them and write something other
+than what you typed (`p@$$w0rd` lands in the file as `p@` followed by the shell's process ID). If in doubt,
+set that line by editing `.env` afterwards rather than through the here-document.
+
 If using your own version control, be sure to exclude your real `.env` file from it given the secrets
-it contains (the official repo's `.gitignore` already excludes it). To set anything else
-from the[environment variable reference](#environment-variable-reference) below, add it to the `wikikt` service's
+it contains (the official repo's `.gitignore` already excludes it).
+
+Anything from the [environment variable reference](#environment-variable-reference) below can go in the
+same file, not just the variables the template lists — the Compose file passes `.env` through to the app.
+The exception is the handful of settings the Compose file pins itself (production mode, the proxy/cookie
+posture, and the database wiring): those deliberately win over `.env`, so a stray `WIKIKT_ENV=development`
+there cannot quietly downgrade a production deployment. To change one of those, edit the `wikikt` service's
 `environment:` block in `docker-compose.prod.yml`.
 
 If hosting multiple sites on the same instance, add a line listing the extra hostnames, space-separated
@@ -80,7 +93,10 @@ If hosting multiple sites on the same instance, add a line listing the extra hos
 WIKIKT_EXTRA_DOMAINS="site1.example.com site2.example.com"
 ```
 
-See [Multiple sites on one instance](#multiple-sites-on-one-instance) for the rest of what that needs.
+Quoting is optional — Compose strips the quotes either way. Note that this variable configures **Caddy**,
+not WikiKT: it is the list of hostnames Caddy obtains certificates for and routes, which is separate from
+creating the sites themselves. See [Multiple sites on one instance](#multiple-sites-on-one-instance) for
+the rest of what that needs.
 
 ### 5. Start
 
@@ -205,6 +221,9 @@ content, as noted in the confirmation prompt.
 
 ## Environment variable reference
 
+These are WikiKT's own settings: each one overrides the matching `wikikt.*` key in `application.yaml`, and
+each works in any deployment style — Docker `.env`, a systemd `EnvironmentFile`, or plain `export`.
+
 | Variable | Purpose                                                                                                                                                                                                                                           |
 |----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `WIKIKT_ENV` | `development` (default) or `production`. Production refuses insecure defaults and is recommended for such deployments.                                                                                                                            |
@@ -219,7 +238,7 @@ content, as noted in the confirmation prompt.
 | `WIKIKT_DATABASE_TYPE` | `h2` (default) or `postgres` (recommended for production).                                                                                                                                                                                        |
 | `WIKIKT_DATABASE_R2DBC_URL` | Connection URL, e.g. `r2dbc:postgresql://host:5432/wikikt`.                                                                                                                                                                                       |
 | `WIKIKT_DATABASE_USERNAME` / `WIKIKT_DATABASE_PASSWORD` | Database credentials                                                                                                                                                                                                                              |
-| `WIKIKT_DATABASE_POOL_MAX_SIZE` | Max pooled connections the app will hold (default `10`). Keep it under the database server's own limit (Postgres defaults to `max_connections: 100`; raise it for a busy sitem, and if several app instances share one database, budget the sum). |
+| `WIKIKT_DATABASE_POOL_MAX_SIZE` | Max pooled connections the app will hold (default `10`). Keep it under the database server's own limit (Postgres defaults to `max_connections: 100`; raise it for a busy site, and if several app instances share one database, budget the sum). |
 | `WIKIKT_DATABASE_POOL_INITIAL_SIZE` | Connections opened at startup (default `2`).                                                                                                                                                                                                      |
 | `WIKIKT_DATABASE_POOL_MAX_IDLE_TIME` | Seconds an idle connection is kept before being closed (default `1800`).                                                                                                                                                                          |
 | `WIKIKT_DATABASE_POOL_MAX_LIFE_TIME` | Seconds before a connection is recycled regardless of use (default `3600`).                                                                                                                                                                       |
@@ -228,7 +247,25 @@ content, as noted in the confirmation prompt.
 | `WIKIKT_GIT_SYNC_DIR` | Git-sync working clone dir (default `./data/git-sync`) for Git Sync feature in Wiki admin settings for content/assets                                                                                                                             |
 | `WIKIKT_UI_ASSET_SOURCE` | `cdn` (default) or `local`; sources for Bootstrap and highlight.js. See [Asset delivery](#asset-delivery).                                                                                                                                        |
 | `WIKIKT_UI_ICON_FONT_SOURCE` | `cdn` (default) or `local`; sources for Material Design Icons webfont.                                                                                                                                                                        |
-| `WIKIKT_UI_EMOJI_FONT_SOURCE` | `cdn` (default) or `local; source for emoji webfont.                                                                                                                                                                                          |
+| `WIKIKT_UI_EMOJI_FONT_SOURCE` | `cdn` (default) or `local`; source for emoji webfont.                                                                                                                                                                                          |
+
+### Compose-only variables (not WikiKT settings)
+
+Two more `WIKIKT_*` names appear in `.env`, and despite the prefix they are **not** application settings —
+they have no `application.yaml` key, and WikiKT itself never reads them. They exist only in
+`docker-compose.prod.yml`, which uses them to configure Caddy:
+
+| Variable | Purpose |
+|----------|---------|
+| `WIKIKT_DOMAIN` | The primary hostname Caddy serves and obtains a Let's Encrypt certificate for. Also supplies the default for `WIKIKT_PUBLIC_URL` (`https://$WIKIKT_DOMAIN`), which you can still override by setting `WIKIKT_PUBLIC_URL` explicitly. |
+| `WIKIKT_EXTRA_DOMAINS` | Additional hostnames for the multi-site feature, space-separated (quotes optional), e.g. `docs.example.com team.example.com`. Caddy obtains a certificate for each and routes them all to WikiKT. Leave unset if you serve a single hostname. |
+
+The distinction matters for multi-site setups: these two tell **Caddy** which names to hold certificates
+for, while the sites themselves are created in **Administration | Sites**, which is what WikiKT matches
+the request `Host` against. Both are required, and neither implies the other — see
+[Multiple sites on one instance](#multiple-sites-on-one-instance). They also only apply to the bundled
+Caddy stack; [`docker-compose.home.yml`](../docker-compose.home.yml) has no Caddy, so there certificates
+and hostname routing are your own proxy's job and neither variable does anything.
 
 ## Asset delivery
 

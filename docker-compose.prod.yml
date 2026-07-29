@@ -21,6 +21,13 @@ services:
 
   wikikt:
     build: .
+    # Pass the whole .env through to the app, so any WIKIKT_* setting from the reference table in
+    # docs/install.md can be set there without editing this file. The `environment:` block below still
+    # wins for anything it names -- the hardened settings (production mode, TLS posture, the database
+    # wiring) cannot be weakened from .env.
+    env_file:
+      - path: .env
+        required: false
     environment:
       WIKIKT_ENV: production
       WIKIKT_DATABASE_TYPE: postgres
@@ -37,9 +44,10 @@ services:
       # Caddy terminates TLS in front of this; honor X-Forwarded-* and mark cookie secure.
       WIKIKT_TRUST_PROXY: "true"
       WIKIKT_SESSION_SECURE_COOKIE: "true"
-      # Canonical public URL for links placed in outbound email (password reset, welcome). Derived from
-      # the domain Caddy serves, so those links never trust a client-supplied Host header.
-      WIKIKT_PUBLIC_URL: "https://${WIKIKT_DOMAIN}"
+      # Canonical public URL for links placed in outbound email (password reset, welcome). Defaults to
+      # the domain Caddy serves, so those links never trust a client-supplied Host header. Set
+      # WIKIKT_PUBLIC_URL in .env to override (e.g. a non-standard port or a path prefix).
+      WIKIKT_PUBLIC_URL: ${WIKIKT_PUBLIC_URL:-https://${WIKIKT_DOMAIN}}
       # Asset delivery:
       # Where frontend libraries and webfonts load from: "cdn" (default) or "local" (to serve the copies
       # bundled in the image). Set all three in .env for a fully local install; see docs/install.md ("Asset delivery").
