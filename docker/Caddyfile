@@ -17,7 +17,10 @@
     reverse_proxy wikikt:8080
 
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # No includeSubDomains: a self-hosted wiki often shares its parent domain with other services,
+        # and HSTS includeSubDomains would force HTTPS on all of them. Matches the app's own HSTS header
+        # (Security.kt), so the value is consistent whether it comes from Caddy or passes through.
+        Strict-Transport-Security "max-age=63072000"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "SAMEORIGIN"
         Referrer-Policy "strict-origin-when-cross-origin"

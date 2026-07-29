@@ -80,13 +80,21 @@ data class WikiKtConfig(
      */
     val mfaEncryptionKey: ByteArray,
     /**
-     * Hard kill switch for the release update check (`wikikt.updateCheck` / `WIKIKT_UPDATE_CHECK`).
-     * Set to `off` to guarantee the app never contacts api.github.com, regardless of what any admin
-     * enables in the web UI — an operator-level, airgap/compliance control like the asset-source
-     * knobs, which is why it's static config and not a database setting. When allowed (the default),
-     * checks still only happen after a root admin explicitly enables them on the Updates page.
+     * The two directories of the optional self-update handshake with the `wikikt-updater` sidecar
+     * container (`wikikt.update.requestDir` / `WIKIKT_UPDATE_REQUEST_DIR` and `wikikt.update.stateDir`
+     * / `WIKIKT_UPDATE_STATE_DIR`). The app *writes* `request.json` into the request dir (its volume
+     * is mounted read-only in the updater) and *reads* `updater.json`/`status.json` from the state dir
+     * (mounted read-only here, read-write in the updater) — direction is enforced by the mounts, so a
+     * compromised app can ring the doorbell but can never forge the updater's status. Both unset (the
+     * default outside the Docker stack) means the self-update half of the Updates page doesn't exist.
      */
-    val updateCheckAllowed: Boolean,
+    val selfUpdate: SelfUpdateDirsConfig?,
+)
+
+/** See [WikiKtConfig.selfUpdate]. Present only when BOTH directories are configured. */
+data class SelfUpdateDirsConfig(
+    val requestDir: java.nio.file.Path,
+    val stateDir: java.nio.file.Path,
 )
 
 /** Where the git-sync working clone lives. The sync settings themselves (repo URL, mode, auth)
@@ -194,8 +202,7 @@ fun Application.loadWikiKtConfig(): WikiKtConfig {
         minPasswordLength = environment.config.envOrConfig("wikikt.security.minPasswordLength", "WIKIKT_MIN_PASSWORD_LENGTH")
             ?.toIntOrNull()?.coerceIn(1, PasswordPolicy.MAX_BYTES) ?: PasswordPolicy.DEFAULT_MIN_LENGTH,
         mfaEncryptionKey = environment.config.loadMfaKey(),
-        updateCheckAllowed = environment.config.envOrConfig("wikikt.updateCheck", "WIKIKT_UPDATE_CHECK")
-            ?.trim()?.lowercase() !in setOf("off", "false", "0", "disabled"),
+        selfUpdate = environment.config.loadSelfUpdateDirsConfig(),
     )
 }
 
@@ -226,6 +233,17 @@ internal fun ApplicationConfig.loadMfaKey(): ByteArray {
         "wikikt.security.mfaKey must decode to 16, 24, or 32 bytes (AES key); got ${key.size}"
     }
     return key
+}
+
+internal fun ApplicationConfig.loadSelfUpdateDirsConfig(): SelfUpdateDirsConfig? {
+    val request = envOrConfig("wikikt.update.requestDir", "WIKIKT_UPDATE_REQUEST_DIR")?.trim()?.ifBlank { null }
+    val state = envOrConfig("wikikt.update.stateDir", "WIKIKT_UPDATE_STATE_DIR")?.trim()?.ifBlank { null }
+    // Half a handshake is no handshake: require both or treat self-update as not configured.
+    if (request == null || state == null) return null
+    return SelfUpdateDirsConfig(
+        requestDir = java.nio.file.Path.of(request).toAbsolutePath().normalize(),
+        stateDir = java.nio.file.Path.of(state).toAbsolutePath().normalize(),
+    )
 }
 
 internal fun ApplicationConfig.loadGitSyncDirConfig(): GitSyncDirConfig {

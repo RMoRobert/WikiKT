@@ -13,6 +13,7 @@ import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.testApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AdminDashboardTest {
@@ -62,5 +63,12 @@ class AdminDashboardTest {
         // Recent logins: the admin who just logged in shows up.
         assertTrue(html.contains("Recent logins"), "recent logins panel")
         assertTrue(html.contains("admin"), "logged-in admin appears")
+
+        // The "update available" link is absent here, and its absence is structural rather than
+        // incidental: tests run as a dev build (no `builtAt` stamp), so UpdateService.availableIfKnown
+        // short-circuits on `releaseBuild` before reading consent, the cache, or the network. Which is
+        // the property worth pinning — rendering the dashboard must never reach github.com. The badge's
+        // own logic (weekly refresh, consent gate, cold cache) is covered in UpdateServiceTest.
+        assertFalse(html.contains("Update available"), "no update badge on a dev build")
     }
 }

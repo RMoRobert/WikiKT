@@ -80,7 +80,30 @@ Two gotchas when *dropping* a table:
 >   it, so a dropped-and-unlisted table is correctly absent from both sides). Once no shipped migration
 >   references it (e.g. after a baseline consolidation), the dead object can be deleted outright.
 
-### 3. Let the drift test write the SQL for you (optional but handy)
+### 3. Bump the Docker image's schema-version label
+Adding a migration raises `MIGRATIONS.maxOf { it.version }`, and that number is baked into the built
+image as the `com.wikikt.schema-version` OCI label. Update the Dockerfile to match:
+
+```dockerfile
+ARG WIKIKT_SCHEMA_VERSION=<new max version>
+```
+
+**Why it matters:** the `wikikt-updater` sidecar compares this label on the pulled image against the
+running one to decide whether a failed one-click update may **auto-roll-back** — rollback is only safe
+when the schema is unchanged, because migrations are forward-only (there are no down-migrations). A
+stale label would let the updater roll the image back under a database that has already migrated.
+`BuildInfoTest` pins the label to the code (it asserts `ARG WIKIKT_SCHEMA_VERSION` equals
+`MIGRATIONS.maxOf { it.version }`), so forgetting this bump fails the build rather than shipping a
+broken guard. The publish workflow reads the ARG into the release's update manifest, so nothing else
+needs touching for a schema bump.
+
+> **Compose revision is separate.** Also bump `ARG WIKIKT_COMPOSE_REVISION` (same Dockerfile) **only**
+> when a release needs a `docker-compose` change that an image pull can't deliver — a new service,
+> volume, or required env var. The updater refuses (`blocked`) a one-click update whose image asks for a
+> higher compose revision than the running stack, so the operator edits their compose file by hand
+> first. A plain schema migration does **not** need a compose-revision bump.
+
+### 4. Let the drift test write the SQL for you (optional but handy)
 After changing a table, run the drift test:
 
 ```
@@ -91,7 +114,7 @@ If your table no longer matches the migrations, it **fails and prints the exact 
 reconcile them — paste that into your new `Migration` (after reviewing it). When it passes again,
 your tables and migrations are in sync.
 
-### 4. Run it
+### 5. Run it
 `./gradlew run` (or any startup) applies pending migrations in version order and records them in
 `schema_migrations`. Already-applied versions are skipped.
 
@@ -110,6 +133,9 @@ your tables and migrations are in sync.
 - **Never add new tables to V1 (`baseline`).** Once V1 has shipped to a real database it is frozen;
   new tables get their own migration, or fresh and existing databases will diverge.
 - **Keep migrations ordered and gap-free** by version number.
+- **Bump the Dockerfile `ARG WIKIKT_SCHEMA_VERSION`** to the new max version whenever you add a
+  migration (see step 3). `BuildInfoTest` enforces it, and the updater's auto-rollback safety depends
+  on it.
 - **Review generated SQL.** `MigrationUtils` can emit destructive `DROP` statements and does not
   reliably detect column *type* changes on Postgres (only H2). Read what you paste.
 

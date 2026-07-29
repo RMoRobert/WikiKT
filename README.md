@@ -2,7 +2,7 @@
 
 WikiKT is a self-hosted wiki/documentation server written in
 Kotlin and built using [Ktor](https://ktor.io), Exposed, and other Kotlin-friendly
-technologies as describe in the [Stack](#stack) section below.
+technologies as described in the [Stack](#stack) section below.
 
 Pages are authored in Markdown or HTML (Markdown preferred) and optionally
 offer revision history. Pages and assets (images) are stored in file-system-like paths (not

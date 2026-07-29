@@ -2,7 +2,10 @@ package com.wikikt.service
 
 import com.wikikt.BuildInfo
 import com.wikikt.model.nowMillis
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -25,13 +28,32 @@ data class ReleaseInfo(
     val htmlUrl: String,
     /** ISO-8601 publish timestamp as GitHub reports it, or null. */
     val publishedAt: String?,
+    /** The release's `update-manifest.json` asset, or null (older release / asset fetch failed). */
+    val manifest: UpdateManifest? = null,
+)
+
+/**
+ * Versioned release metadata published as an `update-manifest.json` asset by the release workflow.
+ * This is the app-side *advisory* copy of the guardrails; the updater sidecar independently enforces
+ * the same bounds from OCI image labels (which a compromised app cannot influence). Null/absent
+ * fields degrade to "no advisory" — never to "go ahead".
+ */
+@kotlinx.serialization.Serializable
+data class UpdateManifest(
+    val schema: Int = 0,
+    val version: String? = null,
+    /** The release's DB schema version (`MIGRATIONS.maxOf { it.version }` at build time). */
+    val schemaVersion: Int? = null,
+    /** Bumped when the Compose files change in a way an image pull can't deliver. */
+    val composeRevision: Int? = null,
+    /** Oldest running version this release upgrades cleanly from. */
+    val minUpgradeFrom: String? = null,
+    /** False = this release must not be one-click installed (the page hides Install). */
+    val selfUpdatable: Boolean = true,
 )
 
 /** Outcome of an update check. Every state renders; none of them ever throws into a page. */
 sealed interface UpdateCheck {
-    /** The WIKIKT_UPDATE_CHECK kill switch is set: no network call can happen, UI cannot override. */
-    data object Disabled : UpdateCheck
-
     /** No admin has opted in yet (or an admin declined) — the page shows the consent card, no I/O. */
     data object NotEnabled : UpdateCheck
 
@@ -48,9 +70,20 @@ sealed interface UpdateCheck {
 
 /**
  * Lazily checks the GitHub Releases API for a newer WikiKT release. "Lazily" is load-bearing: there
- * is no background poller — a check happens only when a root admin views Administration > Updates
- * (and the cached result is stale), or presses "Check now". The request is deliberately anonymous
- * and constant: no version, hostname, or identifier is ever sent (the Updates page promises this).
+ * is no background poller and nothing is scheduled. A request happens only when a root admin is
+ * already looking at the admin console, in one of three ways:
+ *
+ *  - **Administration > Updates** ([check], 24 h TTL) — the page's whole purpose, so it waits for the
+ *    result inline;
+ *  - **"Check now"** on that page ([check] with `force`), rate-limited to once per
+ *    [FORCE_MIN_INTERVAL_MS];
+ *  - **the Administration dashboard** ([availableIfKnown], [PASSIVE_REFRESH_MS] TTL) — a passive
+ *    "update available" badge, which never waits: it renders from cache and refreshes in the
+ *    background for the *next* load.
+ *
+ * All three are gated on the admin's opt-in, so an instance with checks disabled makes no request
+ * ever. The request itself is deliberately anonymous and constant: no version, hostname, or
+ * identifier is sent (the Updates page promises this).
  *
  * The result cache is in-memory only. It is instance-wide, 24 h fresh, and losing it on restart
  * costs exactly one HTTP GET — not worth a database row, and `app_settings` is per-site anyway.
@@ -59,13 +92,17 @@ sealed interface UpdateCheck {
  */
 class UpdateService(
     private val settings: SettingsService,
-    /** WikiKtConfig.updateCheckAllowed — the WIKIKT_UPDATE_CHECK kill switch. */
-    private val allowed: Boolean,
     private val currentVersion: String = BuildInfo.version,
     private val releaseBuild: Boolean = BuildInfo.isRelease,
     /** Test seam (mirrors EmailService's injected sender): returns the response body, throws on failure. */
     private val fetch: suspend (url: String) -> String = ::fetchViaJdkClient,
     private val clock: () -> Long = ::nowMillis,
+    /**
+     * Scope for the dashboard's background refresh. Detached for the same reason as
+     * `GitSyncService.runScope`: a request's call scope is cancelled once the response is sent, which
+     * would abort every refresh the dashboard starts. Tests inject a scope they can join.
+     */
+    private val refreshScope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ) {
     private val logger = LoggerFactory.getLogger(UpdateService::class.java)
 
@@ -86,12 +123,35 @@ class UpdateService(
     }
 
     /**
+     * "An update is available", for a passive badge (the Administration dashboard) — or null when
+     * there is no update, none is known yet, or checks are off. **Never performs I/O on the calling
+     * coroutine.** The dashboard is where every admin lands, so it must not wait on github.com; a
+     * 5 s connect timeout on a box with no egress would be felt on every visit.
+     *
+     * Instead, when the cache is missing or older than [maxAge], a refresh is started in
+     * [refreshScope] and this returns the *pre-refresh* state — so a newly-found release appears on
+     * the next dashboard load. Consent is checked first, so a disabled instance never even reads the
+     * cache, let alone refreshes it.
+     */
+    suspend fun availableIfKnown(maxAge: Long = PASSIVE_REFRESH_MS): UpdateCheck.Available? {
+        if (!releaseBuild) return null
+        if (optIn() != true) return null
+
+        val snapshot = cached
+        // isLocked is a cheap "already refreshing" guard. Without it, a hung fetch would strand one
+        // coroutine per dashboard view behind the mutex; with it they collapse to the one in flight.
+        if ((snapshot == null || (clock() - snapshot.at) >= maxAge) && !inFlight.isLocked) {
+            refreshScope.launch { runCatching { check() } }
+        }
+        return snapshot?.result as? UpdateCheck.Available
+    }
+
+    /**
      * The current update status, from cache when fresh. [force] bypasses the TTL ("Check now") but is
      * itself rate-limited to once per [FORCE_MIN_INTERVAL_MS] so the button can't hammer GitHub.
      * Never throws: network/parse problems come back as [UpdateCheck.Failed].
      */
     suspend fun check(force: Boolean = false): UpdateCheck {
-        if (!allowed) return UpdateCheck.Disabled
         if (!releaseBuild) return UpdateCheck.NotApplicable
         if (optIn() != true) return UpdateCheck.NotEnabled
 
@@ -140,17 +200,49 @@ class UpdateService(
                 tag = tag,
                 htmlUrl = obj["html_url"]?.jsonPrimitive?.content ?: RELEASES_PAGE_URL,
                 publishedAt = obj["published_at"]?.jsonPrimitive?.content,
+                manifest = fetchManifest(obj),
             ),
             now,
         )
     }
 
+    /**
+     * Fetches the release's `update-manifest.json` asset, if published. Failure here never fails the
+     * check — the manifest is advisory (pre-click warnings, Install gating); the updater re-derives
+     * the same guardrails from image labels regardless. Only the manifest's own download URL as
+     * reported by the GitHub API is fetched — never a URL from any other source.
+     */
+    private suspend fun fetchManifest(release: kotlinx.serialization.json.JsonObject): UpdateManifest? = runCatching {
+        val assets = release["assets"] as? kotlinx.serialization.json.JsonArray ?: return null
+        val url = assets.asSequence()
+            .mapNotNull { it as? kotlinx.serialization.json.JsonObject }
+            .firstOrNull { it["name"]?.jsonPrimitive?.content == MANIFEST_ASSET_NAME }
+            ?.get("browser_download_url")?.jsonPrimitive?.content
+            ?.takeIf { it.startsWith("https://") }
+            ?: return null
+        Json { ignoreUnknownKeys = true }.decodeFromString<UpdateManifest>(fetch(url)).takeIf { it.schema == 1 }
+    }.getOrElse { e ->
+        logger.debug("update-manifest.json fetch failed", e)
+        null
+    }
+
     companion object {
         const val LATEST_RELEASE_URL = "https://api.github.com/repos/RMoRobert/WikiKT/releases/latest"
+
+        /** Release-asset filename the publish workflow uploads; see UpdateManifest. */
+        const val MANIFEST_ASSET_NAME = "update-manifest.json"
         const val RELEASES_PAGE_URL = "https://github.com/RMoRobert/WikiKT/releases"
         const val SUCCESS_TTL_MS = 24 * 60 * 60 * 1000L
         const val FAILURE_TTL_MS = 60 * 60 * 1000L
         const val FORCE_MIN_INTERVAL_MS = 5 * 60 * 1000L
+
+        /**
+         * How stale the cache may get before a dashboard view refreshes it in the background
+         * ([availableIfKnown]). Deliberately far longer than [SUCCESS_TTL_MS]: the badge is a
+         * courtesy, and anyone actually chasing an update opens Administration > Updates, which
+         * checks on the daily TTL. Weekly keeps a busy console down to ~52 requests a year.
+         */
+        const val PASSIVE_REFRESH_MS = 7 * 24 * 60 * 60 * 1000L
 
         /** Reject bodies past this size instead of buffering them (a hijacked endpoint must not OOM us). */
         const val MAX_RESPONSE_BYTES = 256 * 1024

@@ -338,10 +338,21 @@ class SettingsService(private val database: R2dbcDatabase) {
          * Release update check opt-in (Administration > Updates, root only). Instance-wide, so it's
          * read/written via [instanceAnchorSiteId], not the admin's selected site. Tri-state: absent =
          * never asked (the page shows a consent card and performs NO network call), "true" = enabled,
-         * "false" = explicitly declined. The WIKIKT_UPDATE_CHECK=off config kill switch overrides this
-         * entirely (see WikiKtConfig.updateCheckAllowed).
+         * "false" = explicitly declined. This is the only control over the check: unset or false and
+         * the app never contacts api.github.com.
          */
         const val UPDATE_CHECK_ENABLED = "update.checkEnabled"
+
+        /**
+         * Audit breadcrumb of the last self-update request (who clicked Install, when, from which
+         * version). Instance-wide like [UPDATE_CHECK_ENABLED]. Written just before the request file;
+         * survives the app's own replacement so the new instance can corroborate the updater's
+         * status.json with "requested by X at Y". Not secrets; fine in backups.
+         */
+        const val UPDATE_LAST_REQUEST_ID = "update.lastRequestId"
+        const val UPDATE_LAST_REQUESTED_AT = "update.lastRequestedAt"
+        const val UPDATE_LAST_REQUESTED_BY = "update.lastRequestedBy"
+        const val UPDATE_LAST_REQUESTED_FROM = "update.lastRequestedFrom"
 
         /**
          * Settings whose values are plaintext credentials. A full backup NEVER writes these into its

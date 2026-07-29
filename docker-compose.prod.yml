@@ -22,10 +22,10 @@ services:
   wikikt:
     # Pulls the prebuilt app image from the GitHub Container Registry -- no JDK, Gradle, or build
     # memory needed on this server. `latest` is the newest release; pin a specific version by
-    # replacing it (e.g. :0.2.0). See docker/README.md ("Pull a prebuilt image from GHCR") for tags.
+    # replacing it (e.g. :1.2.0). See docker/README.md ("Pull a prebuilt image from GHCR") for tags.
     image: ghcr.io/rmorobert/wikikt:latest
     # ...or compile WikiKT from this checkout instead (needs far more memory than running it does):
-    # comment out the `image:` line, uncomment `build: .`, and start with `--build`.
+    # comment out the `image:` line above, uncomment `build: .` below, and start with `--build`.
     # build: .
     # Pass the whole .env through to the app, so any WIKIKT_* setting from the reference table in
     # docs/install.md can be set there without editing this file. The `environment:` block below still
@@ -61,12 +61,22 @@ services:
       WIKIKT_UI_ICON_FONT_SOURCE: ${WIKIKT_UI_ICON_FONT_SOURCE:-cdn}     # icons (~750KB); if unavailable, gaps in UI
       WIKIKT_UI_EMOJI_FONT_SOURCE: ${WIKIKT_UI_EMOJI_FONT_SOURCE:-cdn}   # emoji font (~2MB); if unavailable, uses OS emoji
       # inline (B): set the literal value, e.g. WIKIKT_UI_ASSET_SOURCE: "local"
+      # Self-update handshake with the optional wikikt-updater service (see that below). Inert unless
+      # that service is enabled via `--profile selfupdate`.
+      WIKIKT_UPDATE_REQUEST_DIR: /app/update/req
+      WIKIKT_UPDATE_STATE_DIR: /app/update/state
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       # Uploaded assets + the git-sync working clone if Git sync enabled (note: database itself lives in postgres_data)
       - wikikt_data:/app/data
+      # Self-update handshake volumes, one per direction — the app can only *write* the request and
+      # only *read* the updater's status/heartbeat, enforced by these mounts (the updater mounts them
+      # the other way around). Two empty volumes cost nothing when the updater profile is off, and
+      # keeping them unconditional means enabling self-update never recreates the app container.
+      - wikikt_update_req:/app/update/req
+      - wikikt_update_state:/app/update/state:ro
     expose:
       - "8080"
     restart: unless-stopped
@@ -75,6 +85,41 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
+
+  # One-click updates from Administration > Updates. Runs by default when .env carries
+  # COMPOSE_PROFILES=selfupdate — which the shipped .env.example does — so a standard install gets
+  # the Install update button out of the box. For an offline / no-socket deployment, comment that
+  # line out of .env (or run without it): the profile then never activates and nothing else changes.
+  # One-off alternative: docker compose -f docker-compose.prod.yml --profile selfupdate up -d
+  #
+  # TRUST NOTE: this container holds /var/run/docker.sock, which is root-equivalent on the host.
+  # That is why it is a separate container and the WikiKT app itself never gets the socket.
+  # The app can only ring a "doorbell" file; the updater decides everything else from its own
+  # environment, the compose file, and image labels. See docker/README.md ("One-click updates").
+  wikikt-updater:
+    profiles: ["selfupdate"]
+    image: ghcr.io/rmorobert/wikikt-updater:latest
+    restart: unless-stopped
+    # `docker compose pull` is executed by the host's Docker daemon via the socket, so this container
+    # needs no network of its own; every guardrail is read from image labels, offline.
+    network_mode: none
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      # Must be the absolute host path of the directory holding this compose file. `docker compose`
+      # run inside a container resolves relative bind-mount sources (like ./docker/Caddyfile above)
+      # against the *host* filesystem, so  project must be visible at its own host path (or `up -d`
+      # would silently assemble a different stack). The default matches the install location the docs
+      # recommend (docs/install.md clones to /opt/wikikt); set WIKIKT_COMPOSE_DIR in .env if yours differs.
+      WIKIKT_COMPOSE_DIR: ${WIKIKT_COMPOSE_DIR:-/opt/wikikt}
+      WIKIKT_SERVICE: wikikt
+      WIKIKT_DB_SERVICE: postgres
+      WIKIKT_HEALTH_TIMEOUT: "180"
+    volumes:
+      # Root-equivalent on the host; enabling this profile is a deliberate trust decision.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${WIKIKT_COMPOSE_DIR:-/opt/wikikt}:${WIKIKT_COMPOSE_DIR:-/opt/wikikt}:ro
+      - wikikt_update_req:/req:ro
+      - wikikt_update_state:/state
 
   caddy:
     image: caddy:2
@@ -100,3 +145,5 @@ volumes:
   wikikt_data:
   caddy_data:
   caddy_config:
+  wikikt_update_req:
+  wikikt_update_state:

@@ -106,6 +106,14 @@ object DateDisplay {
     /** Date only (no time), in the viewer's zone and long-date preference. */
     fun formatDate(millis: Long, formats: DisplayFormats): String = formats.formatLongDate(millis)
 
+    /**
+     * Fixed machine-style UTC stamp (e.g. `2026-07-29 14:05 UTC`) for build/release metadata, where a
+     * stable, viewer-independent rendering matters more than locale preferences.
+     */
+    fun formatUtc(millis: Long): String = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).format(UTC_STAMP)
+
+    private val UTC_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'", Locale.ROOT)
+
     /** The value for an `<input type="datetime-local">` — wall-clock time in [zone] (or "" for null). */
     fun toInput(millis: Long?, zone: ZoneId): String =
         millis?.let { Instant.ofEpochMilli(it).atZone(zone).format(DATETIME_LOCAL) } ?: ""

@@ -133,6 +133,9 @@ TLS becomes your responsibility -- .e.g, point your proxy at `http://<host>:8080
 A self-signed cert can work, although not suggested for other than local, personal use or testing;
 it keeps you in production mode without needing a public domain. To ship a prebuilt
 image rather than build on the box, see the `docker save | docker load` comment in the Compose file.
+If you switch to the GHCR image, also consider enabling
+[one-click updates](#one-click-updates-optional-updater-container) — suggested there, though off by
+default to keep this stack offline-friendly.
 
 The **Upgrades**, **Backups**, and **Logs & health** sections below apply to this type of deployment too,
 in general; just substitute `-f docker-compose.home.yml` for `-f docker-compose.prod.yml`.
@@ -172,10 +175,11 @@ docker compose -f docker-compose.prod.yml pull wikikt && docker compose -f docke
 ```
 
 **First-time setup (repo owner):** *(this is done in the official repo already, so this note is for
-developers who clone or fork for their own use)* The first workflow run creates the package as **private**, so pulls
-from a server will fail with "denied" or "manifest unknown" until it is published. On GitHub go to the
-package (Profile/repo | **Packages** | `wikikt`) → **Package settings** | **Change visibility** |
-**Public**. To deliberately keep it private instead, the server must authenticate before pulling:
+developers who clone or fork for their own use)* Ensure that your first workflow run did not create
+the package as private if you need public access (e.g., for easy deployment). On GitHub, go to each
+package (Profile/repo | **Packages** | `wikikt` — **and `wikikt-updater`** if you ship the `selfupdate`
+profile, which `.env.example` enables by default) → **Package settings** | **Change visibility** |
+**Public**. If you do keep them private instead, the server must authenticate before pulling:
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
@@ -191,7 +195,7 @@ from `version` in `build.gradle.kts`, baked into `wikikt.properties` at build ti
 stamped from the git tag instead, i.e., a published image always reports its own tag. The workflow hands
 the tag to the Dockerfile's `WIKIKT_VERSION` build arg, which becomes `-PwikiktVersion` for Gradle. Branch
 builds pass nothing and keep the `-SNAPSHOT` version from `build.gradle.kts`, correctly distinguishing
-these from "real" relases. Bumping `build.gradle.kts` in the same commit is still good practice, however,
+these from "real" releases. Bumping `build.gradle.kts` in the same commit is still good practice, however,
 so "manual" builds from source at that tag report the corresponding version accurately, too.
 
 **Steps:**
@@ -253,9 +257,12 @@ To upgrade later, repeat steps 1–2 to load a newer `wikikt:latest`, then run `
 
 **Update notifications:** a root admin can enable release checks under **Administration > Updates**
 in the WikiKT UI. When enabled, opening that page (at most once a day) compares the running version
-against the latest GitHub release and shows the upgrade steps; it is opt-in, contacts only
-`api.github.com`, and sends nothing about your instance. `WIKIKT_UPDATE_CHECK=off` disables it
-entirely. The upgrade itself is the manual step below.
+against the latest GitHub release and shows the upgrade steps, and the Administration dashboard grows
+an "update available" link (re-checked at most weekly, in the background, so the dashboard never waits
+on the network). It is opt-in, contacts only `api.github.com`, and sends nothing about your instance:
+until an admin enables it, no request is ever made -- and the same page turns it back off. There is no
+background poller; checks only happen while a root admin has the console open. The upgrade itself is
+the manual step below.
 
 If you run the **prebuilt image** (the prod default), upgrading is a pull:
 
@@ -273,17 +280,120 @@ docker compose -f docker-compose.home.yml up -d
 ```
 
 Either way: database, uploads, and certificates persist in their volumes, and schema migrations run
-automatically at startup. Taking a backup first (**Administration > Backup**) is always a good idea.
+automatically at startup. Taking a backup first (**Administration > Storage and backup**) is always a good idea.
+
+## One-click updates (optional updater container)
+
+Both Compose files carry a `wikikt-updater` service (behind the `selfupdate` compose profile) that
+turns the pull-and-restart above into an **Install update** button on **Administration > Updates**.
+It is the **default for the production stack** — `.env.example` (and the quick-setup snippet in
+docs/install.md) ships `COMPOSE_PROFILES=selfupdate`, which activates the profile on a plain
+`up -d`. For `docker-compose.home.yml` it stays **off by default** (the home default builds from
+source, which has nothing to pull) but is suggested once you switch to the GHCR image — uncomment
+`COMPOSE_PROFILES=selfupdate` in your `.env` (see `.env.home.example`).
+
+**Prefer an offline / no-socket deployment?** Remove (or leave commented) the `COMPOSE_PROFILES`
+line in `.env` — the updater then never starts, nothing else changes, and the Updates page shows
+copy-paste upgrade commands instead of the button. That line is the whole switch, in both
+directions.
+
+When a root admin clicks **Install update**, the updater:
+
+1. takes a `pg_dump` of the database into the `wikikt_update_state` volume (aborts if this fails),
+2. pulls whatever image the Compose file resolves to (never a version the app chooses),
+3. compares guardrail labels between the pulled and running images, and **refuses** — touching
+   nothing — if the release needs a Compose-file change or a stepwise upgrade,
+4. restarts *only* the `wikikt` service (`up -d --no-deps`),
+5. waits for the new container's healthcheck, and **rolls back to the previous image** if it never
+   reports healthy — unless the new version already migrated the database schema, in which case it
+   stops and tells you exactly which backup to restore (migrations are forward-only; rolling the
+   image back would not roll the database back).
+
+**Using H2 instead of PostgreSQL?** Step 1 only runs against a PostgreSQL service (it is a
+`pg_dump`). On an H2 setup -- the alternative offered in `docker-compose.home.yml`, where the
+database is a file inside the app volume rather than its own service -- the updater finds no such
+service and **skips the pre-update backup**, then continues with the update. That matters most in
+the one case you would want it: if the new version fails its health check *and* had already migrated
+the schema, the updater deliberately does not roll back, so there is nothing to fall back to. **Take
+a full backup yourself (Administration > Storage and backup > full export) before clicking Install update on an
+H2 instance.** (PostgreSQL setups need no such care: a failed `pg_dump` aborts the update outright.)
+
+**A note on trust (read before enabling):** The updater mounts `/var/run/docker.sock`, which is
+root-equivalent on the host. That is exactly why it is a separate container: WikiKT itself never
+gets the socket, so compromising the (likely Internet-facing) app does not compromise the host. The app can
+only write a small "doorbell" file into a volume the updater reads; the updater takes nothing else
+from it -- its target comes from its own environment and the Compose file, and every safety decision
+is made from image labels via `docker inspect`. The two handshake volumes are mounted in opposite
+directions (app can write requests but only read status), so a compromised app also cannot forge an
+update's outcome. If holding the socket anywhere is unacceptable in your environment,
+drop the `COMPOSE_PROFILES` line as described below; everything else on the Updates page still works.
+
+### Enabling / disabling
+
+Persistent, either stack — in `.env`:
+
+```bash
+COMPOSE_PROFILES=selfupdate   # present = updater runs; absent = it doesn't
+```
+
+then `docker compose -f <file> up -d` (when turning it *off*, add `--remove-orphans` so the stopped
+updater container is cleaned up). One-off without touching `.env`:
+
+```bash
+docker compose -f docker-compose.prod.yml --profile selfupdate up -d
+```
+
+If the project lives at `/opt/wikikt` (the install location [docs/install.md](../docs/install.md)
+recommends), that is all. Anywhere else, also set the ABSOLUTE host path of the directory holding
+the compose file in `.env`:
+
+```bash
+WIKIKT_COMPOSE_DIR=/srv/wikikt   # example — must be exact
+```
+
+This must be exact (`docker compose` running inside the updater resolves relative bind-mount
+sources against the HOST filesystem; the project is therefore mounted into the updater at its own
+host path). An incorrect value will fail and the updater will report "Compose file(s) not visible,"
+and this should be a safe failure that won't inadvertently act on a different stack.
+
+The app detects the updater by its heartbeat file, so the Updates page reflects it within a few
+seconds. For `docker-compose.home.yml` the same applies, but the `wikikt` service must first be
+switched to the GHCR `image:` alternative -- a `build: .` service has nothing to pull. The updater
+cannot update *itself*; refresh it if ever necessary with
+`docker compose --profile selfupdate pull wikikt-updater && docker compose --profile selfupdate up -d`.
+
+While an update runs, the page auto-refreshes and briefly shows a connection error when WikiKT
+itself restarts. That is expected, as it reconnects to the new version and reports the outcome. Pre-update
+database dumps live in the `wikikt_update_state` volume under `backups/` (last 3 kept). They are not
+files on the host — the `wikikt` container has that volume mounted read-only at `/app/update/state`, so
+stream the dump straight out of it to restore (`-T` on both execs, or a TTY corrupts the piped bytes):
+
+```bash
+# List the available dumps:
+docker compose -f docker-compose.prod.yml exec -T wikikt ls -1 /app/update/state/backups
+# Restore the one you want (replace <epoch> with its timestamp):
+docker compose -f docker-compose.prod.yml exec -T wikikt cat /app/update/state/backups/pre-update-<epoch>.dump \
+  | docker compose -f docker-compose.prod.yml exec -T postgres pg_restore -U wikikt -d wikikt --clean
+```
+
+### Manual test matrix (for updater changes)
+
+The updater is deliberately not unit-tested shell; `shellcheck` runs in CI, `updater.sh --dry-run`
+prints the exact commands a pending request would execute, and changes should be walked through this
+matrix on a scratch VM: happy path; no-op when already current; health-gate failure with rollback;
+health-gate failure with a schema change (must *not* roll back); `blocked` on a compose-revision bump;
+malformed request ignored; replayed requestId ignored; updater killed mid-run (page shows "status
+unknown" after ~15 min).
 
 ## Backups
 
 Two methods, depending on your needs:
 
-- **Application backups**: **Administration > Backup** in WikiKT gives a ZIP file of either content
+- **Application backups**: **Administration > Storage and backup** in WikiKT gives a ZIP file of either content
   only or complete site (including accounts, configuration, etc.). Git Sync in (at least) push mode is another
   option for a continuous off-site mirror of content.
 - **Infrastructure backups**: snapshot the volumes, or execute a command like
-  `docker compose -f docker-compose.prod.yml exec postgres pg_dump -U wikikt wikikt > backup.sql`.
+  `docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U wikikt wikikt > backup.sql`.
 
 ## Logs & health
 

@@ -2,6 +2,7 @@ package com.wikikt
 
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.cookies.HttpCookies
+import io.ktor.client.request.delete
 import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -239,6 +240,42 @@ class PrivilegeEscalationGuardTest {
     }
 
     @Test
+    fun `manage users cannot delete a root account`() = testApplication {
+        lateinit var app: Application
+        environment { config = h2Config("wikikt-privesc-delete") }
+        application { app = this; configure() }
+
+        val admin = newClient()
+        val adminCsrf = admin.apiLogin("admin", "test")
+        val userAdmins = admin.createGroup(adminCsrf, "User Admins", listOf("manage:users"))
+        admin.createUser(adminCsrf, "ualtd", "pw-ualtd", listOf(userAdmins))
+        admin.createUser(adminCsrf, "victim", "pw-victim", emptyList())
+
+        val victimId = userIdOf(app, "victim")
+        val adminUserId = admin.idOfUserNamed("admin")
+
+        val ua = newClient()
+        val uaCsrf = ua.apiLogin("ualtd", "pw-ualtd")
+
+        // Attack A: delete the root admin via the console form — deleting a system-group member is
+        // root-only, the same delegated-admin→root boundary as the password-reset/MFA guards.
+        val attackConsole = ua.postForm("/a/users/$adminUserId/delete", uaCsrf)
+        assertEquals(HttpStatusCode.Forbidden, attackConsole.status, "manage:users cannot delete the root admin (console)")
+
+        // Attack B: same via the JSON API.
+        val attackApi = ua.deleteReq("/u/v1/users/$adminUserId", uaCsrf)
+        assertEquals(HttpStatusCode.Forbidden, attackApi.status, "manage:users cannot delete the root admin (API)")
+
+        // Proof the root admin still exists (its password still authenticates).
+        assertEquals(HttpStatusCode.OK, newClient().rawLogin("admin", "test").status, "root admin left intact")
+
+        // Control: manage:users MAY delete a normal (non-system) user — proves the form + perms work, so
+        // the 403s above are the authz guard, not a CSRF/permission failure.
+        assertEquals(HttpStatusCode.Found, ua.postForm("/a/users/$victimId/delete", uaCsrf).status, "manage:users may delete a normal user")
+        assertEquals(HttpStatusCode.NotFound, admin.get("/u/v1/users/$victimId").status, "the normal user is gone")
+    }
+
+    @Test
     fun `full backup export requires root`() = testApplication {
         environment { config = h2Config("wikikt-privesc-backup") }
         application { configure() }
@@ -301,6 +338,9 @@ private suspend fun HttpClient.putJson(path: String, csrf: String, body: String)
         header("X-CSRF-Token", csrf)
         setBody(body)
     }
+
+private suspend fun HttpClient.deleteReq(path: String, csrf: String) =
+    delete(path) { header("X-CSRF-Token", csrf) }
 
 /** Form POST with proper URL-encoding (CSRF tokens are base64 and contain +,/,= that a raw body mangles). */
 private suspend fun HttpClient.postForm(path: String, csrf: String, vararg fields: Pair<String, String>) =

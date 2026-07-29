@@ -112,5 +112,14 @@ class AdminUpdatePageTest {
         // "Check now" with CSRF: accepted (and in a dev build performs no I/O at all).
         val check = admin.postForm("/a/updates/check", csrf)
         assertEquals(HttpStatusCode.Found, check.status)
+
+        // Install: CSRF required; with CSRF it PRGs — and in this dev/unconfigured build every
+        // server-side gate (release build, update available, updater heartbeat) is closed, so it
+        // never writes a request no matter what the form claims.
+        val installNoCsrf = admin.postForm("/a/updates/install", csrf = null, "confirmInstall" to "1")
+        assertTrue(installNoCsrf.status != HttpStatusCode.Found, "missing CSRF must not be accepted")
+        val install = admin.postForm("/a/updates/install", csrf, "confirmInstall" to "1")
+        assertEquals(HttpStatusCode.Found, install.status)
+        assertEquals("/a/updates", install.headers["Location"])
     }
 }

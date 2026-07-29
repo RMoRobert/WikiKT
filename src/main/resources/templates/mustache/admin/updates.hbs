@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{! While the updater sidecar is mid-update, reload every few seconds (same pattern as Git sync
+        on the Storage page). Mid-refresh the app container itself restarts; the browser retries and
+        reconnects to the new instance, which renders the terminal status. }}
+    {{#updateRunning}}<meta http-equiv="refresh" content="4">{{/updateRunning}}
     <title>Admin | Updates | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
@@ -10,6 +14,31 @@
 <body>
 {{>partials/admin-shell.hbs}}
     <h1>Updates</h1>
+
+    {{#updateRunning}}
+    <div class="alert alert-info" role="alert"><i class="mdi mdi-loading mdi-spin" aria-hidden="true"></i>
+        <b>Update in progress</b> ({{runPhase}}). {{runMessage}}
+        <div class="small mt-1">This page refreshes automatically. WikiKT itself restarts partway
+        through — a brief connection error in your browser is expected; just wait and it will reload.</div></div>
+    {{/updateRunning}}
+
+    {{#updateAbandoned}}
+    <div class="alert alert-warning" role="alert"><i class="mdi mdi-help-circle-outline" aria-hidden="true"></i>
+        The last update's status is unknown — the updater stopped reporting mid-run. Check
+        <code>docker compose logs wikikt-updater</code> on the server.</div>
+    {{/updateAbandoned}}
+
+    {{#lastOutcome}}
+    {{#outcomeSuccess}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i>
+        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}</div>{{/outcomeSuccess}}
+    {{#outcomeRolledBack}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-undo-variant" aria-hidden="true"></i>
+        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}</div>{{/outcomeRolledBack}}
+    {{#outcomeBlocked}}<div class="alert alert-info" role="alert"><i class="mdi mdi-hand-back-left-outline" aria-hidden="true"></i>
+        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}</div>{{/outcomeBlocked}}
+    {{#outcomeFailed}}<div class="alert alert-danger" role="alert"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i>
+        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}
+        {{#outcomeBackupPath}}<div class="small mt-1">Pre-update backup: <code>{{outcomeBackupPath}}</code> (inside the <code>wikikt_update_state</code> volume).</div>{{/outcomeBackupPath}}</div>{{/outcomeFailed}}
+    {{/lastOutcome}}
 
     {{! Running build info -- always shown, whatever the check state. }}
     <div class="card mb-4">
@@ -24,28 +53,23 @@
 
     {{#stateDevBuild}}
     <div class="alert alert-secondary" role="alert"><i class="mdi mdi-wrench-outline" aria-hidden="true"></i>
-        You are using a development build (<code>{{appVersion}}</code>). Check disabled; only stamped
+        You are using a development build (<code>{{appVersion}}</code>). Automatic check for updates disabled; only stamped
         release builds have a published version to compare against.</div>
     {{/stateDevBuild}}
-
-    {{#stateDisabled}}
-    <div class="alert alert-secondary" role="alert"><i class="mdi mdi-cancel" aria-hidden="true"></i>
-        Update checks are disabled by the server configuration (<code>WIKIKT_UPDATE_CHECK=off</code>).
-        Check the <a href="{{releasesUrl}}" target="_blank" rel="noopener" class="alert-link">releases page</a>
-        to see current release.</div>
-    {{/stateDisabled}}
 
     {{#stateConsent}}
     <div class="card border-primary mb-4">
         <div class="card-header"><i class="mdi mdi-update" aria-hidden="true"></i> Check for new releases?</div>
         <div class="card-body">
-            <p>WikiKT can check for new releases when you open this page. This sends at most
-                one HTTPS request per day to <code>api.github.com</code>. It does not send any information
-                about your site to the server.</p>
+            <p>WikiKT can check for new releases when you open this page (at most once a day), and show
+                an "update available" note on the Administration dashboard (checked at most weekly).
+                This sends an anonymous HTTPS request to <code>api.github.com</code> — no version,
+                hostname, or other information about your site is ever sent. Nothing is requested until
+                you enable it here.</p>
             <form method="post" action="/a/updates/settings" class="d-inline">
                 {{{csrfField}}}
                 <button type="submit" class="btn btn-primary" name="updateChecks" value="enable">Enable automatic update checks</button>
-                <button type="submit" class="btn btn-outline-secondary" name="updateChecks" value="disable">Disable automatic update checks</button>
+                <button type="submit" class="btn btn-outline-secondary" name="updateChecks" value="disable">Keep disabled</button>
             </form>
         </div>
     </div>
@@ -53,7 +77,7 @@
 
     {{#stateDeclined}}
     <div class="alert alert-secondary" role="alert"><i class="mdi mdi-bell-off-outline" aria-hidden="true"></i>
-        Automatic checks for updates are turned off.
+        Automatic checks for updates are disabled.
         <form method="post" action="/a/updates/settings" class="d-inline ms-2">
             {{{csrfField}}}
             <button type="submit" class="btn btn-sm btn-outline-primary" name="updateChecks" value="enable">Enable automatic update checks</button>
@@ -68,14 +92,66 @@
 
     {{#stateFailed}}
     <div class="alert alert-warning" role="alert"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i>
-        {{failMessage}} Last attempt {{checkedAt}}. If this server has no outbound internet access, set
-        <code>WIKIKT_UPDATE_CHECK=off</code> to silence this check.</div>
+        {{failMessage}} Last attempt {{checkedAt}}. If this server has no outbound internet access, use
+        <b>Disable update checks</b> below to silence this.</div>
     {{/stateFailed}}
 
     {{#stateAvailable}}
     <div class="alert alert-info" role="alert"><i class="mdi mdi-arrow-up-circle-outline" aria-hidden="true"></i>
         <b>WikiKT {{latestVersion}} is available</b>. You are running {{appVersion}}.
         <a href="{{latestUrl}}" target="_blank" rel="noopener" class="alert-link">View release details</a>. Last checked: {{checkedAt}}.</div>
+
+    {{#canInstall}}
+    <div class="card border-primary mb-4">
+        <div class="card-header"><i class="mdi mdi-rocket-launch-outline" aria-hidden="true"></i> Install automatically</div>
+        <div class="card-body">
+            <p>The updater container is running. It will {{^dbIsFile}}take a database backup, {{/dbIsFile}}pull the new image,
+                restart WikiKT, verify the new version reports healthy, and roll back automatically if it
+                doesn't. WikiKT restarts partway through — expect a brief connection error on this page.</p>
+            {{#dbIsFile}}
+            {{! The updater's automatic backup is a pg_dump against a database service. On H2 the
+                database is a file in the app volume, so there is no service to dump and that step is
+                skipped -- making the admin's own backup the only one that exists. }}
+            <div class="alert alert-warning py-2" role="alert"><i class="mdi mdi-database-alert-outline" aria-hidden="true"></i>
+                This instance uses H2, so the updater <b>cannot</b> take its automatic pre-update database
+                backup. Take a <a href="/a/backup/export" class="alert-link">full backup</a> first — if the
+                new version fails after migrating the schema, it is not rolled back automatically.</div>
+            {{/dbIsFile}}
+            <form method="post" action="/a/updates/install">
+                {{{csrfField}}}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="confirmInstall" id="confirmInstall" value="1">
+                    <label class="form-check-label" for="confirmInstall">I understand, and I have a recent
+                        <a href="/a/backup/export">backup</a>{{^dbIsFile}} beyond the automatic pre-update database dump{{/dbIsFile}}.</label>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="mdi mdi-download" aria-hidden="true"></i> Install {{latestVersion}}</button>
+            </form>
+        </div>
+    </div>
+    {{/canInstall}}
+
+    {{#installMinUpgradeBlocked}}
+    <div class="alert alert-warning" role="alert"><i class="mdi mdi-stairs-up" aria-hidden="true"></i>
+        This release upgrades cleanly only from version {{installMinUpgradeFrom}} or newer; upgrade to
+        that version first (see the release notes). One-click install is disabled.</div>
+    {{/installMinUpgradeBlocked}}
+    {{#installComposeRevBlocked}}
+    <div class="alert alert-warning" role="alert"><i class="mdi mdi-file-alert-outline" aria-hidden="true"></i>
+        This release requires a Compose file change that an image pull can't deliver — follow the
+        release notes and upgrade manually. One-click install is disabled.</div>
+    {{/installComposeRevBlocked}}
+    {{#installNotSelfUpdatable}}
+    <div class="alert alert-warning" role="alert"><i class="mdi mdi-hand-back-left-outline" aria-hidden="true"></i>
+        This release is marked as requiring a manual upgrade — follow the release notes.</div>
+    {{/installNotSelfUpdatable}}
+    {{#installNoManifest}}
+    <p class="form-text">This release publishes no update manifest, so one-click install isn't offered for it.</p>
+    {{/installNoManifest}}
+    {{#updaterStale}}
+    <div class="alert alert-warning" role="alert"><i class="mdi mdi-heart-off-outline" aria-hidden="true"></i>
+        The updater container isn't responding — check <code>docker compose logs wikikt-updater</code>.
+        One-click install is unavailable until it reports in.</div>
+    {{/updaterStale}}
 
     <div class="card mb-4">
         <div class="card-header"><i class="mdi mdi-console" aria-hidden="true"></i> How to upgrade</div>
@@ -88,9 +164,15 @@ sudo docker compose -f docker-compose.prod.yml up -d</code></pre>
             <p class="mb-1 fw-semibold">Building from source (if your Compose file uses <code>build: .</code>):</p>
             <pre class="bg-body-tertiary p-2 rounded"><code>git pull
 sudo docker compose -f docker-compose.prod.yml up -d --build wikikt</code></pre>
-            <p class="form-text mb-0">Running <code>docker-compose.home.yml</code> or a plain jar instead? See the upgrade
+            <p class="form-text {{#updaterInstalled}}mb-0{{/updaterInstalled}}">Running <code>docker-compose.home.yml</code> or a plain jar instead? See the upgrade
                 notes in <code>docker/README.md</code> and <code>docs/install.md</code>. Database migrations run
                 automatically at startup; database, uploads, and certificates persist in their volumes.</p>
+            {{^updaterInstalled}}
+            <p class="form-text mb-0">Prefer one-click updates from this page? Add
+                <code>COMPOSE_PROFILES=selfupdate</code> to <code>.env</code> and re-run
+                <code>docker compose up -d</code> — see "One-click updates" in <code>docker/README.md</code>
+                (it holds the Docker socket, so read the trust note there first).</p>
+            {{/updaterInstalled}}
         </div>
     </div>
     {{/stateAvailable}}

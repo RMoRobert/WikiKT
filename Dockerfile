@@ -17,6 +17,28 @@ RUN ./gradlew --no-daemon shadowJar -x test \
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
+# ARGs are per-stage; re-declare the version for the label below.
+ARG WIKIKT_VERSION
+# Guardrail metadata for the optional wikikt-updater sidecar (see docker/updater/). The updater reads
+# these OCI labels off the pulled image vs. the running one via `docker inspect` -- keeps offline and not
+# susceptible to app problems -- to decide whether a one-click update is safe:
+#   schema-version     - This build's DB schema (MIGRATIONS max). MUST match the code; BuildInfoTest
+#                        asserts it against MigrationService. Rollback after a failed update is only
+#                        automatic when this is UNCHANGED (migrations are forward-only).
+#   compose-revision   - Bump when docker-compose.prod.yml or .home.yml change in a way an image pull
+#                        can't deliver (e.g., new service/volume/required env var). The updater refuses
+#                        ("blocked") when the pulled image's revision is higher than the running one.
+#   min-upgrade-from   - Oldest running version this image upgrades cleanly from.
+#   updater-protocol   - The request/status file contract version (SelfUpdateService.PROTOCOL).
+ARG WIKIKT_SCHEMA_VERSION=1
+ARG WIKIKT_COMPOSE_REVISION=1
+ARG WIKIKT_MIN_UPGRADE_FROM=0.0.0
+LABEL org.opencontainers.image.source="https://github.com/RMoRobert/WikiKT" \
+      org.opencontainers.image.version="${WIKIKT_VERSION}" \
+      com.wikikt.schema-version="${WIKIKT_SCHEMA_VERSION}" \
+      com.wikikt.compose-revision="${WIKIKT_COMPOSE_REVISION}" \
+      com.wikikt.min-upgrade-from="${WIKIKT_MIN_UPGRADE_FROM}" \
+      com.wikikt.updater-protocol="1"
 # git powers Administration > Git Sync; curl serves the container healthcheck.
 RUN apk add --no-cache git curl
 WORKDIR /app

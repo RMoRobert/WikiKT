@@ -345,8 +345,9 @@ fun Route.configureAdminRouting() {
 
         // --- Updates (root only): instance-wide, so gated on root permissions. ---
         // The GET itself performs the (cached, lazy) release check when checks are enabled, by
-        // design: no background poller, no nagging; the network call made only when a
-        // root admin looks at this page.
+        // design: no background poller and nothing scheduled, so a request only ever happens while a
+        // root admin is looking at the console. This page waits for the result inline; the dashboard's
+        // "update available" badge instead refreshes weekly in the background (UpdateService kdoc).
         get("/updates") {
             if (!call.requireRoot()) {
                 call.respondForbidden()
@@ -380,6 +381,35 @@ fun Route.configureAdminRouting() {
             val params = call.receiveParameters()
             if (!call.validateFormCsrf(params)) return@post
             call.appContext.update.check(force = true)
+            call.respondRedirect("/a/updates")
+        }
+
+        // One-click install via the wikikt-updater sidecar. Server-side re-checks every gate the UI
+        // renders (updater fresh, update genuinely available, manifest allows self-update) — the form
+        // is not the authority; and the updater independently re-derives its own guardrails from
+        // image labels, so even this route being wrong cannot force an unsafe update.
+        post("/updates/install") {
+            if (!call.requireRoot()) {
+                call.respondForbidden()
+                return@post
+            }
+            val params = call.receiveParameters()
+            if (!call.validateFormCsrf(params)) return@post
+            val ctx = call.appContext
+            if (params["confirmInstall"] == null) { // unchecked confirm box: bounce back, no action
+                call.respondRedirect("/a/updates")
+                return@post
+            }
+            val check = ctx.update.check()
+            val manifest = (check as? UpdateCheck.Available)?.release?.manifest
+            if (check is UpdateCheck.Available && manifest != null && manifest.selfUpdatable) {
+                val username = call.currentUserId()?.let { ctx.users.findById(it)?.username } ?: "unknown"
+                ctx.selfUpdate.requestInstall(
+                    requestedBy = username,
+                    currentVersion = com.wikikt.BuildInfo.version,
+                    expectVersion = check.release.version.toString(),
+                )
+            }
             call.respondRedirect("/a/updates")
         }
 
@@ -898,7 +928,12 @@ fun Route.configureAdminRouting() {
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
-            call.appContext.users.delete(id)
+            try {
+                call.appContext.users.delete(id, actorIsRoot = call.appContext.permissions.isRoot(call.currentUserId()))
+            } catch (e: IllegalArgumentException) {
+                call.respondForbidden()
+                return@post
+            }
             call.respondRedirect("/a/users")
         }
 
@@ -1396,7 +1431,7 @@ fun Route.configureAdminRouting() {
         }
 
         get("/fragments") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@get
             }
@@ -1419,7 +1454,7 @@ fun Route.configureAdminRouting() {
         }
 
         get("/fragments/new") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@get
             }
@@ -1427,7 +1462,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/fragments") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -1444,7 +1479,7 @@ fun Route.configureAdminRouting() {
         }
 
         get("/fragments/{id}/edit") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@get
             }
@@ -1473,7 +1508,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/fragments/{id}") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -1499,7 +1534,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/fragments/{id}/delete") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -1520,7 +1555,7 @@ fun Route.configureAdminRouting() {
         // --- Infoboxes: admin-defined field templates bound to page paths by rules; editors fill in the
         //     values per page (see InfoboxService). ---
         get("/infoboxes") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@get
             }
@@ -1528,7 +1563,7 @@ fun Route.configureAdminRouting() {
         }
 
         get("/infoboxes/new") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@get
             }
@@ -1536,7 +1571,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/infoboxes") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -1553,7 +1588,7 @@ fun Route.configureAdminRouting() {
         }
 
         get("/infoboxes/{id}/edit") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@get
             }
@@ -1579,7 +1614,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/infoboxes/{id}") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -1605,7 +1640,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/infoboxes/{id}/delete") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -1624,7 +1659,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/infoboxes/rules") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -1643,7 +1678,7 @@ fun Route.configureAdminRouting() {
         }
 
         post("/infoboxes/rules/{id}/delete") {
-            if (!call.requireManagePages()) {
+            if (!call.requireManageGroups()) {
                 call.respondForbidden()
                 return@post
             }
@@ -2053,7 +2088,13 @@ internal suspend fun io.ktor.server.application.ApplicationCall.dashboardModel()
             mapOf("username" to user.username, "at" to DateDisplay.format(at, formats))
         }
     }
-    return adminBaseModel() + mapOf(
+    val base = adminBaseModel()
+    // "Update available" link in the version card. Root only: it points at /a/updates, which is
+    // root-gated, so showing it to a delegated admin would just hand them a 403. Cache-only — see
+    // UpdateService.availableIfKnown, which refreshes weekly in the background rather than making the
+    // dashboard wait on github.com (and stays silent entirely until an admin opts in).
+    val update = if (base["navSecRoot"] == true) ctx.update.availableIfKnown() else null
+    return base + mapOf(
         "pageCount" to pages.size,
         "userCount" to ctx.users.list().size,
         "groupCount" to ctx.groups.list().size,
@@ -2061,16 +2102,15 @@ internal suspend fun io.ktor.server.application.ApplicationCall.dashboardModel()
         "hasRecentPages" to recentPages.isNotEmpty(),
         "recentLogins" to recentLogins,
         "hasRecentLogins" to recentLogins.isNotEmpty(),
+        // Version card shows the essentials only; commit sha and build time live on the Updates page.
         "appVersion" to com.wikikt.BuildInfo.version,
-        // Which build, exactly: commit sha and (for stamped prod jars) build time. Null-valued keys
-        // render nothing — dev builds and source builds without git simply omit them.
-        "appGitSha" to com.wikikt.BuildInfo.gitSha.takeIf { it != "unknown" },
-        "appBuiltAt" to com.wikikt.BuildInfo.builtAt?.let { DateDisplay.format(it * 1000, formats) },
         "jvmVersion" to System.getProperty("java.version"),
         "dbEngine" to when (ctx.config.database.type) {
             com.wikikt.config.DatabaseType.POSTGRES -> "PostgreSQL"
             com.wikikt.config.DatabaseType.H2 -> "H2"
         },
+        "updateAvailable" to (update != null),
+        "updateVersion" to update?.release?.version?.toString(),
     )
 }
 
@@ -2086,7 +2126,6 @@ internal suspend fun io.ktor.server.application.ApplicationCall.updatesModel(): 
     val optIn = ctx.update.optIn()
     fun checkedAtOf(at: Long) = DateDisplay.format(at, formats)
     val state = when (check) {
-        is UpdateCheck.Disabled -> mapOf("stateDisabled" to true)
         is UpdateCheck.NotApplicable -> mapOf("stateDevBuild" to true)
         is UpdateCheck.NotEnabled -> mapOf(
             // Tri-state consent: never asked -> the consent card; explicitly declined -> the re-enable card.
@@ -2110,11 +2149,90 @@ internal suspend fun io.ktor.server.application.ApplicationCall.updatesModel(): 
     return adminBaseModel() + mapOf(
         "appVersion" to com.wikikt.BuildInfo.version,
         "appGitSha" to com.wikikt.BuildInfo.gitSha.takeIf { it != "unknown" },
-        "appBuiltAt" to com.wikikt.BuildInfo.builtAt?.let { DateDisplay.format(it * 1000, formats) },
+        // Build stamp is fixed UTC (not the viewer's locale format): it identifies a build artifact,
+        // so it should read identically for every admin comparing against release metadata.
+        "appBuiltAt" to com.wikikt.BuildInfo.builtAt?.let { DateDisplay.formatUtc(it * 1000) },
         "releasesUrl" to UpdateService.RELEASES_PAGE_URL,
         // The Check now button renders only in states where checks are actually running.
-        "checksEnabled" to (optIn == true && check !is UpdateCheck.Disabled && check !is UpdateCheck.NotApplicable),
-    ) + state
+        "checksEnabled" to (optIn == true && check !is UpdateCheck.NotApplicable),
+    ) + state + selfUpdateModel(check)
+}
+
+/**
+ * The self-update (updater sidecar) portion of the Updates page model. Everything degrades: no
+ * configured dirs -> all flags false (manual instructions only); stale heartbeat or missing
+ * manifest -> Install hidden with a reason the admin can act on. The gates here are advisory UI —
+ * the install route re-checks them, and the updater re-derives its own from image labels.
+ */
+private suspend fun io.ktor.server.application.ApplicationCall.selfUpdateModel(check: UpdateCheck): Map<String, Any?> {
+    val ctx = appContext
+    val su = ctx.selfUpdate
+    if (!su.configured) return mapOf("updaterConfigured" to false)
+    val formats = displayFormats()
+    val presence = su.presence()
+    val status = su.status()
+    val running = su.isRunning(status)
+    val manifest = (check as? UpdateCheck.Available)?.release?.manifest
+
+    // Pre-click advisories, comparing the manifest (advisory copy of the release's guardrails)
+    // against this build / the running container's labels as reported by the updater's heartbeat.
+    val heartbeat = (presence as? com.wikikt.service.UpdaterPresence.Available)?.heartbeat
+    val minFrom = manifest?.minUpgradeFrom?.let { com.wikikt.service.SemVer.parse(it) }
+    val current = com.wikikt.service.SemVer.parse(com.wikikt.BuildInfo.version)
+    val minUpgradeBlocked = minFrom != null && current != null && current < minFrom
+    val composeRevBlocked = run {
+        val need = manifest?.composeRevision
+        val have = heartbeat?.runningComposeRevision
+        need != null && have != null && need > have
+    }
+
+    val canInstall = check is UpdateCheck.Available && presence is com.wikikt.service.UpdaterPresence.Available &&
+        !running && manifest != null && manifest.selfUpdatable && !minUpgradeBlocked && !composeRevBlocked
+
+    // Terminal outcome of the last run, with the DB breadcrumb ("requested by X at Y") when it
+    // corroborates. Kept visible until the next run replaces it.
+    val anchor = ctx.settings.instanceAnchorSiteId()
+    val lastRequestId = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUEST_ID)
+    val requestedBy = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUESTED_BY)
+    val requestedAt = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUESTED_AT)?.toLongOrNull()
+    val terminal = status?.takeIf { it.terminal }
+
+    return mapOf(
+        "updaterConfigured" to true,
+        // H2 keeps the database as a file in the app volume rather than as its own service, so the
+        // updater's automatic pre-update backup (a pg_dump against that service) cannot run. The
+        // install card says so and points at the full backup instead — see docker/README.md.
+        "dbIsFile" to (ctx.config.database.type == com.wikikt.config.DatabaseType.H2),
+        "updaterInstalled" to (presence is com.wikikt.service.UpdaterPresence.Available),
+        "updaterStale" to (presence is com.wikikt.service.UpdaterPresence.Stale),
+        "canInstall" to canInstall,
+        // Why Install is hidden even though an update is available and the updater is running:
+        "installNoManifest" to (check is UpdateCheck.Available && presence is com.wikikt.service.UpdaterPresence.Available && manifest == null),
+        "installNotSelfUpdatable" to (manifest?.selfUpdatable == false),
+        "installMinUpgradeBlocked" to minUpgradeBlocked,
+        "installMinUpgradeFrom" to manifest?.minUpgradeFrom,
+        "installComposeRevBlocked" to composeRevBlocked,
+        // In-flight: drives the meta-refresh and the progress card.
+        "updateRunning" to running,
+        "runPhase" to status?.takeIf { !it.terminal }?.phase,
+        "runMessage" to status?.takeIf { !it.terminal }?.message,
+        "updateAbandoned" to su.isAbandoned(status),
+        // Last terminal outcome.
+        "lastOutcome" to (terminal != null),
+        "outcomeSuccess" to (terminal?.phase == "success"),
+        "outcomeRolledBack" to (terminal?.phase == "rolled-back"),
+        "outcomeBlocked" to (terminal?.phase == "blocked"),
+        "outcomeFailed" to (terminal?.phase == "failed"),
+        "outcomeMessage" to terminal?.message,
+        "outcomeBackupPath" to terminal?.backupPath?.ifBlank { null },
+        "outcomeRequestedLine" to terminal?.let { t ->
+            if (t.requestId.isNotEmpty() && t.requestId == lastRequestId && requestedBy != null && requestedAt != null) {
+                "Requested by $requestedBy, ${DateDisplay.format(requestedAt, formats)}."
+            } else {
+                null
+            }
+        },
+    )
 }
 
 /** Model for the Administration > Settings page. */
@@ -2742,7 +2860,12 @@ internal suspend fun io.ktor.server.application.ApplicationCall.adminBaseModel()
         "navShowSite" to (canGroups || canNav),
         "navSecSite" to canGroups,
         "navSecNav" to canNav,
-        "navSecContent" to canPages,
+        // Content section: Pages needs a content-write grant (manage:pages), but Fragments and Infoboxes
+        // render site-wide, so they're admin-gated (manage:groups) like the rest of the site-wide console.
+        // The section header shows if either applies; each link is gated individually below.
+        "navSecContent" to (canPages || canGroups),
+        "navContentPages" to canPages,
+        "navContentFragments" to canGroups,
         "navSecUsers" to canUsers,
         "navSecGroups" to canGroups,
         // The Authentication group shows if the user can reach any item under it.

@@ -17,6 +17,7 @@ import com.wikikt.service.GroupService
 import com.wikikt.service.InfoboxService
 import com.wikikt.service.MfaService
 import com.wikikt.service.PageService
+import com.wikikt.service.SelfUpdateService
 import com.wikikt.service.UpdateService
 import com.wikikt.service.PageRenderService
 import com.wikikt.service.PasswordResetService
@@ -62,6 +63,7 @@ class AppContext(
     val infobox: InfoboxService,
     val gitSync: GitSyncService,
     val update: UpdateService,
+    val selfUpdate: SelfUpdateService,
     val backup: BackupService,
     val emailTemplates: EmailTemplateService,
     val email: EmailService,
@@ -183,9 +185,14 @@ suspend fun Application.createAppContext(): AppContext {
     // that they all exist (gitSync is the last, so this can't move earlier alongside the content services).
     sites.wireCascade(pages, assets, fragments, nav, settings, gitSync)
     val backup = BackupService(database, sites, pages, assets, fragments, nav, importer, settings, searchIndex, assetDir)
-    // Release update check (Administration > Updates). Lazy: only fetches when a root admin views the
-    // page after opting in; WIKIKT_UPDATE_CHECK=off makes the network path unreachable entirely.
-    val update = UpdateService(settings, config.updateCheckAllowed)
+    // Release update check (Administration > Updates, plus the dashboard's "update available" badge).
+    // Lazy and opt-in: no background poller and nothing scheduled — a request happens only while a
+    // root admin has the console open, and only after one has enabled checks (default: never asked,
+    // no I/O at all). See UpdateService's kdoc for the three entry points and their TTLs.
+    val update = UpdateService(settings)
+    // Optional one-click install via the wikikt-updater sidecar; inert unless both handshake dirs are
+    // configured (they are only in the Docker stack) AND the updater's heartbeat is fresh.
+    val selfUpdate = SelfUpdateService(config.selfUpdate, settings)
 
     // Email: templates (defaults + per-site overrides) render into messages that the queue-backed
     // EmailService enqueues; a background worker (Application.startEmailWorker) drains the queue over SMTP.
@@ -215,6 +222,7 @@ suspend fun Application.createAppContext(): AppContext {
         infobox = infobox,
         gitSync = gitSync,
         update = update,
+        selfUpdate = selfUpdate,
         backup = backup,
         emailTemplates = emailTemplates,
         email = email,

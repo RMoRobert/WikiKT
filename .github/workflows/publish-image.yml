@@ -27,7 +27,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # write: attaches update-manifest.json to the GitHub Release on tag builds
       packages: write
 
     steps:
@@ -80,9 +80,57 @@ jobs:
           # way to add arm64, as the resulting JAR is architecture-independent.
           platforms: linux/amd64
 
+      # The updater sidecar image (docker/updater/): a small docker-cli + compose + script container
+      # that performs one-click updates when the operator enables the `selfupdate` compose profile.
+      # Published alongside the app so their versions travel together.
+      - name: Derive updater tags
+        id: meta_updater
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-updater
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=short
+
+      - name: Build and push updater
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/updater
+          push: true
+          tags: ${{ steps.meta_updater.outputs.tags }}
+          labels: ${{ steps.meta_updater.outputs.labels }}
+          platforms: linux/amd64
+
+      # Release metadata the app's update check consumes (Administration > Updates): advisory copies
+      # of the guardrail values baked into the image labels, published as a release asset. Values are
+      # read from the Dockerfile ARG defaults, the single source of truth (BuildInfoTest pins
+      # WIKIKT_SCHEMA_VERSION to the code's migration list).
+      - name: Attach update-manifest.json to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          schema_ver=$(grep -oP 'ARG WIKIKT_SCHEMA_VERSION=\K\d+' Dockerfile)
+          compose_rev=$(grep -oP 'ARG WIKIKT_COMPOSE_REVISION=\K\d+' Dockerfile)
+          min_from=$(grep -oP 'ARG WIKIKT_MIN_UPGRADE_FROM=\K[0-9A-Za-z.-]+' Dockerfile)
+          jq -n --arg v "$VERSION" --argjson sv "$schema_ver" --argjson cr "$compose_rev" --arg mf "$min_from" \
+            '{schema: 1, version: $v, schemaVersion: $sv, composeRevision: $cr, minUpgradeFrom: $mf, selfUpdatable: true}' \
+            > update-manifest.json
+          cat update-manifest.json
+          # A Release normally already exists (creating one is what pushes the tag); create it for
+          # bare tag pushes so /releases/latest — which the in-app update check reads — always works.
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes
+          gh release upload "$TAG" update-manifest.json --clobber
+
       - name: Summary
         run: |
           echo "### Published" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.meta_updater.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

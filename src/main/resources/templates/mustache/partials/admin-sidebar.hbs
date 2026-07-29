@@ -34,9 +34,11 @@
 
         {{#navSecContent}}
         <p class="admin-nav-heading">Content</p>
-        <a class="admin-nav-link{{#nav_pages}} active{{/nav_pages}}" href="/a/pages"><i class="mdi mdi-file-document-outline" aria-hidden="true"></i> Pages</a>
+        {{#navContentPages}}<a class="admin-nav-link{{#nav_pages}} active{{/nav_pages}}" href="/a/pages"><i class="mdi mdi-file-document-outline" aria-hidden="true"></i> Pages</a>{{/navContentPages}}
+        {{#navContentFragments}}
         <a class="admin-nav-link{{#nav_fragments}} active{{/nav_fragments}}" href="/a/fragments"><i class="mdi mdi-puzzle-outline" aria-hidden="true"></i> Fragments</a>
         <a class="admin-nav-link{{#nav_infoboxes}} active{{/nav_infoboxes}}" href="/a/infoboxes"><i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Infoboxes</a>
+        {{/navContentFragments}}
         {{/navSecContent}}
 
         {{#navSecAuth}}

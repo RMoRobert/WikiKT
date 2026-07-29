@@ -11,7 +11,10 @@
 {{>partials/admin-shell.hbs}}
     <div class="page-meta"><h1><i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Infoboxes</h1><a class="btn btn-primary" href="/a/infoboxes/new">New template</a></div>
     {{#otherSite}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-information-outline" aria-hidden="true"></i> That template belongs to a different site. Showing <strong>{{managedSiteName}}</strong>'s templates instead.</div>{{/otherSite}}
-    <p class="text-secondary">A <strong>template</strong> is a named set of fields. A <strong>rule</strong> binds a template to pages by path or tag; editors then fill in the values on each page, which show as a fact card (Wikipedia-style) on the page.</p>
+    <p>An infobox is a way to standardize the apprearance and provision of specific information across a set of pages. A
+    <strong>template</strong> is a named set of fields that define the requested information. A <strong>rule</strong>
+    suggests this template to pages by path or tag; editors then fill in the values on the Page Info tab of matching
+    pages.</p>
 
     <h2 class="h5 mt-4">Templates</h2>
     {{#hasTemplates}}

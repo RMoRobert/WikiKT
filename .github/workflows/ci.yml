@@ -29,6 +29,11 @@ jobs:
       - name: Set up Gradle (with build cache)
         uses: gradle/actions/setup-gradle@v4
 
+      # The updater sidecar is the security-sensitive shell in this repo (it holds the Docker
+      # socket); lint it on every change. shellcheck is preinstalled on ubuntu runners.
+      - name: Shellcheck the updater
+        run: shellcheck docker/updater/updater.sh
+
       - name: Build and test
         run: ./gradlew --no-daemon build
 

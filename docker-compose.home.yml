@@ -106,12 +106,21 @@ services:
       WIKIKT_UI_ICON_FONT_SOURCE: ${WIKIKT_UI_ICON_FONT_SOURCE:-cdn}     # icons (~750KB); if unavailable, gaps in UI
       WIKIKT_UI_EMOJI_FONT_SOURCE: ${WIKIKT_UI_EMOJI_FONT_SOURCE:-cdn}   # emoji font (~2MB); if unavailable, uses OS emoji
       # inline (B): set the literal value, e.g. WIKIKT_UI_ASSET_SOURCE: "local"
+      # Self-update handshake with the optional wikikt-updater service (see it below). Inert unless
+      # that service is enabled via `--profile selfupdate` (which also needs the GHCR `image:`
+      # alternative above -- a `build: .` service has nothing to pull).
+      WIKIKT_UPDATE_REQUEST_DIR: /app/update/req
+      WIKIKT_UPDATE_STATE_DIR: /app/update/state
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       # Uploaded assets, git-sync working clone (if Git Sync enabled), and H2 DB file (if using H2):
       - wikikt_data:/app/data
+      # Self-update handshake volumes, one per direction (app writes requests and reads state; the
+      # updater mounts them the other way around). Empty and harmless while the profile is off.
+      - wikikt_update_req:/app/update/req
+      - wikikt_update_state:/app/update/state:ro
     ports:
       # Exposes the app on the host. If your reverse proxy runs on this same host, harden it to
       # loopback only: "127.0.0.1:8080:8080". Left open so a proxy (or browser) on another LAN
@@ -124,6 +133,41 @@ services:
       timeout: 3s
       retries: 3
 
+  # Optional one-click updates from Administration > Updates. Suggested if you use the GHCR
+  # `image:` alternative above (and requires it: `build: .` has nothing to pull). Off by default to
+  # stay offline-friendly; enable persistently by uncommenting COMPOSE_PROFILES=selfupdate in .env
+  # (see .env.home.example), or one-off with:
+  #   docker compose -f docker-compose.home.yml --profile selfupdate up -d
+  # TRUST NOTE: holds /var/run/docker.sock (root-equivalent on the host). This is why it is
+  # a separate, opt-in container and the app never gets the socket. See docker/README.md
+  # ("One-click updates") for the details and WIKIKT_COMPOSE_DIR requirement.
+  wikikt-updater:
+    profiles: ["selfupdate"]
+    image: ghcr.io/rmorobert/wikikt-updater:latest
+    restart: unless-stopped
+    network_mode: none
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      # MUST be the absolute host path of the directory holding this compose file (compose run inside
+      # a container resolves relative bind-mount sources against the *host* filesystem). The default
+      # matches the docs' recommended install location; set it in .env if you cloned elsewhere.
+      WIKIKT_COMPOSE_DIR: ${WIKIKT_COMPOSE_DIR:-/opt/wikikt}
+      # inline (B): WIKIKT_COMPOSE_DIR: "/opt/wikikt"
+      WIKIKT_SERVICE: wikikt
+      # The service the updater runs `pg_dump` inside for its automatic pre-update backup -- i.e. the
+      # `postgres` service at the top of this file. If you took the H2 alternative above and deleted
+      # that service, no service by this name exists, so there is no automatic backup. On H2, take
+      # a full backup yourself (Administration > Backup > full export) before installing an update.
+      WIKIKT_DB_SERVICE: postgres
+      WIKIKT_HEALTH_TIMEOUT: "180"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${WIKIKT_COMPOSE_DIR:-/opt/wikikt}:${WIKIKT_COMPOSE_DIR:-/opt/wikikt}:ro
+      - wikikt_update_req:/req:ro
+      - wikikt_update_state:/state
+
 volumes:
   postgres_data:   # delete this line if you switch to H2
   wikikt_data:
+  wikikt_update_req:
+  wikikt_update_state:

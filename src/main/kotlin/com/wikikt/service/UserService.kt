@@ -366,8 +366,25 @@ class UserService(private val database: R2dbcDatabase) {
      * revisions, staged versions, assets, fragments) are nulled so the content survives
      * unattributed, while things that only make sense for a live user — sessions, group
      * memberships, per-user ACL entries, and API keys (which authenticate AS the user) — are removed.
+     *
+     * A non-root actor ([actorIsRoot] = false) may not delete a member of a system (root-bearing)
+     * group — the same delegated-admin→root guard [update] applies. Without it a `manage:users` admin
+     * could delete the built-in admin, which [SeedService] then recreates by username with the
+     * configured `WIKIKT_ADMIN_PASSWORD` on the next boot (a takeover chain on a weak-password deploy).
+     * Enforced at the service layer so the admin console and the JSON API share it; throws
+     * [IllegalArgumentException] when violated (callers map it to 403, as they do for [update]).
      */
-    suspend fun delete(id: UInt): Boolean = suspendTransaction(database) {
+    suspend fun delete(id: UInt, actorIsRoot: Boolean = false): Boolean = suspendTransaction(database) {
+        if (!actorIsRoot) {
+            val systemGroups = systemGroupIds()
+            val targetGroups = UserGroupsTable.selectAll()
+                .where { UserGroupsTable.userId eq id }
+                .map { it[UserGroupsTable.groupId].value }
+                .toList()
+            if (targetGroups.any { it in systemGroups }) {
+                throw IllegalArgumentException("Only a root administrator can delete a system-group member")
+            }
+        }
         SessionsTable.deleteWhere { SessionsTable.userId eq id }
         PasswordResetTokensTable.deleteWhere { PasswordResetTokensTable.userId eq id }
         EmailVerificationTokensTable.deleteWhere { EmailVerificationTokensTable.userId eq id }

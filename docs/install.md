@@ -18,7 +18,7 @@ revision history if enabled.
 *To build (optional)*: the recommended prod Compose file pulls a **prebuilt image** from the GitHub
 Container Registry, so the server never compiles anything and the *run* sizing above is all you need.
 Building from source instead (`up -d --build`, the default in `docker-compose.home.yml`) requires
-notably more resources: it compiles the Kotlin sources and assembles a ~110 MB self-contained JAR on
+notably more resources: it compiles the Kotlin sources and assembles a ~35 MB self-contained JAR on
 the server, running two JVMs (Gradle plus the Kotlin compiler), and wants **~4 GB RAM**, or 2 GB with
 swap. Shared-core instance types (`e2-small`, `t3.micro`) may also run slowly if burst credits are all
 consumed. See [Building elsewhere](#building-elsewhere) below for the options.
@@ -30,27 +30,35 @@ consumed. See [Building elsewhere](#building-elsewhere) below for the options.
 - **DigitalOcean**: Create a Droplet with Ubuntu LTS, Basic plan (1–2 GB). Under *Networking*,
   allow inbound **22, 80, 443** (Cloud Firewall or leave the default open Droplet).
 - **Amazon EC2**: Launch an instance with Ubuntu LTS, `t3.small` to `c5.large` suggested (although
-- `t3.micro` may work for small deployments). In the security group, allow 
+  `t3.micro` may work for small deployments). In the security group, allow 
    inbound **22 (your IP), 80, 443 (anywhere)**.
 - **Google Compute Engine**: Create a VM with Ubuntu LTS, `e2-small` or higher recommended. 
    Check *Allow HTTP/HTTPS traffic* (or add firewall rules for 80/443).
 
-### 2. Point DNS at it
+The commands in this guide assume a **Debian-family image (Ubuntu LTS or Debian)**, which every
+provider above offers and defaults you into `sudo` rights: DigitalOcean signs you in as `root`,
+EC2's Ubuntu images as `ubuntu` (passwordless sudo), and GCE grants your login user sudo. Other
+families (Amazon Linux, RHEL) can work but differ in package tooling and SELinux defaults and are
+not covered here.
 
-Create an `A` record for your wiki's hostname and point it at the VM's public IP:
+### 2. Configure DNS
+
+Create a DNS record to point at your VM. In most cases, this means creating an `A` record for
+your wiki's hostname and pointing it at the VM's public IP (or a `CNAME` record if your provider
+offers a stable public hostname but not a static public IP). For example:
 
 ```
 A   wiki.example.com   203.0.113.10
 ```
 
-If you plant to use multiple sites on the same instance, be sure to create a record for each (e.g.,
-site1.example.com and site2.example.com).
+If you plan to use multiple sites on the same instance, be sure to create a DNS record for each (e.g.,
+`site1.example.com` and `site2.example.com`).
 
 Do this before first start, as Caddy needs the name to resolve to obtain the HTTPS certificate.
 
 ### 3. Install Docker
 
-SSH in and run Docker's official convenience script to install (or install manually if preferred):
+SSH into your VM and run Docker's official convenience script to install (or install manually if preferred):
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
@@ -58,8 +66,15 @@ curl -fsSL https://get.docker.com | sudo sh
 
 ### 4. Download WikiKT and configure
 
-If you are using a custom fork or clone, replace `<git-url>` below with the URL of your fork. Otherwise,
-use `https://github.com/RMoRobert/WikiKT.git` for the official repo (or switch to desired branch).
+If you are using a custom fork or clone, replace `https://github.com/RMoRobert/WikiKT.git` below with the URL of
+your fork (or switch to desired branch).
+
+NOTE: `/opt/wikikt` below is the recommended install location (which does need `sudo`, but the 
+`$(id -un)` line in the script below -- effectively "my username" -- hands ownership of this folder
+to you, and the trailing colon sets your group). You *can* install in any directory, but some optional
+features default to this path, notably the one-click updater and the `systemd` example in Option B.
+If you must use a different location (e.g., no sudo available in your environment),
+set `WIKIKT_COMPOSE_DIR` in `.env` (unless you plan to perform manual installation and updates only).
 
 The Docker stack is configured by a `.env` file sitting next to the Compose file (or however you prefer to set
 the same environment variables). The repo ships [`.env.example`](../.env.example) as an annotated template of the
@@ -67,7 +82,9 @@ supported variables, which you may copy (`cp .env.example .env`) and fill in as 
 the below into the shell will create this file with appropriate values in one step for you:
 
 ```bash
-git clone <git-url> wikikt && cd wikikt
+sudo git clone <git-url> /opt/wikikt
+sudo chown -R "$(id -un):" /opt/wikikt
+cd /opt/wikikt
 cat > .env <<EOF
 WIKIKT_DOMAIN=wiki.example.com
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
@@ -75,14 +92,22 @@ WIKIKT_SESSION_ENCRYPTION_KEY=$(openssl rand -hex 16)
 WIKIKT_SESSION_SIGN_KEY=$(openssl rand -hex 32)
 WIKIKT_MFA_KEY=$(openssl rand -hex 32)
 WIKIKT_ADMIN_PASSWORD=$(openssl rand -base64 18)
+COMPOSE_PROFILES=selfupdate
 EOF
 chmod 600 .env
 grep WIKIKT_ADMIN_PASSWORD .env   # the generated admin password -- save it for your first login!
 ```
 
+The `COMPOSE_PROFILES=selfupdate` line enables the updater container that powers one-click updates
+from **Administration > Updates** (with a pre-update database dump, a health check on the new
+version, and automatic rollback) -- the default for this stack. It holds the Docker socket, so if
+you prefer a no-socket or offline-leaning deployment, simply omit that line; everything else works
+the same and the Updates page shows manual upgrade commands instead. Details and trust note:
+[One-click updates](../docker/README.md#one-click-updates-optional-updater-container).
+
 `<git-url>` is the only placeholder to substitute. The admin password is generated along with the keys
 rather than typed, then printed on screen it so you can save it. Change it after first login to something
-of your own choosing: **Account | Settings** (or set your own initially as described below).
+of your own choosing: your account menu → **Profile → Security** (or set your own initially as described below).
 
 **If you set any secret by hand, single-quote the value in `.env`:**
 
@@ -90,7 +115,7 @@ of your own choosing: **Account | Settings** (or set your own initially as descr
 WIKIKT_ADMIN_PASSWORD='my p@$$word_example'
 ```
 
-(Without the quotes, `$` starts a variable reference and the rest is silently dropped — `a$bcdef` reaches
+(Without the quotes, `$` starts a variable reference and the rest is silently dropped -- `a$bcdef` reaches
 the app as just `a`, leaving a one-character admin password you probably won't expect, and while Compose does
 log `The "bcdef" variable is not set`, you probably won't see it scroll by in the build output.) This
 applies however you write the file, including `cp .env.example .env` and editing it. Generated hex and
@@ -116,7 +141,6 @@ WIKIKT_EXTRA_DOMAINS="site1.example.com site2.example.com"
 ```
 
 Quotes here are optional (Compose strips them). Note that this variable configures **Caddy**,
-
 not WikiKT: it is the list of hostnames Caddy obtains certificates for and routes, which is separate from
 creating the sites themselves. See [Multiple sites on one instance](#multiple-sites-on-one-instance) for
 the rest of what that needs.
@@ -128,26 +152,38 @@ sudo docker compose -f docker-compose.prod.yml up -d
 ```
 
 First start pulls the prebuilt app image from the GitHub Container Registry (to compile from source on
-the server instead, see [Building elsewhere](#building-elsewhere) — then start with `--build`). Then
+the server instead, see [Building elsewhere](#building-elsewhere), then start with `--build`). Then
 open `https://wiki.example.com` and log in as `admin` with the password from `.env`. See
 [docker/README.md](../docker/README.md) for upgrades, logs, and backup practice.
 
 ### Updating
 
 WikiKT can tell you when a new release is out: as a root admin, open **Administration > Updates** and
-enable update checks (opt-in; one anonymous request a day to `api.github.com`, nothing about your
-instance is sent; `WIKIKT_UPDATE_CHECK=off` disables it entirely). Installing the update is manual.
-With the prebuilt image (the default here), it is a pull and restart:
+enable update checks (opt-in; at most one anonymous request a day to `api.github.com`, nothing about
+your instance is sent). Once enabled, the Administration dashboard also shows an "update available"
+link when there is one, re-checked at most weekly in the background. Nothing is requested until you
+enable it, there is no background poller, and the same page turns it off again -- so an offline or
+air-gapped install simply leaves it disabled.
+
+With the `.env` from step 4 (`COMPOSE_PROFILES=selfupdate`), installing an update is then the
+**Install update** button on that same page — it takes a database backup, pulls, restarts, verifies
+the new version is healthy, and rolls back automatically if not. Without the updater (the line
+omitted), installing is a manual pull and restart:
 
 ```bash
 sudo docker compose -f docker-compose.prod.yml pull wikikt
 sudo docker compose -f docker-compose.prod.yml up -d
 ```
 
-If you build from source, `git pull` then rebuild with `--build` instead — see the
+If you build from source, `git pull` then rebuild with `--build` instead -- see the
 [Upgrades](../docker/README.md#upgrades) section of docker/README.md. Volumes (database, uploads,
 certificates) persist, and schema migrations run automatically at startup; taking a backup first
-(**Administration > Backup**) is always a good idea.
+(**Administration > Storage and backup**) is always a good idea.
+
+The updater is its own container holding the Docker socket (the app never gets it) — the trust
+model, how to disable it, and how to add it to a `docker-compose.home.yml` deployment running the
+GHCR image are all in
+[One-click updates](../docker/README.md#one-click-updates-optional-updater-container).
 
 ### Building elsewhere
 
@@ -179,8 +215,9 @@ which turns a memory shortfall into a stall rather than a clean failure. Any of 
 - **Resize the VM for the build only**, then scale back down: stop the instance, change the machine type
   (e.g. to one with 4 GB and a full vCPU), start it, build, and reverse it afterwards.
 - **Don't build on the server at all**: the most reliable option for a small instance, in either of two
-  forms. Pull a ready-made image from the GitHub Container Registry, which is a one-line change to the
-  Compose file (see [Pull a prebuilt image from GHCR](../docker/README.md#pull-a-prebuilt-image-from-ghcr));
+  forms. Pulling the ready-made image from the GitHub Container Registry is what
+  `docker-compose.prod.yml` already does by default -- so if you switched it to `build: .`, you can switch
+  it back (see [Pull a prebuilt image from GHCR](../docker/README.md#pull-a-prebuilt-image-from-ghcr));
   or, if you build your own fork, build on a workstation and copy the image over with `docker save`/`docker
   load` (see [Run from a prebuilt image](../docker/README.md#run-from-a-prebuilt-image-no-registry)).
   Neither needs a JDK, Gradle, or build memory on the VM.
@@ -192,7 +229,7 @@ which turns a memory shortfall into a stall rather than a clean failure. Any of 
   and set `WIKIKT_DATABASE_R2DBC_URL`, `WIKIKT_DATABASE_USERNAME`, and `WIKIKT_DATABASE_PASSWORD`
   to the appropriate values for the managed instance.
 - Snapshots/AMIs of the VM (plus `pg_dump`) make good infrastructure backups, or **Administration |
-  Backup** in WikiKT covers the application layer, and the Git Sync (push mode or bidirectional) option
+  Storage and backup** in WikiKT covers the application layer, and the Git Sync (push mode or bidirectional) option
   in Administration settings can keep an off-site content mirror.
 
 ## Option B: Self-hosted without Docker
@@ -225,7 +262,7 @@ export WIKIKT_SESSION_SECURE_COOKIE=true
 export WIKIKT_PUBLIC_URL=https://wiki.example.com
 ```
 
-There is no `.env` file in this mode — the variables above are plain environment variables. Under
+There is no `.env` file in this mode; the variables above are plain environment variables. Under
 systemd, put the same `KEY=value` lines in the unit's `EnvironmentFile` (below) rather than exporting
 them by hand, and `chmod 600` that file since it holds your secrets. The full list of what you can set
 is in the [environment variable reference](#environment-variable-reference).
@@ -259,7 +296,7 @@ and one site is the catch-all that serves any host no other site claims.
 
 1. **Create the sites.** As an admin, go to **Administration | Sites | New site**. Give each site a name
    and the hostname it answers to (e.g. `wiki.example.com`). Leave the catch-all flag on exactly one
-   site — it handles bare IPs, health checks, and any domain you haven't mapped. Use **Manage** (or the
+   site -- it handles bare IPs, health checks, and any domain you haven't mapped. Use **Manage** (or the
    switcher at the top of the admin sidebar) to choose which site the admin pages act on.
 
 2. **Point DNS at the instance.** Add an `A`/`AAAA` (or `CNAME`) record for every hostname → the same
@@ -274,7 +311,7 @@ and one site is the catch-all that serves any host no other site claims.
      [Caddyfile](../docker/Caddyfile) standalone, add each hostname to its site address instead.)
    - If your proxy instead rewrites `Host` and sends the real host in `X-Forwarded-Host`, set
      **`WIKIKT_TRUST_PROXY=true`** so WikiKT reads the forwarded host. Only enable this when the app is
-     actually behind a trusted proxy — it also makes the login rate-limit trust `X-Forwarded-For`, which a
+     actually behind a trusted proxy -- it also makes the login rate-limit trust `X-Forwarded-For`, which a
      directly-exposed server must not do.
 
 Example nginx that preserves the host (one server block can serve every site since routing happens in
@@ -299,17 +336,18 @@ content, as noted in the confirmation prompt.
 ## Environment variable reference
 
 These are WikiKT's own settings: each one overrides the matching `wikikt.*` key in `application.yaml`, and
-each works in any deployment style — Docker `.env`, a systemd `EnvironmentFile`, or plain `export`.
+each works in any deployment style: Docker `.env`, a systemd `EnvironmentFile`, or plain `export`.
 
 | Variable | Purpose                                                                                                                                                                                                                                           |
 |----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `WIKIKT_ENV` | `development` (default) or `production`. Production refuses insecure defaults and is recommended for such deployments.                                                                                                                            |
 | `WIKIKT_ADMIN_PASSWORD` | Initial `admin` password (development default is `changeme`, fatal error in production).                                                                                                                                                          |
+| `WIKIKT_MIN_PASSWORD_LENGTH` | Minimum length for user-chosen passwords (self-registration, reset, self-service change, and admin-set). Default `5`; raise it (e.g. `12`+) on a public-facing deployment. Capped at 72 (the bcrypt byte limit). |
 | `WIKIKT_SESSION_ENCRYPTION_KEY` | Session cookie encryption key - hex, e.g., `openssl rand -hex 16`.                                                                                                                                                                                |
 | `WIKIKT_SESSION_SIGN_KEY` | Session cookie signing key - hex, e.g., `openssl rand -hex 32`.                                                                                                                                                                                   |
 | `WIKIKT_MFA_KEY` | AES key (hex, e.g., `openssl rand -hex 32`) encrypting stored two-factor (TOTP) secrets at rest. Required (fatal if unset) in production.                                                                                                         |
 | `WIKIKT_SESSION_SECURE_COOKIE` | `true` when served over HTTPS.                                                                                                                                                                                                                    |
-| `WIKIKT_SESSION_MAX_AGE_SECONDS` | Session lifetime (default 1296000 = 15 days).                                                                                                                                                                                                     |
+| `WIKIKT_SESSION_MAX_AGE_SECONDS` | Session lifetime (default 604800 = 7 days).                                                                                                                                                                                                     |
 | `WIKIKT_TRUST_PROXY` | `true` Only behind a reverse proxy (honors `X-Forwarded-*`).                                                                                                                                                                                      |
 | `WIKIKT_PUBLIC_URL` | Canonical base URL for links in outbound email (password reset, welcome), e.g. `https://wiki.example.com`. Set on any internet-facing install so email links use your real host rather than a client-supplied `Host` header.                      |
 | `WIKIKT_DATABASE_TYPE` | `h2` (default) or `postgres` (recommended for production).                                                                                                                                                                                        |
@@ -325,22 +363,23 @@ each works in any deployment style — Docker `.env`, a systemd `EnvironmentFile
 | `WIKIKT_UI_ASSET_SOURCE` | `cdn` (default) or `local`; sources for Bootstrap and highlight.js. See [Asset delivery](#asset-delivery).                                                                                                                                        |
 | `WIKIKT_UI_ICON_FONT_SOURCE` | `cdn` (default) or `local`; sources for Material Design Icons webfont.                                                                                                                                                                        |
 | `WIKIKT_UI_EMOJI_FONT_SOURCE` | `cdn` (default) or `local`; source for emoji webfont.                                                                                                                                                                                          |
-| `WIKIKT_UPDATE_CHECK` | Set to `off` to guarantee the app never contacts `api.github.com` for release update checks, regardless of what an admin enables under Administration > Updates. Checks are opt-in (per admin consent) even when this is unset.                    |
+| `WIKIKT_UPDATE_REQUEST_DIR` / `WIKIKT_UPDATE_STATE_DIR` | Directories of the self-update handshake with the optional updater container. Already set by the Compose files; leave alone unless building a custom stack. Unset (both) = the one-click update feature is absent.                                |
 
 ### Compose-only variables (not WikiKT settings)
 
-Two more `WIKIKT_*` names appear in `.env`, and despite the prefix they are **not** application settings —
-they have no `application.yaml` key, and WikiKT itself never reads them. They exist only in
-`docker-compose.prod.yml`, which uses them to configure Caddy:
+A few more `WIKIKT_*` names appear in `.env`, and despite the prefix they are **not** application settings --
+they have no `application.yaml` key, and WikiKT itself never reads them. They exist only in the
+Compose files, which use them to configure Caddy and the optional updater:
 
 | Variable | Purpose |
 |----------|---------|
 | `WIKIKT_DOMAIN` | The primary hostname Caddy serves and obtains a Let's Encrypt certificate for. Also supplies the default for `WIKIKT_PUBLIC_URL` (`https://$WIKIKT_DOMAIN`), which you can still override by setting `WIKIKT_PUBLIC_URL` explicitly. |
 | `WIKIKT_EXTRA_DOMAINS` | Additional hostnames for the multi-site feature, space-separated (quotes optional), e.g. `docs.example.com team.example.com`. Caddy obtains a certificate for each and routes them all to WikiKT. Leave unset if you serve a single hostname. |
+| `WIKIKT_COMPOSE_DIR` | Only for the opt-in `selfupdate` profile: the absolute host path of the directory holding the Compose file, mounted into the updater container at that same path. Defaults to `/opt/wikikt`, the clone location in step 4, so most installs never set it. See [One-click updates](../docker/README.md#one-click-updates-optional-updater-container). |
 
 The distinction matters for multi-site setups: these two tell **Caddy** which names to hold certificates
 for, while the sites themselves are created in **Administration | Sites**, which is what WikiKT matches
-the request `Host` against. Both are required, and neither implies the other — see
+the request `Host` against. Both are required, and neither implies the other -- see
 [Multiple sites on one instance](#multiple-sites-on-one-instance). They also only apply to the bundled
 Caddy stack; [`docker-compose.home.yml`](../docker-compose.home.yml) has no Caddy, so there certificates
 and hostname routing are your own proxy's job and neither variable does anything.
@@ -379,7 +418,7 @@ With Docker, add those three lines to your `.env` (see [`.env.example`](../.env.
 ## Two-factor authentication (2FA)
 
 WikiKT supports app-based two-factor authentication (TOTP -- Google Authenticator, Aegis, 1Password, etc.).
-Any user can enable it under **Account | Settings | Security**: scan the QR code (or enter the setup key
+Any user can enable it under **Profile → Security** (from your account menu): scan the QR code (or enter the setup key
 manually), confirm a 6-digit code, and save the one-time recovery codes shown once. After that, signing
 in requires the password *and* a current code (or a recovery code).
 
@@ -388,12 +427,12 @@ if enabled for the site.
 
 **Requirements & operations:**
 
-- Set `WIKIKT_MFA_KEY` (a random 32-byte hex value) — it encrypts stored TOTP secrets and is required in
+- Set `WIKIKT_MFA_KEY` (a random 32-byte hex value): encrypts stored TOTP secrets and is required in
   production. Keep it backed up alongside your session keys; losing it makes existing 2FA enrolments
-  unreadable (users would re-enrol).
+  unreadable (users would need to re-enroll).
 - **Lost device recovery:** a user with their recovery codes can sign in with one. If they've lost both
   the device and the codes, an administrator can clear their 2FA from **Administration | Users | (edit
   user) | Reset two-factor authentication**, after which the user signs in with just their password and
   re-enrols. Resetting a *root* administrator's 2FA requires a root administrator.
 - 2FA protects interactive login only; API keys are separate long-lived credentials (you should instead revoke a key
-- if suspected of being compromised).
+  if suspected of being compromised).
