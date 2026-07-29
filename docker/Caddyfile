@@ -4,9 +4,9 @@
 # Caddy obtains + renews a Let's Encrypt cert for EACH name and routes them all to WikiKT, which then
 # resolves the per-request Host to a site (exact hostname match, else the catch-all site).
 #
-# IMPORTANT — a new site's hostname must be set in TWO places, and changing this one needs a redeploy:
+# IMPORTANT: a new site's hostname must be set in TWO places, and changing this one needs a redeploy:
 #   1. This Caddy config (WIKIKT_EXTRA_DOMAINS) so Caddy gets a cert and routes it. Adding the site in
-#      the WikiKT admin console alone is NOT enough — without a cert here, HTTPS to that host fails.
+#      the WikiKT admin console alone is *not* enough; without a cert here, HTTPS to that host fails.
 #   2. The WikiKT admin console (Administration > Sites) so WikiKT maps the hostname to a site.
 # Every hostname also needs its own DNS record pointing at this server (see docker/README.md).
 {$WIKIKT_DOMAIN} {$WIKIKT_EXTRA_DOMAINS:} {

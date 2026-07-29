@@ -11,7 +11,7 @@ Minimum size: **1 vCPU / 1 GB RAM** works for small wikis; 2 GB is suggested for
 JVM plus PostgreSQL. Disk requirements vary based on wiki size, and note that size grows with uploads and revision
 history if enabled.
 
-## Option A — Cloud VM with Docker Compose (recommended)
+## Option A: Cloud VM with Docker Compose (recommended)
 
 ### 1. Create the VM
 
@@ -20,8 +20,8 @@ history if enabled.
 - **Amazon EC2**: Launch an instance with Ubuntu LTS, `t3.small` to `c5.large` suggested (although
 - `t3.micro` may work for small deployments). In the security group, allow 
    inbound **22 (your IP), 80, 443 (anywhere)**.
-- **Google Compute Engine**: Create a VM with Ubuntu LTS, `e2-small`. Tick *Allow HTTP/HTTPS
-  traffic* (or add firewall rules for 80/443).
+- **Google Compute Engine**: Create a VM with Ubuntu LTS, `e2-small` or higher recommended. 
+   Check *Allow HTTP/HTTPS traffic* (or add firewall rules for 80/443).
 
 ### 2. Point DNS at it
 
@@ -49,7 +49,7 @@ curl -fsSL https://get.docker.com | sudo sh
 ```bash
 git clone <your-wikikt-repo-url> wikikt && cd wikikt
 cat > .env <<EOF
-WIKIKT_DOMAIN=wiki.example.com
+WIKIKT_DOMAIN=hdocs3test.wikikit.com
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 WIKIKT_SESSION_ENCRYPTION_KEY=$(openssl rand -hex 16)
 WIKIKT_SESSION_SIGN_KEY=$(openssl rand -hex 32)
@@ -58,6 +58,10 @@ WIKIKT_ADMIN_PASSWORD=<choose-a-strong-admin-password>
 EOF
 chmod 600 .env
 ```
+
+If hosting multiple sites on the same instance, add am extra line to the file after WIKIKT_DOMAIN (or anywhere before end)
+containing space-separated domains (only need to include extra domains, not primary, here):
+WIKIKT_EXTRA_DOMAINS="site1.example.com site2.example.com"`
 
 ### 5. Start
 
