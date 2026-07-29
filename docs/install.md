@@ -86,11 +86,13 @@ log `The "bcdef" variable is not set`, you probably won't see it scroll by in th
 applies however you write the file, including `cp .env.example .env` and editing it. Generated hex and
 base64 values, as in the above suggestions, never contain `$` and should not raise this concern.
 
+
 If using your own version control, be sure to exclude your real `.env` file from it given the secrets
 it contains (the official repo's `.gitignore` already excludes it).
 
 Anything from the [environment variable reference](#environment-variable-reference) below can go in the
 same file, not just the variables the template lists -- the Compose file passes `.env` through to the app.
+
 The exception is the handful of settings the Compose file pins itself (production mode, the proxy/cookie
 posture, and the database wiring): those deliberately win over `.env`, so a stray `WIKIKT_ENV=development`
 there cannot quietly downgrade a production deployment. To change one of those, edit the `wikikt` service's
@@ -104,6 +106,7 @@ WIKIKT_EXTRA_DOMAINS="site1.example.com site2.example.com"
 ```
 
 Quotes here are optional (Compose strips them). Note that this variable configures **Caddy**,
+
 not WikiKT: it is the list of hostnames Caddy obtains certificates for and routes, which is separate from
 creating the sites themselves. See [Multiple sites on one instance](#multiple-sites-on-one-instance) for
 the rest of what that needs.
