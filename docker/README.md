@@ -13,31 +13,18 @@ to be useful in real deployments).
 
 ## Configure
 
-Create a `.env` file next to `docker-compose.prod.yml` — `cp .env.example .env` gives you the
-template below with every option and its comments, ready to fill in:
+All configuration comes from a `.env` file next to `docker-compose.prod.yml`. Copy the annotated
+template and fill it in:
 
 ```bash
-# Your primary domain (required). Caddy will obtain HTTPS certificate
-WIKIKT_DOMAIN=wiki.example.com
-
-# Optional: extra site hostnames for the multi-site feature (space-separated). See "Multiple sites" below.
-# WIKIKT_EXTRA_DOMAINS=docs.example.com team.example.com
-
-# PostgreSQL password (also used by app's connection)
-POSTGRES_PASSWORD=<strong-password>
-
-# Session keys: hex strings, both required in production (dev will warn, prod will fail without):
-WIKIKT_SESSION_ENCRYPTION_KEY=<openssl rand -hex 16>
-WIKIKT_SESSION_SIGN_KEY=<openssl rand -hex 32>
-
-# MFA key: encrypts stored two-factor (TOTP) secrets at rest; also required in production.
-WIKIKT_MFA_KEY=<openssl rand -hex 32>
-
-# Admin password (dev will warn, but prod cannot be or start with "changeme")
-WIKIKT_ADMIN_PASSWORD=<admin-password>
+cp .env.example .env && chmod 600 .env
 ```
 
-Generate the keys:
+[`.env.example`](../.env.example) is the reference for this stack: it lists every variable the Compose
+file reads, each with a comment on what it does and whether it is required. At minimum you must set
+`WIKIKT_DOMAIN`, `POSTGRES_PASSWORD`, `WIKIKT_ADMIN_PASSWORD`, and the three key values — the app runs in
+production mode here, so it refuses to start with an unset session/MFA key or the default `changeme`
+password. Generate the keys with:
 
 ```bash
 echo "WIKIKT_SESSION_ENCRYPTION_KEY=$(openssl rand -hex 16)"
@@ -45,34 +32,22 @@ echo "WIKIKT_SESSION_SIGN_KEY=$(openssl rand -hex 32)"
 echo "WIKIKT_MFA_KEY=$(openssl rand -hex 32)"
 ```
 
-### Asset delivery (optional)
-
-Front-end libraries and webfonts load from public CDNs by default. All of them are also bundled in the
-image, so you can serve them from your own container instead — for an air-gapped network, a strict
-egress policy, or to avoid sending visitor IP addresses to jsDelivr and Google. Add to `.env`:
-
-```bash
-WIKIKT_UI_ASSET_SOURCE=local        # Bootstrap, highlight.js (~440KB)
-WIKIKT_UI_ICON_FONT_SOURCE=local    # Material Design Icons (~750KB)
-WIKIKT_UI_EMOJI_FONT_SOURCE=local   # Noto Color Emoji (~2MB)
-```
-
-Set all three — they are independent. One more request remains after that: the body/heading font
-chosen in **Admin → Settings → Appearance** still comes from Google Fonts unless you pick the
-**System UI** preset. The effective state of all three is shown on that same page, and the full
-rationale is in [docs/install.md](../docs/install.md#asset-delivery).
+Note that `.env` is *not* passed to the container wholesale: the Compose file's `environment:` block lists
+the variables it reads, and only those. `.env.example` covers exactly that set (including the optional
+[asset delivery](../docs/install.md#asset-delivery) switches, which let the front-end libraries and
+webfonts be served from your own container instead of public CDNs). To set anything else from the
+[environment variable reference](../docs/install.md#environment-variable-reference) — connection-pool
+sizing, session lifetime, storage paths — add the line to the `wikikt` service's `environment:` block in
+`docker-compose.prod.yml`, either as a literal value or as `${VAR}` if you would rather keep it in `.env`.
 
 ## DNS
 
-Point your domain at the server before first start (Caddy needs it to pass the ACME challenge) with a DNS
-configuration resembling:
+Point every hostname you serve — the primary `WIKIKT_DOMAIN` and each name in `WIKIKT_EXTRA_DOMAINS` — at
+the server *before* first start, since Caddy validates and issues a certificate per hostname:
 
 ```
 A   wiki.example.com   <your-server-ip>
 ```
-
-Add one such record for **every** hostname you serve — the primary `WIKIKT_DOMAIN` and each name in
-`WIKIKT_EXTRA_DOMAINS` — since Caddy validates and issues a certificate per hostname.
 
 ## Start
 
@@ -98,8 +73,11 @@ The app runs with `WIKIKT_ENV=production` (insecure defaults are fatal, not warn
 
 WikiKT can host multiple sites on one instance, each answering to its own hostname (a subdomain like
 `docs.example.com`, or a separate domain), with one site as the catch-all fallback. The site is chosen
-per request from the `Host` header. To serve extra hostnames over HTTPS, list them in
-`WIKIKT_EXTRA_DOMAINS` (space-separated) in `.env`:
+per request from the `Host` header. What follows is the Caddy/Compose side of that; the feature itself
+(creating sites, the catch-all, backups, other proxies) is covered in
+[docs/install.md](../docs/install.md#multiple-sites-on-one-instance).
+
+To serve extra hostnames over HTTPS, list them in `WIKIKT_EXTRA_DOMAINS` (space-separated) in `.env`:
 
 ```bash
 WIKIKT_DOMAIN=wiki.example.com

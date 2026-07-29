@@ -3,9 +3,11 @@
 The recommended installation path uses **Docker Compose** running the app, PostgreSQL, and Caddy
 (automatic HTTPS). This should deploy the same in any supported environment, including a Linux
 VM (or bare metal) with Docker, a DigitalOcean Droplet, an Amazon EC2 instance, a Google Compute
-Engine VM, or a home server (although non-Internet-facing servers may prefer a simpler option;
-see other Docker Compose example files for more). This guide covers the cloud options first (the only
-provider-specific parts are in  steps 1 and 2) then covers running without Docker.
+Engine VM, or a home server (although non-Internet-facing servers may prefer a simpler option:
+[`docker-compose.home.yml`](../docker-compose.home.yml) is the same stack without Caddy, for a LAN or
+your own reverse proxy -- see [docker/README.md](../docker/README.md#home-behind-your-own-reverse-proxy)).
+This guide covers the cloud options first (the only provider-specific parts are in steps 1 and 2) then
+covers running without Docker.
 
 Minimum size: **1 vCPU / 1 GB RAM** works for small wikis; 2 GB is suggested for most deployments for the
 JVM plus PostgreSQL. Disk requirements vary based on wiki size, and note that size grows with uploads and revision
@@ -46,10 +48,18 @@ curl -fsSL https://get.docker.com | sudo sh
 
 ### 4. Download WikiKT and configure
 
+If you are using a custom fork or clone, replace `<git-url>` below with the URL of your fork. Otherwise,
+use `https://github.com/RMoRobert/WikiKT.git` for the official repo (or switch to desired branch).
+
+The Docker stack is configured by a `.env` file sitting next to the Compose file (or however you prefer to set
+the same enviornment variables). The repo ships [`.env.example`](../.env.example) as an annotated template of the
+supported variables, which you may copy (`cp .env.example .env`) and fill in as desired. Alternatively, pasting
+the below into the shell will create this file with appropriate values in one step for you:
+
 ```bash
-git clone <your-wikikt-repo-url> wikikt && cd wikikt
+git clone <git-url> wikikt && cd wikikt
 cat > .env <<EOF
-WIKIKT_DOMAIN=hdocs3test.wikikit.com
+WIKIKT_DOMAIN=wiki.example.com
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 WIKIKT_SESSION_ENCRYPTION_KEY=$(openssl rand -hex 16)
 WIKIKT_SESSION_SIGN_KEY=$(openssl rand -hex 32)
@@ -58,10 +68,19 @@ WIKIKT_ADMIN_PASSWORD=<choose-a-strong-admin-password>
 EOF
 chmod 600 .env
 ```
+If using your own version control, be sure to exclude your real `.env` file from it given the secrets
+it contains (the official repo's `.gitignore` already excludes it). To set anything else
+from the[environment variable reference](#environment-variable-reference) below, add it to the `wikikt` service's
+`environment:` block in `docker-compose.prod.yml`.
 
-If hosting multiple sites on the same instance, add am extra line to the file after WIKIKT_DOMAIN (or anywhere before end)
-containing space-separated domains (only need to include extra domains, not primary, here):
-WIKIKT_EXTRA_DOMAINS="site1.example.com site2.example.com"`
+If hosting multiple sites on the same instance, add a line listing the extra hostnames, space-separated
+(the primary `WIKIKT_DOMAIN` does not need to be repeated here), as mentioned above:
+
+```bash
+WIKIKT_EXTRA_DOMAINS="site1.example.com site2.example.com"
+```
+
+See [Multiple sites on one instance](#multiple-sites-on-one-instance) for the rest of what that needs.
 
 ### 5. Start
 
@@ -113,6 +132,11 @@ export WIKIKT_SESSION_SECURE_COOKIE=true
 export WIKIKT_PUBLIC_URL=https://wiki.example.com
 ```
 
+There is no `.env` file in this mode — the variables above are plain environment variables. Under
+systemd, put the same `KEY=value` lines in the unit's `EnvironmentFile` (below) rather than exporting
+them by hand, and `chmod 600` that file since it holds your secrets. The full list of what you can set
+is in the [environment variable reference](#environment-variable-reference).
+
 A minimal systemd unit example:
 
 ```ini
@@ -150,9 +174,11 @@ and one site is the catch-all that serves any host no other site claims.
 
 3. **Make sure the proxy forwards the original `Host` header.** WikiKT resolves the site from the request
    host, so the domain the visitor typed must reach the app:
-   - **Caddy and nginx forward `Host` by default**, so you have nothing to do. The bundled
-     [docker/Caddyfile](../docker/Caddyfile) works; add each hostname to its site address (or use a wildcard)
-     so Caddy provisions TLS for it.
+   - **Caddy and nginx forward `Host` by default**, so you have nothing to do. On the bundled Compose
+     stack, list the extra hostnames in `WIKIKT_EXTRA_DOMAINS` in your `.env` and re-run
+     `docker compose -f docker-compose.prod.yml up -d` so Caddy provisions TLS for each one — adding a
+     site in the admin console alone leaves it without a certificate. (Using the
+     [Caddyfile](../docker/Caddyfile) standalone, add each hostname to its site address instead.)
    - If your proxy instead rewrites `Host` and sends the real host in `X-Forwarded-Host`, set
      **`WIKIKT_TRUST_PROXY=true`** so WikiKT reads the forwarded host. Only enable this when the app is
      actually behind a trusted proxy — it also makes the login rate-limit trust `X-Forwarded-For`, which a
@@ -220,7 +246,7 @@ or `local`; the default (none or invalid value specified) results in `cdn`.
 
 They are separate settings rather than one overarching setting because the sizes differ by an order
 of magnitude, and so do the consequences of a blocked CDN: missing *icons* might leave unexpected gaps
-in the UI (thoiugh otherwise functioning), while a missing emoji font degrades gracefully to the OS defaults.
+in the UI (though otherwise functioning), while a missing emoji font degrades gracefully to the OS defaults.
 
 The current state of all three is shown read-only under **Administration | Settings | Appearance |
 Asset delivery**. (Read-only because it can only be configured at deployment for instance, not per

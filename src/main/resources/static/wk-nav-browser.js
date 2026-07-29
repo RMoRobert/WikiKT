@@ -26,10 +26,11 @@
         it.classList.toggle('active', on);
         if (on) it.setAttribute('aria-current', 'true'); else it.removeAttribute('aria-current');
         if (!on) return;
-        var label = it.getAttribute('data-nav-label');
-        if (triggerLabel) triggerLabel.textContent = label;
-        trigger.setAttribute('title', 'Navigation view: ' + label);
-        trigger.setAttribute('aria-label', 'Navigation view: ' + label);
+        // Same wording partials/sidebar.hbs renders server-side — keep the two in step.
+        var label = 'Navigation view mode: ' + it.getAttribute('data-nav-label');
+        if (triggerLabel) triggerLabel.textContent = it.getAttribute('data-nav-label');
+        trigger.setAttribute('title', label);
+        trigger.setAttribute('aria-label', label);
       });
       try { document.cookie = 'wk-nav-view=' + view + '; path=/; max-age=31536000; SameSite=Lax'; } catch (e) {}
     }

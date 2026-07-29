@@ -1,6 +1,6 @@
 # WikiKT
 
-WikiKT (package `com.wikikt`) is a self-hosted wiki/documentation server written in
+WikiKT is a self-hosted wiki/documentation server written in
 Kotlin and built using [Ktor](https://ktor.io), Exposed, and other Kotlin-friendly
 technologies as describe in the [Stack](#stack) section below.
 
@@ -10,7 +10,17 @@ actually a filesystem, just an assigned path that appears as one in the UI and U
 features include users and groups with different permissions allowed for each (plus guests),
 full-text search, scheduled publishing, and reusable content fragments (transclusion).
 
-## Stack
+## Why WikiKT?
+
+While evaluating several documentation or wiki-type solutions, none quite met my needs,
+though many came close. WikiKT aims to fill that gap for me. It may not offer everything
+*you* need, and while somewhat flexible, certain architectural decisions were made to
+prioritize my intended use. It may not meet yours, and that's OK! WikiKT is open-source,
+and you're welcome to fork it and customize it to meet your needs. (Because I work on this
+personal project only in my free time, I cannot personally offer support, significant PR review,
+or similar assistance.)
+
+# Stack
 
 Notable dependencies include:
 
@@ -72,7 +82,7 @@ most self-hosted Linux boxes or similar. See [docs/install.md](docs/install.md) 
 non-Docker (fat JAR + systemd) alternative.
 
 ```bash
-# create .env first (domain, passwords, session keys) -- see docker/README.md
+cp .env.example .env && chmod 600 .env   # then set domain, passwords, and session/MFA keys
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
