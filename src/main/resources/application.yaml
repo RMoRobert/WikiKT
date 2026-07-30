@@ -30,8 +30,8 @@ wikikt:
     # Set true when served over HTTPS so the cookie is never sent over plain HTTP.
     secureCookie: false
     # Session lifetime in seconds; the cookie expires after this and the user must log in again.
-    # Default 604800 (7 days). Bounds how long a stolen or stale cookie stays usable.
-    maxAgeSeconds: 604800
+    # Default 1296000 (15 days). Bounds how long a stolen or stale cookie stays usable.
+    maxAgeSeconds: 1296000
   ui:
     # --- Front-end asset delivery -------------------------------------------------------------
     # Each of the three is "cdn" (the default) or "local". "local" serves the copy bundled in the

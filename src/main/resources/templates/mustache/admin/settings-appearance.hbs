@@ -11,6 +11,7 @@
 {{>partials/admin-shell.hbs}}
     <h1>Appearance</h1>
     {{#saved}}<div class="alert alert-success" role="alert">Settings saved.</div>{{/saved}}
+    {{#appearanceError}}<div class="alert alert-danger" role="alert">{{appearanceError}}</div>{{/appearanceError}}
     <form method="post" action="/a/settings/appearance" class="edit-form">
         {{{csrfField}}}
         <h2>Theme</h2>
@@ -53,9 +54,14 @@
         </div>
         <h2>Colors</h2>
         <div class="mb-3">
-            <label class="form-label">Primary color <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteBrandColor" value="{{siteBrandColorValue}}" placeholder="#0172ad" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
-            <p class="form-text">A hex color (e.g. <code>#0172ad</code>) used as the accent for links and primary buttons (perhaps your brand color). Leave blank for the default primary color.</p>
+            <label class="form-label" for="siteBrandColor">Primary color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" id="siteBrandColor" name="siteBrandColor" value="{{siteBrandColorValue}}" placeholder="#0172ad" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">A hex color (e.g. <code>#0172ad</code>) used as the accent for links and primary buttons. It must be dark enough to read as a link on a white page and behind white button text — WCAG AA, at least 4.5:1 against white — so choose a mid-to-dark shade. Leave blank for the default.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="siteBrandColorDark">Primary color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" id="siteBrandColorDark" name="siteBrandColorDark" value="{{siteBrandColorDarkValue}}" placeholder="#6ea8fe" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <p class="form-text">The link color used in dark mode, where the primary color above is usually too dark to read on the dark background. It must reach 4.5:1 against the dark background, so pick a lighter shade (e.g. <code>#6ea8fe</code>). Leave blank to keep the default dark-mode link color.</p>
         </div>
         <div class="mb-3">
             <label class="form-label">Header color <span class="text-secondary">(optional)</span></label>

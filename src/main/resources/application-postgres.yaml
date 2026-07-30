@@ -22,8 +22,8 @@ wikikt:
     signKey: ""
     # Enable once served over HTTPS.
     secureCookie: false
-    # Session lifetime in seconds (default 604800 = 7 days).
-    maxAgeSeconds: 604800
+    # Session lifetime in seconds (default 1296000 = 15 days).
+    maxAgeSeconds: 1296000
   database:
     type: postgres
     h2:

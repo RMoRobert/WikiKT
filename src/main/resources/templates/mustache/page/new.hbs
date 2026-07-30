@@ -24,10 +24,10 @@
         <div class="mb-3">
             <label class="form-label" for="newPath">Path</label>
             <div class="input-group">
-                <input class="form-control" type="text" id="newPath" name="path" placeholder="e.g. apps/rule-machine/rule-6-1" required autofocus>
+                <input class="form-control" type="text" id="newPath" name="path" placeholder="e.g. apps/rule-machine/rule-6-1" aria-describedby="newPathHelp" required autofocus>
                 <button class="btn btn-outline-secondary" type="button" id="browsePath"><i class="mdi mdi-file-tree" aria-hidden="true"></i> Browse…</button>
             </div>
-            <p class="form-text">Browse existing pages to pick a location, or type a new path.</p>
+            <p class="form-text" id="newPathHelp">Browse existing pages to pick a location, or type a new path.</p>
         </div>
         <div class="mb-3">
             <label class="form-label" for="newLocale">Locale</label>

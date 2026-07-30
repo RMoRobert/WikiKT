@@ -45,8 +45,8 @@
             <h2 class="h5 mt-2">My info</h2>
             <div class="mb-3">
                 <label class="form-label" for="displayName">Display name</label>
-                <input type="text" class="form-control" id="displayName" name="displayName" maxlength="100" value="{{displayName}}" placeholder="{{username}}">
-                <div class="form-text">A friendly name shown instead of your username. Leave blank to use your username.</div>
+                <input type="text" class="form-control" id="displayName" name="displayName" maxlength="100" value="{{displayName}}" placeholder="{{username}}" aria-describedby="displayNameHelp">
+                <div class="form-text" id="displayNameHelp">A friendly name shown instead of your username. Leave blank to use your username.</div>
             </div>
             <div class="mb-3">
                 <label class="form-label" for="jobTitle">Job title</label>
@@ -60,41 +60,41 @@
             <h2 class="h5 mt-4">Preferences</h2>
             <div class="mb-3">
                 <label class="form-label" for="timezone">Time zone</label>
-                <select class="form-select" id="timezone" name="timezone">
+                <select class="form-select" id="timezone" name="timezone" aria-describedby="timezoneHelp">
                     <option value="" {{#usingServerDefault}}selected{{/usingServerDefault}}>Server default ({{serverZone}})</option>
                     {{#timezoneOptions}}
                     <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                     {{/timezoneOptions}}
                 </select>
-                <div class="form-text">Determines what time zone dates and times are displayed in for your account.</div>
+                <div class="form-text" id="timezoneHelp">Determines what time zone dates and times are displayed in for your account.</div>
             </div>
             <div class="mb-3">
                 <label class="form-label" for="dateFormatShort">Short date format</label>
-                <select class="form-select" id="dateFormatShort" name="dateFormatShort">
+                <select class="form-select" id="dateFormatShort" name="dateFormatShort" aria-describedby="dateFormatShortHelp">
                     {{#shortDateOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/shortDateOptions}}
                 </select>
-                <div class="form-text">Used for the compact dates shown with a time (page history, admin lists, etc.).</div>
+                <div class="form-text" id="dateFormatShortHelp">Used for the compact dates shown with a time (page history, admin lists, etc.).</div>
             </div>
             <div class="mb-3">
                 <label class="form-label" for="dateFormatLong">Long date format</label>
-                <select class="form-select" id="dateFormatLong" name="dateFormatLong">
+                <select class="form-select" id="dateFormatLong" name="dateFormatLong" aria-describedby="dateFormatLongHelp">
                     {{#longDateOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/longDateOptions}}
                 </select>
-                <div class="form-text">Used for date-only lines such as a page's &ldquo;last modified&rdquo; date.</div>
+                <div class="form-text" id="dateFormatLongHelp">Used for date-only lines such as a page's &ldquo;last modified&rdquo; date.</div>
             </div>
             <div class="mb-3">
                 <label class="form-label" for="timeFormat">Time format</label>
-                <select class="form-select" id="timeFormat" name="timeFormat">
+                <select class="form-select" id="timeFormat" name="timeFormat" aria-describedby="timeFormatHelp">
                     {{#timeFormatOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/timeFormatOptions}}
                 </select>
-                <div class="form-text">Whether times display on a 12-hour (AM/PM) or 24-hour clock.</div>
+                <div class="form-text" id="timeFormatHelp">Whether times display on a 12-hour (AM/PM) or 24-hour clock.</div>
             </div>
             <div class="mb-3">
                 <label class="form-label" for="userTheme">Color theme</label>
-                <select class="form-select" id="userTheme" name="theme">
+                <select class="form-select" id="userTheme" name="theme" aria-describedby="userThemeHelp">
                     {{#userThemeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/userThemeOptions}}
                 </select>
-                <div class="form-text">Applies to your account on every device. Can also change with theme switcher on top bar if enabled on site.</div>
+                <div class="form-text" id="userThemeHelp">Applies to your account on every device. Can also change with theme switcher on top bar if enabled on site.</div>
             </div>
             <button type="submit" class="btn btn-primary">Save</button>
         </form>

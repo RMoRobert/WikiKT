@@ -10,6 +10,9 @@
     {{>partials/brand-style.hbs}}
 </head>
 <body>
+{{! Skip link: the editor has its own bar (not partials/header.hbs), so it needs its own jump to the
+    content textarea (#main below). Off-screen until focused — see .skip-link in site.css. }}
+<a class="skip-link" href="#main">Skip to main content</a>
 <form method="post" action="{{saveUrl}}" class="editor" data-plain-editor="{{plainEditor}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}" data-max-upload-files="{{maxUploadFiles}}">
     {{{csrfField}}}
     <header class="editor-bar">
@@ -78,23 +81,23 @@
         </div>
         {{/infoboxHasOrphans}}
         <div class="mb-3">
-            <label class="form-label">Title</label>
+            <label class="form-label" for="titlePanel">Title</label>
             <input class="form-control" type="text" id="titlePanel" value="{{title}}" placeholder="Page title" autocomplete="off">
         </div>
         <div class="mb-3">
-            <label class="form-label">Short description</label>
-            <textarea class="form-control" name="description" rows="2" maxlength="1000" placeholder="Short summary shown under the title and in link previews">{{description}}</textarea>
+            <label class="form-label" for="pageDescription">Short description</label>
+            <textarea class="form-control" id="pageDescription" name="description" rows="2" maxlength="1000" placeholder="Short summary shown under the title and in link previews">{{description}}</textarea>
         </div>
         {{! Content format is changed from the page's "Page actions → Convert" menu (server-side); this
             hidden field just carries the current format through an ordinary save. }}
         <input type="hidden" name="contentFormat" value="{{contentFormat}}">
         <div class="page-info-row">
-            <div class="mb-3 pi-locale"><label class="form-label">Locale</label>
+            <div class="mb-3 pi-locale"><label class="form-label" for="moveLocale">Locale</label>
                 <select class="form-select" id="moveLocale" name="locale" required>
                     {{#localeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/localeOptions}}
                 </select>
             </div>
-            <div class="mb-3 pi-path"><label class="form-label">Path</label>
+            <div class="mb-3 pi-path"><label class="form-label" for="movePath">Path</label>
                 <div class="input-group">
                     <input class="form-control" type="text" id="movePath" name="path" value="{{pagePath}}" required>
                     <button class="btn btn-outline-secondary" type="button" id="browseMove"><i class="mdi mdi-file-tree" aria-hidden="true"></i> Browse…</button>
@@ -139,11 +142,11 @@
 
         <div class="tab-pane fade" id="pi-metadata" role="tabpanel" aria-labelledby="pi-tab-metadata">
         <div class="mb-3">
-            <label class="form-label">Search engines (robots)</label>
-            <select class="form-select" name="metaRobots">
+            <label class="form-label" for="metaRobots">Search engines (robots)</label>
+            <select class="form-select" name="metaRobots" id="metaRobots" aria-describedby="metaRobotsHelp">
                 {{#metaRobotsOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/metaRobotsOptions}}
             </select>
-            <p class="form-text">Overrides the site-wide default <code>&lt;meta name="robots"&gt;</code> for this page. Applies on "Update live now".</p>
+            <p class="form-text" id="metaRobotsHelp">Overrides the site-wide default <code>&lt;meta name="robots"&gt;</code> for this page. Applies on "Update live now".</p>
         </div>
         </div>{{! /#pi-metadata }}
 
@@ -158,13 +161,13 @@
         <p class="text-secondary">Inject custom CSS and JavaScript into the <code>&lt;head&gt;</code> of this page only. Use with caution, as code is included as-is.  If scheduled, custom styles and scripts will be published when draft becomes live.</p>
         <div class="mb-3">
             <label class="form-label" for="customCss">CSS</label>
-            <textarea class="form-control text-nowrap" style="font-family:var(--bs-font-monospace);" name="customCss" id="customCss" rows="8" spellcheck="false" autocomplete="off" maxlength="20000">{{pageCustomCss}}</textarea>
-            <p class="form-text">Do not include <code>&lt;style&gt;</code> tags.</p>
+            <textarea class="form-control text-nowrap" style="font-family:var(--bs-font-monospace);" name="customCss" id="customCss" rows="8" spellcheck="false" autocomplete="off" maxlength="20000" aria-describedby="customCssHelp">{{pageCustomCss}}</textarea>
+            <p class="form-text" id="customCssHelp">Do not include <code>&lt;style&gt;</code> tags.</p>
         </div>
         <div class="mb-3">
             <label class="form-label" for="customJs">JavaScript</label>
-            <textarea class="form-control text-nowrap" style="font-family:var(--bs-font-monospace);" name="customJs" id="customJs" rows="8" spellcheck="false" autocomplete="off" maxlength="20000">{{pageCustomJs}}</textarea>
-            <p class="form-text">Wrap in script tags.</p>
+            <textarea class="form-control text-nowrap" style="font-family:var(--bs-font-monospace);" name="customJs" id="customJs" rows="8" spellcheck="false" autocomplete="off" maxlength="20000" aria-describedby="customJsHelp">{{pageCustomJs}}</textarea>
+            <p class="form-text" id="customJsHelp">Wrap in script tags.</p>
         </div>
         </div>{{! /#pi-code }}
         {{/canManageCode}}
@@ -192,11 +195,11 @@
 
         <div class="tab-pane fade" id="pi-schedule" role="tabpanel" aria-labelledby="pi-tab-schedule">
         {{#showPublishControls}}
-        <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="published" {{#published}}checked{{/published}}><label class="form-check-label">Published <span class="text-secondary">— when unchecked, the page is a draft visible only to editors</span></label></div>
+        <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="publishedCheck" name="published" {{#published}}checked{{/published}}><label class="form-check-label" for="publishedCheck">Published <span class="text-secondary">— when unchecked, the page is a draft visible only to editors</span></label></div>
         <div class="mb-3">
-            <label class="form-label">Publish at (optional)</label>
-            <input class="form-control" type="datetime-local" name="publishAt" value="{{publishAt}}">
-            <p class="form-text">If the page is left as a draft, it will auto-publish at this time (server time). Ignored once published.</p>
+            <label class="form-label" for="publishAt">Publish at (optional)</label>
+            <input class="form-control" type="datetime-local" id="publishAt" name="publishAt" value="{{publishAt}}" aria-describedby="publishAtHelp">
+            <p class="form-text" id="publishAtHelp">If the page is left as a draft, it will auto-publish at this time (server time). Ignored once published.</p>
         </div>
         {{/showPublishControls}}
         {{#showApply}}
@@ -204,16 +207,16 @@
         <div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-edit-outline" aria-hidden="true"></i> Editing a staged update{{#stagedScheduled}} — scheduled to publish at {{stagedScheduledAt}}{{/stagedScheduled}}{{^stagedScheduled}} (no schedule yet){{/stagedScheduled}}. <a href="{{viewUrl}}?staged" class="alert-link">Preview</a></div>
         {{/hasStaged}}
         <div class="mb-3">
-            <label class="form-label">Apply</label>
-            <select class="form-select" name="applyMode" onchange="var s=document.getElementById('stagedAtRow'); if(s) s.style.display = this.value==='scheduled' ? '' : 'none';">
+            <label class="form-label" for="applyMode">Apply</label>
+            <select class="form-select" id="applyMode" name="applyMode" onchange="var s=document.getElementById('stagedAtRow'); if(s) s.style.display = this.value==='scheduled' ? '' : 'none';">
                 <option value="now" {{#applyNowSel}}selected{{/applyNowSel}}>Update live now</option>
                 <option value="staged" {{#applyStagedSel}}selected{{/applyStagedSel}}>Save as staged draft (no date)</option>
                 <option value="scheduled" {{#applyScheduledSel}}selected{{/applyScheduledSel}}>Schedule publish at…</option>
             </select>
         </div>
         <div class="mb-3" id="stagedAtRow" style="{{^applyScheduledSel}}display:none{{/applyScheduledSel}}">
-            <label class="form-label">Publish at</label>
-            <input class="form-control" type="datetime-local" name="stagedPublishAt" value="{{stagedPublishAtInput}}">
+            <label class="form-label" for="stagedPublishAt">Publish at</label>
+            <input class="form-control" type="datetime-local" id="stagedPublishAt" name="stagedPublishAt" value="{{stagedPublishAtInput}}">
         </div>
         <p class="form-text">Staged saves capture content only; tags, path &amp; permissions apply only with "Update live now". The live page stays unchanged until publish.</p>
         {{#hasStaged}}
@@ -232,7 +235,7 @@
     </div>{{! /#pageInfo modal }}
 
     <main id="main" tabindex="-1" class="editor-content">
-        <textarea name="content" rows="24">{{content}}</textarea>
+        <textarea name="content" rows="24" aria-label="Page content">{{content}}</textarea>
     </main>
 </form>
 {{#loggedIn}}

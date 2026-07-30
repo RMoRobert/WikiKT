@@ -33,6 +33,12 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val SITE_LOGO_URL = "site.logoUrl"
         const val DEFAULT_LOGO_URL = "/logo.svg"
         const val SITE_BRAND_COLOR = "site.brandColor"
+        // Optional brand color used for links in DARK mode. The light [SITE_BRAND_COLOR] drives light-mode
+        // links and the primary/button color in both modes (validated for contrast on white); this one
+        // drives dark-mode link text only, so it can be light enough to read on the dark body. Unset =
+        // dark-mode links fall back to Bootstrap's default. Both are contrast-validated on save (see
+        // brandColorContrastError); the per-mode scoping lives in partials/brand-style.hbs.
+        const val SITE_BRAND_COLOR_DARK = "site.brandColorDark"
         // Optional background colors for the top header bar, one per color mode (light / dark). When
         // unset, a subtly tinted default is used (see site.css). Foreground text/borders are auto-chosen
         // for contrast from each color's luminance (partials/brand-style.hbs).
@@ -431,6 +437,70 @@ class SettingsService(private val database: R2dbcDatabase) {
             }
         }
 
+        // Body backgrounds a brand color is judged against (Bootstrap's --bs-body-bg per theme), and the
+        // WCAG AA text-contrast floor. Used to validate admin-chosen brand colors on save.
+        const val BODY_BG_LIGHT = "#ffffff"
+        const val BODY_BG_DARK = "#212529"
+        const val MIN_AA_CONTRAST = 4.5
+
+        /** `#rgb`/`#rrggbb`/`#rrggbbaa` to (r,g,b), or null if malformed. Alpha is ignored. */
+        private fun hexToRgb(hex: String): Triple<Int, Int, Int>? {
+            val h = hex.removePrefix("#")
+            val full = if (h.length == 3 || h.length == 4) h.take(3).flatMap { listOf(it, it) }.joinToString("") else h
+            if (full.length < 6) return null
+            return try {
+                Triple(full.substring(0, 2).toInt(16), full.substring(2, 4).toInt(16), full.substring(4, 6).toInt(16))
+            } catch (_: NumberFormatException) {
+                null
+            }
+        }
+
+        /** WCAG relative luminance of an sRGB color (0..1). */
+        private fun relativeLuminance(rgb: Triple<Int, Int, Int>): Double {
+            fun channel(c: Int): Double {
+                val s = c / 255.0
+                return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * channel(rgb.first) + 0.7152 * channel(rgb.second) + 0.0722 * channel(rgb.third)
+        }
+
+        /** WCAG contrast ratio (1..21) between two hex colors, or null if either is malformed. */
+        internal fun contrastRatio(hex1: String, hex2: String): Double? {
+            val l1 = hexToRgb(hex1)?.let { relativeLuminance(it) } ?: return null
+            val l2 = hexToRgb(hex2)?.let { relativeLuminance(it) } ?: return null
+            val hi = maxOf(l1, l2)
+            val lo = minOf(l1, l2)
+            return (hi + 0.05) / (lo + 0.05)
+        }
+
+        /**
+         * Validates the two brand colors for WCAG AA readability, returning a human error message or null
+         * if both are fine. The light color must reach [MIN_AA_CONTRAST]:1 against a white body (it colors
+         * links on white and is the button background with white text); the dark color must reach it
+         * against the dark body. Blank means "unset" and always passes. Assumes each is already
+         * hex-format-validated (a malformed value is treated as blank/cleared by the caller).
+         */
+        internal fun brandColorContrastError(lightColor: String, darkColor: String): String? {
+            fun fmt(r: Double?) = if (r == null) "?" else (Math.round(r * 10) / 10.0).toString()
+            if (lightColor.isNotBlank()) {
+                val r = contrastRatio(lightColor, BODY_BG_LIGHT)
+                if (r == null || r < MIN_AA_CONTRAST) {
+                    return "Primary color $lightColor is too light: it needs a contrast of at least " +
+                        "$MIN_AA_CONTRAST:1 against a white background for readable links and buttons " +
+                        "(this is ${fmt(r)}:1). Choose a darker shade."
+                }
+            }
+            if (darkColor.isNotBlank()) {
+                val r = contrastRatio(darkColor, BODY_BG_DARK)
+                if (r == null || r < MIN_AA_CONTRAST) {
+                    return "Primary color (dark mode) $darkColor is too dark: it needs a contrast of at " +
+                        "least $MIN_AA_CONTRAST:1 against the dark background for readable links " +
+                        "(this is ${fmt(r)}:1). Choose a lighter shade."
+                }
+            }
+            return null
+        }
+
         /** Escapes text for safe interpolation into the (raw-HTML) default footer. */
         private fun htmlEscape(s: String): String = s
             .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -603,6 +673,9 @@ class SettingsService(private val database: R2dbcDatabase) {
             "siteName" to (s[SITE_NAME]?.ifBlank { null } ?: DEFAULT_SITE_NAME),
             "siteLogoUrl" to (s[SITE_LOGO_URL]?.ifBlank { null } ?: DEFAULT_LOGO_URL),
             "siteBrandColor" to s[SITE_BRAND_COLOR]?.ifBlank { null },
+            // Dark-mode link color; drives only dark-mode links (see brand-style.hbs). Unset → dark links
+            // keep Bootstrap's default, so a light-tuned brand color never lands unreadable on the dark body.
+            "siteBrandColorDark" to s[SITE_BRAND_COLOR_DARK]?.ifBlank { null },
             // Header colors per color mode; the *IsDark flags pick light vs dark navbar foregrounds
             // (unused unless the matching color is set).
             "siteHeaderColor" to (s[SITE_HEADER_COLOR]?.ifBlank { null }),

@@ -54,7 +54,7 @@
     {{#navShowHome}}<a class="wk-nav-home-link{{#navHomeActive}} active{{/navHomeActive}}" href="{{navHomeUrl}}"{{#navHomeActive}} aria-current="page"{{/navHomeActive}}><i class="mdi mdi-home-outline" aria-hidden="true"></i> Home</a>{{/navShowHome}}
     {{/navShowToggle}}
     {{#navShowStatic}}
-    <nav class="wk-nav-pane wk-nav-pane--static{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static">
+    <nav class="wk-nav-pane wk-nav-pane--static{{#navStaticActive}} is-active{{/navStaticActive}}" data-nav-view="static" aria-label="Main menu">
         {{>partials/nav-items.hbs}}
         {{#canManageNav}}<a class="wiki-nav-edit" href="{{editMenuUrl}}"><i class="mdi mdi-pencil-outline" aria-hidden="true"></i> Edit menu</a>{{/canManageNav}}
     </nav>

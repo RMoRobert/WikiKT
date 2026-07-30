@@ -94,10 +94,11 @@
       });
     }
 
-    function render(folder) {
+    function render(folder, focusAfter) {
       var list = childrenAt(folder);
       if (list === null) { folder = ''; list = roots; }   // stale/removed path → fall back to the root
       body.innerHTML = '';
+      var upBtn = null;
 
       if (folder) {
         var parent = folder.split('/').slice(0, -1).join('/');
@@ -106,8 +107,9 @@
         up.className = 'wk-tree-up';
         up.appendChild(icon('arrow-up'));
         up.appendChild(document.createTextNode(' ' + labelAt(folder)));
-        up.addEventListener('click', function () { render(parent); });
+        up.addEventListener('click', function () { render(parent, true); });
         body.appendChild(up);
+        upBtn = up;
       }
 
       if (!list.length) {
@@ -115,6 +117,7 @@
         empty.className = 'wk-tree-empty';
         empty.textContent = folder ? 'This section has no pages.' : 'No pages yet.';
         body.appendChild(empty);
+        if (focusAfter && upBtn) upBtn.focus();
         return;
       }
 
@@ -136,13 +139,21 @@
           main = document.createElement('button');
           main.type = 'button';
           main.className = 'wk-tree-link wk-tree-folder';
-          main.addEventListener('click', function () { render(n.path); });
+          main.addEventListener('click', function () { render(n.path, true); });
         }
         main.appendChild(icon(hasKids ? 'folder-outline' : 'file-document-outline'));
         main.appendChild(document.createTextNode(' ' + n.label));
         row.appendChild(main);
         body.appendChild(row);
       });
+
+      // Keyboard: a drill-in/out replaced the level's DOM, removing whatever the user had focused, so
+      // move focus into the new level (the "up" control, else the first item) instead of dropping it to
+      // <body>. Skipped on the initial render so landing on a page doesn't steal focus from the content.
+      if (focusAfter) {
+        var target = upBtn || body.querySelector('.wk-tree-link');
+        if (target) target.focus();
+      }
     }
 
     // Open on the current page's folder: its own contents when it's a section, else its parent's.

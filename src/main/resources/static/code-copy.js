@@ -4,6 +4,22 @@
   const copyIcon = '<i class="mdi mdi-content-copy" aria-hidden="true"></i>';
   const okIcon = '<i class="mdi mdi-check" aria-hidden="true"></i>';
 
+  // Screen-reader parity for the visual checkmark: announce "Copied" via a shared off-screen live
+  // region (WCAG 4.1.3), so keyboard/AT users get the same confirmation sighted users do.
+  const announceCopied = () => {
+    let r = document.getElementById('wk-copy-status');
+    if (!r) {
+      r = document.createElement('div');
+      r.id = 'wk-copy-status';
+      r.className = 'visually-hidden';
+      r.setAttribute('role', 'status');
+      r.setAttribute('aria-live', 'polite');
+      document.body.appendChild(r);
+    }
+    // Toggle a trailing space so an identical consecutive message still registers as a change.
+    r.textContent = r.textContent === 'Copied' ? 'Copied ' : 'Copied';
+  };
+
   document.querySelectorAll('.wiki-content pre > code').forEach((code) => {
     const pre = code.parentElement;
     if (pre.querySelector('.code-copy-btn')) return; // idempotent
@@ -19,6 +35,7 @@
     const flash = () => {
       btn.classList.add('copied');
       btn.innerHTML = okIcon;
+      announceCopied();
       setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = copyIcon; }, 1500);
     };
     const fallbackCopy = (text) => {

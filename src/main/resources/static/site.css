@@ -47,7 +47,8 @@ textarea::placeholder {
     --wk-sidebar-gap: 0.75rem;
     --wk-sidebar-bg: #2168ab;
     --wk-sidebar-fg: rgba(255, 255, 255, 0.95);
-    --wk-sidebar-fg-muted: rgba(255, 255, 255, 0.72);
+    /* 0.82 (not 0.72) keeps muted sidebar text at >=4.5:1 on the default #2168ab background (WCAG 1.4.3). */
+    --wk-sidebar-fg-muted: rgba(255, 255, 255, 0.82);
     --wk-sidebar-hover-bg: rgba(255, 255, 255, 0.14);
     --wk-sidebar-active-bg: rgba(255, 255, 255, 0.22);
     --wk-sidebar-line: rgba(255, 255, 255, 0.3);
@@ -697,6 +698,13 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     background: rgba(var(--wk-navbar-tint), 0.14);
     color: rgba(var(--wk-navbar-tint), 1);
 }
+/* A distinct keyboard-focus ring (WCAG 2.4.7). These icon buttons aren't .btn, so they get no
+   Bootstrap focus ring, and the hover/focus background tint alone reads ~1.5:1 against the bar —
+   invisible to keyboard users. The outline is drawn over the bar, so --wk-navbar-tint stays legible. */
+.wk-navbar .nav-icon:focus-visible {
+    outline: 2px solid rgba(var(--wk-navbar-tint), 0.9);
+    outline-offset: 2px;
+}
 .wk-navbar .nav-icon .mdi { font-size: 1.5rem; line-height: 1; }
 /* No caret on the icon dropdown toggles — the glyph is the whole affordance. */
 .wk-navbar .nav-icon.dropdown-toggle::after { display: none; }
@@ -761,7 +769,14 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     border-radius: 2rem;
     background: var(--bs-body-bg, var(--bs-body-bg));
 }
-.header-search-box:focus-within { border-color: var(--bs-secondary-color); }
+.header-search-box:focus-within {
+    border-color: var(--bs-secondary-color);
+    /* Visible keyboard-focus ring for the search pill (WCAG 2.4.7); the input itself keeps
+       outline:none below because the wrapper carries the indicator. Drawn over the bar, so the
+       navbar tint stays legible. */
+    outline: 2px solid rgba(var(--wk-navbar-tint), 0.9);
+    outline-offset: 2px;
+}
 .header-search-box .mdi { color: var(--bs-secondary-color); font-size: 1.2rem; }
 .header-search-box input[type="search"] {
     flex: 1;
@@ -1958,3 +1973,15 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 [data-bs-theme="dark"] .hljs-name, [data-bs-theme="dark"] .hljs-quote, [data-bs-theme="dark"] .hljs-selector-tag, [data-bs-theme="dark"] .hljs-selector-pseudo { color: #7ee787; }
 [data-bs-theme="dark"] .hljs-emphasis { font-style: italic; }
 [data-bs-theme="dark"] .hljs-strong { font-weight: bold; }
+
+/* Honor the OS "reduce motion" preference (WCAG 2.3.3). The site's own transitions are short
+   color/opacity/transform tweaks, so near-zeroing them is safe; 0.01ms (rather than none) still fires
+   any transitionend/animationend handlers that JS may await. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

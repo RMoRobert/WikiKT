@@ -42,19 +42,19 @@
             </div>
             <div class="mb-3">
                 <label class="form-label" for="registerUsername">Username</label>
-                <input class="form-control" type="text" id="registerUsername" name="username" value="{{username}}" required autofocus maxlength="100">
+                <input class="form-control" type="text" id="registerUsername" name="username" value="{{username}}" autocomplete="username" required autofocus maxlength="100">
             </div>
             <div class="mb-3">
                 <label class="form-label" for="registerEmail">Email address</label>
-                <input class="form-control" type="email" id="registerEmail" name="email" value="{{email}}" required maxlength="255">
+                <input class="form-control" type="email" id="registerEmail" name="email" value="{{email}}" autocomplete="email" required maxlength="255">
             </div>
             <div class="mb-3">
                 <label class="form-label" for="registerPassword">Password</label>
-                <input class="form-control" type="password" id="registerPassword" name="password" minlength="5" maxlength="72" required>
+                <input class="form-control" type="password" id="registerPassword" name="password" autocomplete="new-password" minlength="5" maxlength="72" required>
             </div>
             <div class="mb-3">
                 <label class="form-label" for="registerConfirm">Confirm password</label>
-                <input class="form-control" type="password" id="registerConfirm" name="confirm" minlength="5" maxlength="72" required>
+                <input class="form-control" type="password" id="registerConfirm" name="confirm" autocomplete="new-password" minlength="5" maxlength="72" required>
             </div>
             <button type="submit" class="btn btn-primary">Create account</button>
             <a href="/login" class="btn btn-link">Back to sign in</a>

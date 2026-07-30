@@ -373,8 +373,16 @@ class UserService(private val database: R2dbcDatabase) {
      * configured `WIKIKT_ADMIN_PASSWORD` on the next boot (a takeover chain on a weak-password deploy).
      * Enforced at the service layer so the admin console and the JSON API share it; throws
      * [IllegalArgumentException] when violated (callers map it to 403, as they do for [update]).
+     *
+     * A root actor also may not delete *their own* account ([actorId] == [id]): together with the
+     * system-group guard above (only a root can delete a root) this guarantees at least one root always
+     * survives — a root can delete another root, but never the last one (itself) — and prevents a
+     * self-inflicted lockout. [actorId] null skips this check (e.g. internal/seed callers).
      */
-    suspend fun delete(id: UInt, actorIsRoot: Boolean = false): Boolean = suspendTransaction(database) {
+    suspend fun delete(id: UInt, actorIsRoot: Boolean = false, actorId: UInt? = null): Boolean = suspendTransaction(database) {
+        if (actorIsRoot && actorId != null && actorId == id) {
+            throw IllegalArgumentException("A root administrator cannot delete their own account.")
+        }
         if (!actorIsRoot) {
             val systemGroups = systemGroupIds()
             val targetGroups = UserGroupsTable.selectAll()

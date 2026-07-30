@@ -1,4 +1,10 @@
-{{#siteBrandColor}}<style>:root{--bs-primary:{{siteBrandColor}};--bs-link-color:{{siteBrandColor}};--bs-link-hover-color:{{siteBrandColor}};}</style>{{/siteBrandColor}}
+{{! Brand / primary color. `--bs-primary` (the button background, with white text) uses the light color
+    in BOTH modes — it's contrast-validated against white on save, so white button text stays readable.
+    Link color is per color mode: the light color on the light body, the optional dark color on the dark
+    body, each validated against its own background so a color tuned for one mode never lands unreadable
+    in the other. Dark color unset => dark-mode links keep Bootstrap's (theme-lightened) default. }}
+{{#siteBrandColor}}<style>:root{--bs-primary:{{siteBrandColor}};}:root:not([data-bs-theme='dark']){--bs-link-color:{{siteBrandColor}};--bs-link-hover-color:{{siteBrandColor}};}</style>{{/siteBrandColor}}
+{{#siteBrandColorDark}}<style>:root[data-bs-theme='dark']{--bs-link-color:{{siteBrandColorDark}};--bs-link-hover-color:{{siteBrandColorDark}};}</style>{{/siteBrandColorDark}}
 {{! Top bar + editor bar colors, one per color mode. Every foreground on those bars is built from
     --wk-navbar-tint (site.css), so a light color needs only that one triple flipped to black to re-tint
     the brand, action icons, editor title field and bar buttons together. :not/:root[..] scoping keeps

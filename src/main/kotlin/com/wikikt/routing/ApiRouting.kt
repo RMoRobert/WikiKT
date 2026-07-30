@@ -276,8 +276,9 @@ fun Route.configureApiRouting() {
                     call.respond(HttpStatusCode.BadRequest)
                     return@delete
                 }
+                val actorId = call.currentUserId()
                 val deleted = try {
-                    call.appContext.users.delete(id, actorIsRoot = call.appContext.permissions.isRoot(call.currentUserId()))
+                    call.appContext.users.delete(id, actorIsRoot = call.appContext.permissions.isRoot(actorId), actorId = actorId)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to e.message))
                     return@delete

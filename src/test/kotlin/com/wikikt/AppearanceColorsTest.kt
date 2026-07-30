@@ -194,6 +194,60 @@ class AppearanceColorsTest {
         }
     }
 
+    @Test
+    fun `brand colors are per color mode and contrast-validated on save`() = testApplication {
+        environment { config = testConfig("brand-colors") }
+        application { configure() }
+        val client = createClient { install(HttpCookies); followRedirects = false }
+        val csrf = login(client)
+
+        // Valid: a dark-enough primary (>=4.5:1 on white) and a light-enough dark-mode link (on the dark body).
+        saveAppearance(client, csrf, "siteBrandColor" to "#0172ad", "siteBrandColorDark" to "#6ea8fe")
+        client.get("/a").bodyAsText().let { html ->
+            assertTrue(html.contains(":root{--bs-primary:#0172ad;}"), "primary set at :root (both modes)")
+            assertTrue(
+                html.contains(":root:not([data-bs-theme='dark']){--bs-link-color:#0172ad;--bs-link-hover-color:#0172ad;}"),
+                "light-mode link color scoped to light mode",
+            )
+            assertTrue(
+                html.contains(":root[data-bs-theme='dark']{--bs-link-color:#6ea8fe;--bs-link-hover-color:#6ea8fe;}"),
+                "dark-mode link color scoped to dark mode",
+            )
+        }
+
+        // Dark color unset: dark-mode links fall back to Bootstrap's default — no override emitted, so a
+        // light-tuned primary never lands unreadable on the dark body.
+        saveAppearance(client, csrf, "siteBrandColor" to "#0172ad", "siteBrandColorDark" to "")
+        client.get("/a").bodyAsText().let { html ->
+            assertTrue(html.contains("--bs-primary:#0172ad;"), "primary survives")
+            assertFalse(html.contains(":root[data-bs-theme='dark']{--bs-link-color"), "no dark-mode link override when unset")
+        }
+
+        // Too-light primary (fails 4.5:1 on white) is rejected: the form re-renders with a message and
+        // NOTHING is persisted (the prior valid value stands).
+        val badLight = client.post("/a/settings/appearance") {
+            setBody(FormDataContent(Parameters.build { append("_csrf", csrf); append("siteBrandColor", "#dddddd") }))
+        }.bodyAsText()
+        assertTrue(badLight.contains("too light"), "low-contrast primary rejected with a message")
+        client.get("/a").bodyAsText().let { html ->
+            assertFalse(html.contains("--bs-primary:#dddddd"), "rejected primary not persisted")
+            assertTrue(html.contains("--bs-primary:#0172ad;"), "prior value untouched by the failed save")
+        }
+
+        // Too-dark dark-mode color (fails 4.5:1 on the dark body) is likewise rejected.
+        val badDark = client.post("/a/settings/appearance") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("_csrf", csrf); append("siteBrandColor", "#0172ad"); append("siteBrandColorDark", "#333333")
+                    },
+                ),
+            )
+        }.bodyAsText()
+        assertTrue(badDark.contains("too dark"), "low-contrast dark-mode color rejected with a message")
+        assertFalse(client.get("/a").bodyAsText().contains("--bs-link-color:#333333"), "rejected dark color not persisted")
+    }
+
     private fun testConfig(dbName: String) = MapApplicationConfig(
         "wikikt.defaultLocale" to "en",
         "wikikt.defaultAdmin.username" to "admin",

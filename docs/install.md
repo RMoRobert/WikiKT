@@ -82,7 +82,7 @@ supported variables, which you may copy (`cp .env.example .env`) and fill in as 
 the below into the shell will create this file with appropriate values in one step for you:
 
 ```bash
-sudo git clone <git-url> /opt/wikikt
+sudo git clone https://github.com/RMoRobert/WikiKT.git /opt/wikikt
 sudo chown -R "$(id -un):" /opt/wikikt
 cd /opt/wikikt
 cat > .env <<EOF
@@ -95,7 +95,7 @@ WIKIKT_ADMIN_PASSWORD=$(openssl rand -base64 18)
 COMPOSE_PROFILES=selfupdate
 EOF
 chmod 600 .env
-grep WIKIKT_ADMIN_PASSWORD .env   # the generated admin password -- save it for your first login!
+grep WIKIKT_ADMIN_PASSWORD .env   # the generated admin password -- SAVE THIS for first login!
 ```
 
 The `COMPOSE_PROFILES=selfupdate` line enables the updater container that powers one-click updates
@@ -105,22 +105,10 @@ you prefer a no-socket or offline-leaning deployment, simply omit that line; eve
 the same and the Updates page shows manual upgrade commands instead. Details and trust note:
 [One-click updates](../docker/README.md#one-click-updates-optional-updater-container).
 
-`<git-url>` is the only placeholder to substitute. The admin password is generated along with the keys
-rather than typed, then printed on screen it so you can save it. Change it after first login to something
-of your own choosing: your account menu → **Profile → Security** (or set your own initially as described below).
-
-**If you set any secret by hand, single-quote the value in `.env`:**
-
-```bash
-WIKIKT_ADMIN_PASSWORD='my p@$$word_example'
-```
-
-(Without the quotes, `$` starts a variable reference and the rest is silently dropped -- `a$bcdef` reaches
-the app as just `a`, leaving a one-character admin password you probably won't expect, and while Compose does
-log `The "bcdef" variable is not set`, you probably won't see it scroll by in the build output.) This
-applies however you write the file, including `cp .env.example .env` and editing it. Generated hex and
-base64 values, as in the above suggestions, never contain `$` and should not raise this concern.
-
+The admin password (and required keys) are generated randomly and then printed to screen at the end, which **you must
+note for your first login**. Change to something of your own choosing in the WikiKIT web UI
+under (account menu) → **Profile → Security** (or set explicitly in environment if preferred beforehand;
+single-quote if set this or any secret manually to avoid `$` interpolation or similar problems).
 
 If using your own version control, be sure to exclude your real `.env` file from it given the secrets
 it contains (the official repo's `.gitignore` already excludes it).
@@ -146,6 +134,8 @@ creating the sites themselves. See [Multiple sites on one instance](#multiple-si
 the rest of what that needs.
 
 ### 5. Start
+
+While still in `/opt/wikikt`, run:
 
 ```bash
 sudo docker compose -f docker-compose.prod.yml up -d

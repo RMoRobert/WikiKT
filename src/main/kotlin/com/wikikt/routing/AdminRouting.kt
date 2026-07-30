@@ -198,6 +198,26 @@ fun Route.configureAdminRouting() {
             val siteId = call.adminSiteId()
             val ctx = call.appContext
             val s = com.wikikt.service.SettingsService
+            // Brand colors are contrast-validated BEFORE anything is saved: a well-formed color that
+            // fails WCAG AA against its body background (light on white, dark on the dark surface) re-
+            // renders the form with an error and the submitted values, persisting nothing. Malformed hex
+            // is treated as blank/cleared as elsewhere, so only a valid-but-low-contrast choice trips this.
+            val brandLight = params["siteBrandColor"].orEmpty().trim().let { if (it.matches(HEX_COLOR)) it else "" }
+            val brandDark = params["siteBrandColorDark"].orEmpty().trim().let { if (it.matches(HEX_COLOR)) it else "" }
+            s.brandColorContrastError(brandLight, brandDark)?.let { err ->
+                call.respond(
+                    MustacheContent(
+                        "admin/settings-appearance.hbs",
+                        call.settingsModel() + mapOf(
+                            "appearanceError" to err,
+                            // Echo what the admin typed (not the cleared/stored value) so they can correct it.
+                            "siteBrandColorValue" to params["siteBrandColor"].orEmpty().trim(),
+                            "siteBrandColorDarkValue" to params["siteBrandColorDark"].orEmpty().trim(),
+                        ),
+                    ),
+                )
+                return@post
+            }
             // Default color mode: one of the known modes, else fall back to the default.
             val theme = params["siteTheme"].orEmpty().trim()
             ctx.settings.set(siteId, s.APPEARANCE_THEME, if (theme in s.THEME_OPTIONS) theme else s.DEFAULT_THEME)
@@ -211,9 +231,9 @@ fun Route.configureAdminRouting() {
             // Favicon: an uploaded image asset, or empty to use the bundled default (/favicon.svg).
             val favicon = params["siteFaviconUrl"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_FAVICON_URL, if (favicon.isNotEmpty() && call.imageAssetUrls().any { it.first == favicon }) favicon else "")
-            // Only persist a valid CSS hex color; anything else clears it (avoids injecting junk into :root).
-            val color = params["siteBrandColor"].orEmpty().trim()
-            ctx.settings.set(siteId, s.SITE_BRAND_COLOR, if (color.matches(HEX_COLOR)) color else "")
+            // Brand colors were hex-validated and contrast-checked above; persist those normalized values.
+            ctx.settings.set(siteId, s.SITE_BRAND_COLOR, brandLight)
+            ctx.settings.set(siteId, s.SITE_BRAND_COLOR_DARK, brandDark)
             val headerColor = params["siteHeaderColor"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_HEADER_COLOR, if (headerColor.matches(HEX_COLOR)) headerColor else "")
             val headerColorDark = params["siteHeaderColorDark"].orEmpty().trim()
@@ -928,8 +948,9 @@ fun Route.configureAdminRouting() {
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
+            val actorId = call.currentUserId()
             try {
-                call.appContext.users.delete(id, actorIsRoot = call.appContext.permissions.isRoot(call.currentUserId()))
+                call.appContext.users.delete(id, actorIsRoot = call.appContext.permissions.isRoot(actorId), actorId = actorId)
             } catch (e: IllegalArgumentException) {
                 call.respondForbidden()
                 return@post
@@ -2342,6 +2363,7 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
             s.EXTERNAL_LINK_MODE_OPTIONS.map { mapOf("value" to it, "label" to labels[it], "selected" to (it == current)) }
         },
         "siteBrandColorValue" to settings.get(siteId, s.SITE_BRAND_COLOR).orEmpty(),
+        "siteBrandColorDarkValue" to settings.get(siteId, s.SITE_BRAND_COLOR_DARK).orEmpty(),
         "siteHeaderColorValue" to settings.get(siteId, s.SITE_HEADER_COLOR).orEmpty(),
         "siteHeaderColorDarkValue" to settings.get(siteId, s.SITE_HEADER_COLOR_DARK).orEmpty(),
         "siteSidebarColorValue" to settings.get(siteId, s.SITE_SIDEBAR_COLOR).orEmpty(),

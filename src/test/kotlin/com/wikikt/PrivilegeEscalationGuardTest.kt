@@ -276,6 +276,37 @@ class PrivilegeEscalationGuardTest {
     }
 
     @Test
+    fun `a root admin cannot delete its own account`() = testApplication {
+        environment { config = h2Config("wikikt-privesc-self-delete") }
+        application { configure() }
+
+        val admin = newClient()
+        val adminCsrf = admin.apiLogin("admin", "test")
+        val adminUserId = admin.idOfUserNamed("admin")
+        // A second, disposable root, to prove root CAN delete a *different* root — just not itself.
+        val adminGroupId = admin.idOfGroupNamed("Admin")
+        val root2 = admin.createUser(adminCsrf, "root2", "pw-root2", listOf(adminGroupId))
+
+        // Root deleting its own account is blocked (it would risk locking the instance out); together
+        // with the system-group guard this keeps at least one root alive at all times.
+        assertEquals(
+            HttpStatusCode.Forbidden,
+            admin.postForm("/a/users/$adminUserId/delete", adminCsrf).status,
+            "root cannot delete its own account (console)",
+        )
+        assertEquals(
+            HttpStatusCode.Forbidden,
+            admin.deleteReq("/u/v1/users/$adminUserId", adminCsrf).status,
+            "root cannot delete its own account (API)",
+        )
+        assertEquals(HttpStatusCode.OK, newClient().rawLogin("admin", "test").status, "root account intact")
+
+        // Positive control: root MAY delete a *different* root — the guard is about self-deletion only.
+        assertEquals(HttpStatusCode.Found, admin.postForm("/a/users/$root2/delete", adminCsrf).status, "root may delete another root")
+        assertEquals(HttpStatusCode.NotFound, admin.get("/u/v1/users/$root2").status, "the other root is gone")
+    }
+
+    @Test
     fun `full backup export requires root`() = testApplication {
         environment { config = h2Config("wikikt-privesc-backup") }
         application { configure() }
