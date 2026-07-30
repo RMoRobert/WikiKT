@@ -877,6 +877,77 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .editor-toolbar button { color: inherit; }
 .editor-toolbar button .mdi { font-size: 1.05rem; }
 .editor-toolbar button .mdi::before { vertical-align: middle; }
+/* Callout insert buttons: tint each icon like the callout box it creates (same values as the
+   .callout-icon colors further down). */
+.editor-toolbar button.mde-callout-info .mdi { color: #1976d2; }
+.editor-toolbar button.mde-callout-success .mdi { color: #2e7d32; }
+.editor-toolbar button.mde-callout-warning .mdi { color: #c87f00; }
+.editor-toolbar button.mde-callout-error .mdi { color: #d32f2f; }
+[data-bs-theme="dark"] .editor-toolbar button.mde-callout-info .mdi { color: #6cb6ff; }
+[data-bs-theme="dark"] .editor-toolbar button.mde-callout-success .mdi { color: #56d364; }
+[data-bs-theme="dark"] .editor-toolbar button.mde-callout-warning .mdi { color: #e3b341; }
+[data-bs-theme="dark"] .editor-toolbar button.mde-callout-error .mdi { color: #ff7b72; }
+
+/* --- "Insert block" dropdown (quote / callouts / code block) ---
+   EasyMDE builds this as a <button> containing a .easymde-dropdown-content <div> of item buttons,
+   opened purely by CSS on :focus / :focus-within / :active (its own JS just focuses the button on
+   click). Its stock styling hardcodes light-mode colors and paints a corner-triangle "menu" hint via
+   a background gradient, so override both and draw a normal caret instead. */
+.editor-toolbar .easymde-dropdown {
+    position: relative;
+    /* Undo the stock corner-gradient + white border; match the plain toolbar buttons. */
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    padding-right: 0.75rem; /* room for the caret */
+}
+.editor-toolbar .easymde-dropdown:hover { background: var(--bs-secondary-bg); }
+.editor-toolbar .easymde-dropdown::after {
+    content: "";
+    position: absolute;
+    right: 0.2rem;
+    top: 50%;
+    margin-top: -0.1em;
+    border: 0.25em solid transparent;
+    border-top-color: currentColor;
+    opacity: 0.7;
+}
+.editor-toolbar .easymde-dropdown-content {
+    /* Keep EasyMDE's visibility-driven open/close; restyle the panel to match the site theme. */
+    min-width: 11rem;
+    /* The button sits in the left half of the toolbar at every breakpoint, so a left-anchored menu
+       fits; this only keeps a narrow phone from ever gaining a horizontal scrollbar. */
+    max-width: calc(100vw - 1rem);
+    padding: 0.25rem;
+    top: calc(100% + 1px);
+    left: 0;
+    text-align: left;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
+}
+/* Menu rows: full-width, icon + label on one line. EasyMDE gives each row `display: block`; these
+   need to be flex so the label sits beside the icon rather than under it. */
+.editor-toolbar .easymde-dropdown-content button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    height: auto;
+    min-height: 2rem; /* comfortable touch target */
+    padding: 0.25rem 0.5rem;
+    text-align: left;
+    white-space: nowrap;
+    border-radius: var(--bs-border-radius-sm);
+}
+.editor-toolbar .easymde-dropdown-content button:hover,
+.editor-toolbar .easymde-dropdown-content button:focus {
+    background: var(--bs-secondary-bg);
+}
+/* The icons are tinted per callout type; keep them from being squeezed by the label. */
+.editor-toolbar .easymde-dropdown-content button .mdi { flex: 0 0 auto; width: 1.25rem; }
+
 /* Pin the formatting toolbar (bold / italic / link / …) just under the sticky editor bar so it stays
    visible however far the content is scrolled. --wk-editor-bar-h is measured in edit.hbs (the bar
    wraps taller on narrow screens); it falls back to the desktop bar height. Needs an opaque background
@@ -1507,17 +1578,17 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 
 /* Section headings get full-width underlines (mapped one level down since content
    headings are demoted on render: our h2 = a source h1, our h3 = a source h2). h2 gets a 2px line
-   that fades out to the right — neutral by default, overridable per site via --wk-heading-line
-   (Admin > Appearance "Heading underline color", emitted by partials/brand-style.hbs as a fade
-   built from the chosen color). h3 gets a plain hairline. */
+   that fades out to the right; h3 gets a plain hairline. Both draw in --wk-heading-line-color
+   (Admin > Appearance "Heading underline color", emitted by partials/brand-style.hbs), falling
+   back to the neutral border color when unset. */
 .wiki-content h2 {
     margin-top: 2.5rem; /* extra separation above sections (the global h2 default is 2rem) */
     padding-bottom: 0.3rem;
-    background: var(--wk-heading-line, linear-gradient(90deg, var(--bs-border-color), transparent)) left bottom / 100% 2px no-repeat;
+    background: linear-gradient(90deg, var(--wk-heading-line-color, var(--bs-border-color)), transparent) left bottom / 100% 2px no-repeat;
 }
 .wiki-content h3 {
     padding-bottom: 0.2rem;
-    border-bottom: var(--bs-border-width) solid var(--bs-border-color);
+    border-bottom: var(--bs-border-width) solid var(--wk-heading-line-color, var(--bs-border-color));
 }
 
 /* Below 1200px the side column leaves the row — with it in place, mid-width screens squeezed the
@@ -1559,7 +1630,11 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    in the single column: "Page details" & co. keep their natural DOM position AFTER <main>, so they
    show (and read, for screen readers) after the page body. */
 @media (max-width: 768px) {
-    .page-aside { display: contents; }
+    /* Drop the sticky-column properties along with the box: with display:contents the aside has no
+       box, but `overflow-y: auto` still makes it a clipping parent with a 0x0 rect — which Popper
+       reads as a zero-width boundary and uses to shove the Share dropdown to the viewport's left
+       edge instead of under its button. */
+    .page-aside { display: contents; position: static; overflow: visible; max-height: none; }
     .page-card { width: 100%; }
 }
 

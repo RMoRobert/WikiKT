@@ -28,6 +28,6 @@
     back to the background-derived muted tint when these are unset. }}
 {{#siteNavHeadingColor}}<style>:root:not([data-bs-theme='dark']){--wk-sidebar-heading-fg:{{siteNavHeadingColor}};}</style>{{/siteNavHeadingColor}}
 {{#siteNavHeadingColorDark}}<style>:root[data-bs-theme='dark']{--wk-sidebar-heading-fg:{{siteNavHeadingColorDark}};}</style>{{/siteNavHeadingColorDark}}
-{{! Content-heading underline: the fade is built here from the single admin-chosen color (falls back
-    to a neutral border-color fade in site.css when unset). }}
-{{#siteHeadingLineColor}}<style>:root{--wk-heading-line:linear-gradient(90deg,{{siteHeadingLineColor}},transparent);}</style>{{/siteHeadingLineColor}}
+{{! Content-heading underline color. site.css draws both heading underlines from it — the h2 fade
+    and the h3 hairline — falling back to the neutral border color when unset. }}
+{{#siteHeadingLineColor}}<style>:root{--wk-heading-line-color:{{siteHeadingLineColor}};}</style>{{/siteHeadingLineColor}}

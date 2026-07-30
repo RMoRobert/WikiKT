@@ -2193,6 +2193,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.selfUpdateModel(c
     val presence = su.presence()
     val status = su.status()
     val running = su.isRunning(status)
+    val pending = su.pending(status)
     val manifest = (check as? UpdateCheck.Available)?.release?.manifest
 
     // Pre-click advisories, comparing the manifest (advisory copy of the release's guardrails)
@@ -2208,7 +2209,8 @@ private suspend fun io.ktor.server.application.ApplicationCall.selfUpdateModel(c
     }
 
     val canInstall = check is UpdateCheck.Available && presence is com.wikikt.service.UpdaterPresence.Available &&
-        !running && manifest != null && manifest.selfUpdatable && !minUpgradeBlocked && !composeRevBlocked
+        !running && pending !is com.wikikt.service.PendingInstall.Waiting &&
+        manifest != null && manifest.selfUpdatable && !minUpgradeBlocked && !composeRevBlocked
 
     // Terminal outcome of the last run, with the DB breadcrumb ("requested by X at Y") when it
     // corroborates. Kept visible until the next run replaces it.
@@ -2233,11 +2235,20 @@ private suspend fun io.ktor.server.application.ApplicationCall.selfUpdateModel(c
         "installMinUpgradeBlocked" to minUpgradeBlocked,
         "installMinUpgradeFrom" to manifest?.minUpgradeFrom,
         "installComposeRevBlocked" to composeRevBlocked,
-        // In-flight: drives the meta-refresh and the progress card.
+        // In-flight: drives the auto-refresh and the progress card.
         "updateRunning" to running,
         "runPhase" to status?.takeIf { !it.terminal }?.phase,
         "runMessage" to status?.takeIf { !it.terminal }?.message,
         "updateAbandoned" to su.isAbandoned(status),
+        // Just-clicked: request written, updater hasn't picked it up yet (poll is ~10 s). Without
+        // this the post-PRG page is indistinguishable from never having clicked Install.
+        "updatePending" to (pending is com.wikikt.service.PendingInstall.Waiting),
+        "pendingRequestedLine" to (pending as? com.wikikt.service.PendingInstall.Waiting)?.let {
+            "Requested by ${it.requestedBy}, ${DateDisplay.format(it.requestedAt, formats)}."
+        },
+        "updateUnclaimed" to (pending is com.wikikt.service.PendingInstall.Unclaimed),
+        // Keep the page following the action (JS poller, or meta refresh under noscript).
+        "updateAutoRefresh" to (running || pending is com.wikikt.service.PendingInstall.Waiting),
         // Last terminal outcome.
         "lastOutcome" to (terminal != null),
         "outcomeSuccess" to (terminal?.phase == "success"),

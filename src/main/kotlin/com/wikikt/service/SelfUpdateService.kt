@@ -14,11 +14,11 @@ import java.nio.file.StandardCopyOption
 import java.util.UUID
 
 /**
- * The updater sidecar's periodic heartbeat (`updater.json` in the state dir). Its freshness — not
- * volume existence, not an env var — is how the app knows an updater is actually running: the volume
- * exists even with the `selfupdate` profile off, and an env flag would lie when the container is
+ * The updater sidecar's periodic heartbeat (`updater.json` in the state dir). Its freshness -- not
+ * volume existence or an environment variable -- is how the app knows an updater is actually running: the
+ * volume exists even with the `selfupdate` profile off, and an env flag would lie when the container is
  * stopped. [runningComposeRevision] is the `com.wikikt.compose-revision` label of the *running* app
- * container, reported by the updater (which can `docker inspect`; the app cannot see its own labels) —
+ * container, reported by the updater (which can `docker inspect`; the app cannot see its own labels);
  * it lets the Updates page warn about a required Compose-file change before Install is clicked.
  */
 @Serializable
@@ -73,7 +73,21 @@ sealed interface UpdaterPresence {
     data class Available(val heartbeat: UpdaterHeartbeat) : UpdaterPresence
 }
 
-enum class InstallRequestOutcome { REQUESTED, UPDATER_NOT_AVAILABLE, ALREADY_RUNNING }
+/**
+ * The gap between clicking Install and the updater picking the request up (its poll is ~10 s).
+ * Without this state the post-click page looks identical to the pre-click one, as if the button
+ * did nothing. Derived entirely from disk (`request.json` vs `status.json`'s requestId), so it
+ * survives the PRG redirect and any reload.
+ */
+sealed interface PendingInstall {
+    /** Request written, not yet picked up; normal for the first seconds after the click. */
+    data class Waiting(val requestedAt: Long, val requestedBy: String) : PendingInstall
+
+    /** Still unclaimed well past the poll interval: the updater likely stopped. */
+    data class Unclaimed(val requestedAt: Long) : PendingInstall
+}
+
+enum class InstallRequestOutcome { REQUESTED, UPDATER_NOT_AVAILABLE, ALREADY_RUNNING, ALREADY_REQUESTED }
 
 /**
  * App side of the self-update handshake with the `wikikt-updater` sidecar. See
@@ -127,14 +141,36 @@ class SelfUpdateService(
         status != null && !status.terminal && (clock() - status.updatedAt) > STATUS_STALE_MS
 
     /**
-     * Rings the doorbell. The app-side running check is UX only — the real single-flight guarantee is
+     * The last written request, when the updater hasn't acknowledged it yet ([status] carries the
+     * requestId the updater is/was working on; the updater echoes the id it consumed, so a match
+     * means the request's story is now told by the status card instead). Requests older than
+     * [STATUS_STALE_MS] return null so a leftover file (e.g. a recreated state volume) won't make
+     * this state get stuck.
+     */
+    suspend fun pending(status: UpdaterStatus?): PendingInstall? {
+        val d = dirs ?: return null
+        val req = readJson<UpdateRequest>(d.requestDir.resolve(REQUEST_FILE))?.takeIf { it.schema == SCHEMA } ?: return null
+        if (status?.requestId == req.requestId) return null
+        return when (val age = clock() - req.requestedAt) {
+            in 0..PENDING_PICKUP_MS -> PendingInstall.Waiting(req.requestedAt, req.requestedBy)
+            in PENDING_PICKUP_MS..STATUS_STALE_MS -> PendingInstall.Unclaimed(req.requestedAt)
+            else -> null.also { if (age < 0) logger.debug("request.json is from the future; ignoring") }
+        }
+    }
+
+    /**
+     * Rings the doorbell. The app-side running check is UX only; the real single-flight guarantee is
      * the updater's own lock (`mkdir /state/.lock`) plus its request-id replay protection, because
      * this process is about to be replaced and cannot hold a lock across its own restart.
      */
     suspend fun requestInstall(requestedBy: String, currentVersion: String, expectVersion: String): InstallRequestOutcome {
         val d = dirs ?: return InstallRequestOutcome.UPDATER_NOT_AVAILABLE
         if (presence() !is UpdaterPresence.Available) return InstallRequestOutcome.UPDATER_NOT_AVAILABLE
-        if (isRunning(status())) return InstallRequestOutcome.ALREADY_RUNNING
+        val current = status()
+        if (isRunning(current)) return InstallRequestOutcome.ALREADY_RUNNING
+        // A request already waiting for pickup: don't overwrite it (double-click, or two admins). An
+        // Unclaimed one may be overwritten — re-requesting is exactly the recovery for that state.
+        if (pending(current) is PendingInstall.Waiting) return InstallRequestOutcome.ALREADY_REQUESTED
 
         val request = UpdateRequest(
             schema = SCHEMA,
@@ -163,7 +199,7 @@ class SelfUpdateService(
         return InstallRequestOutcome.REQUESTED
     }
 
-    /** Size-capped, throw-proof JSON read. Any problem — missing, huge, garbage — is null. */
+    /** Size-capped, throw-proof JSON read. Any problem (missing, huge, garbage) is null. */
     private suspend inline fun <reified T> readJson(path: Path): T? = withContext(Dispatchers.IO) {
         try {
             if (!Files.isRegularFile(path) || Files.size(path) > MAX_FILE_BYTES) return@withContext null
@@ -185,6 +221,10 @@ class SelfUpdateService(
 
         /** Heartbeat older than this = updater not responding (it rewrites every ~10 s poll). */
         const val HEARTBEAT_FRESH_MS = 180_000L
+
+        /** How long a written request may sit unacknowledged before "waiting" (a spinner, normal)
+         *  becomes "unclaimed" (a warning). The updater polls every ~10s; 60s should be generous. */
+        const val PENDING_PICKUP_MS = 60_000L
 
         /** Non-terminal status older than this = the updater died mid-run; show "unknown". */
         const val STATUS_STALE_MS = 15 * 60_000L

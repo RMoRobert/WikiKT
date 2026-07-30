@@ -67,14 +67,18 @@ class UpdateHandshakeTest {
             )
         }
 
-        fun writeStatus(phase: String, terminal: Boolean, updatedAt: Long = now) {
+        fun writeStatus(phase: String, terminal: Boolean, updatedAt: Long = now, requestId: String = "r1") {
             Files.writeString(
                 stateDir.resolve("status.json"),
-                """{"schema":1,"requestId":"r1","phase":"$phase","terminal":$terminal,
+                """{"schema":1,"requestId":"$requestId","phase":"$phase","terminal":$terminal,
                    "startedAt":${updatedAt - 60_000},"updatedAt":$updatedAt,
                    "fromVersion":"1.2.3","toVersion":"1.3.0","message":"msg","logTail":["a","b"]}""",
             )
         }
+
+        /** The requestId of the request the app last wrote — the real updater echoes it into status.json. */
+        fun writtenRequestId(): String =
+            Regex("\"requestId\":\"([0-9a-f-]{36})\"").find(Files.readString(requestDir.resolve("request.json")))!!.groupValues[1]
     }
 
     @Test
@@ -137,14 +141,52 @@ class UpdateHandshakeTest {
         assertTrue("\"requestedBy\":\"rob\"" in text, text)
         assertTrue("\"requestedAt\":${env.now}" in text, "timestamps are epoch millis: $text")
 
+        // Freshly written and not yet picked up: a second click must not overwrite it.
+        assertEquals(InstallRequestOutcome.ALREADY_REQUESTED, env.service.requestInstall("rob", "1.2.3", "1.3.0"))
+
         // While the updater reports a run in flight, a second request is refused (UX guard; the
         // updater's lock + replay protection are the real guarantee).
-        env.writeStatus("pulling", terminal = false)
+        val requestId = env.writtenRequestId()
+        env.writeStatus("pulling", terminal = false, requestId = requestId)
         assertEquals(InstallRequestOutcome.ALREADY_RUNNING, env.service.requestInstall("rob", "1.2.3", "1.3.0"))
 
         // Terminal status: a new request may be written again (and atomically replaces the old file).
-        env.writeStatus("success", terminal = true)
+        env.writeStatus("success", terminal = true, requestId = requestId)
         assertEquals(InstallRequestOutcome.REQUESTED, env.service.requestInstall("rob", "1.3.0", "1.4.0"))
+    }
+
+    @Test
+    fun `pending tracks the click through pickup, and goes unclaimed if the updater never comes`() = runBlocking<Unit> {
+        val env = Env("pending")
+        assertNull(env.service.pending(env.service.status()), "no request file, nothing pending")
+
+        env.writeHeartbeat()
+        assertEquals(InstallRequestOutcome.REQUESTED, env.service.requestInstall("rob", "1.2.3", "1.3.0"))
+
+        // Immediately after the click (this is what the PRG redirect renders): Waiting, with the
+        // audit line the page shows.
+        val waiting = env.service.pending(env.service.status())
+        assertIs<com.wikikt.service.PendingInstall.Waiting>(waiting)
+        assertEquals("rob", waiting.requestedBy)
+
+        // The updater picks it up (echoes the requestId): pending yields to the running status card.
+        val requestId = env.writtenRequestId()
+        env.writeStatus("backing-up", terminal = false, requestId = requestId)
+        val status = env.service.status()
+        assertNull(env.service.pending(status), "acknowledged request is no longer pending")
+        assertTrue(env.service.isRunning(status))
+
+        // Alternate ending: never picked up. Past the pickup window it turns into a warning...
+        env.writeHeartbeat() // fresh heartbeat, so requestInstall's presence gate passes below
+        Files.deleteIfExists(env.stateDir.resolve("status.json"))
+        env.now += SelfUpdateService.PENDING_PICKUP_MS + 1
+        assertIs<com.wikikt.service.PendingInstall.Unclaimed>(env.service.pending(env.service.status()))
+        // ...which may be overwritten by a fresh request (that is the recovery path), unlike Waiting.
+        assertEquals(InstallRequestOutcome.REQUESTED, env.service.requestInstall("rob", "1.2.3", "1.3.0"))
+
+        // And a request old enough to predate the stale window is ignored entirely.
+        env.now += SelfUpdateService.STATUS_STALE_MS + 1
+        assertNull(env.service.pending(env.service.status()), "ancient leftover request is not alarming")
     }
 
     @Test

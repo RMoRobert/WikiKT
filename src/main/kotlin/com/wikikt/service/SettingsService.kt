@@ -71,8 +71,8 @@ class SettingsService(private val database: R2dbcDatabase) {
         // the sidebar background — so these override only the headings, not the links around them.
         const val SITE_NAV_HEADING_COLOR = "site.navHeadingColor"
         const val SITE_NAV_HEADING_COLOR_DARK = "site.navHeadingColorDark"
-        // Optional color for the fading underline drawn beneath content section headings (h2). When
-        // unset, a neutral border-color fade is used (see .wiki-content h2 in site.css).
+        // Optional color for the underlines drawn beneath content section headings — the h2 fade and
+        // the h3 hairline. When unset, both use the neutral border color (see .wiki-content in site.css).
         const val SITE_HEADING_LINE_COLOR = "site.headingLineColor"
         // Browser-tab favicon: an uploaded image asset, or the bundled default at [DEFAULT_FAVICON_URL].
         const val SITE_FAVICON_URL = "site.faviconUrl"

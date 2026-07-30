@@ -3,10 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {{! While the updater sidecar is mid-update, reload every few seconds (same pattern as Git sync
-        on the Storage page). Mid-refresh the app container itself restarts; the browser retries and
-        reconnects to the new instance, which renders the terminal status. }}
-    {{#updateRunning}}<meta http-equiv="refresh" content="4">{{/updateRunning}}
+    {{! While an install request is pending or running, keep the page following it. A plain meta
+        refresh (the Storage page's pattern) breaks here: the app container restarts mid-update, and
+        a refresh that fires during that gap navigates to the browser's connection-error page and
+        stops refreshing — stranding the admin. So with JS, poll /healthz and only reload once the
+        app answers: the page rides through the restart and comes back showing the outcome. The meta
+        refresh remains as the noscript fallback (its copy warns about the connection error). }}
+    {{#updateAutoRefresh}}
+    <noscript><meta http-equiv="refresh" content="4"></noscript>
+    <script>
+        setInterval(function () {
+            fetch('/healthz', {cache: 'no-store'})
+                .then(function (r) { if (r.ok) { window.location.reload(); } })
+                .catch(function () { /* app restarting; keep polling until it answers again */ });
+        }, 4000);
+    </script>
+    {{/updateAutoRefresh}}
     <title>Admin | Updates | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
@@ -15,11 +27,30 @@
 {{>partials/admin-shell.hbs}}
     <h1>Updates</h1>
 
+    {{#updatePending}}
+    <div class="alert alert-info" role="alert">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        <b>Update requested</b> — waiting for the updater to pick it up (usually within seconds).
+        {{#pendingRequestedLine}}{{pendingRequestedLine}}{{/pendingRequestedLine}}
+        <div class="small mt-1">This page follows the update automatically, including through
+        WikiKT's own restart. Stay on this page or come back later — the result shows either way.</div></div>
+    {{/updatePending}}
+
+    {{#updateUnclaimed}}
+    <div class="alert alert-warning" role="alert"><i class="mdi mdi-timer-alert-outline" aria-hidden="true"></i>
+        The last install request was never picked up by the updater. Check
+        <code>docker compose logs wikikt-updater</code> on the server; if an update is still
+        available below, you can request it again.</div>
+    {{/updateUnclaimed}}
+
     {{#updateRunning}}
-    <div class="alert alert-info" role="alert"><i class="mdi mdi-loading mdi-spin" aria-hidden="true"></i>
+    <div class="alert alert-info" role="alert">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
         <b>Update in progress</b> ({{runPhase}}). {{runMessage}}
-        <div class="small mt-1">This page refreshes automatically. WikiKT itself restarts partway
-        through — a brief connection error in your browser is expected; just wait and it will reload.</div></div>
+        <div class="small mt-1">This page follows the update automatically, including through
+        WikiKT's own restart, and will show the result when it finishes.
+        <noscript>Without JavaScript, expect a brief connection error while WikiKT restarts — wait a
+        minute, then reload this page for the result.</noscript></div></div>
     {{/updateRunning}}
 
     {{#updateAbandoned}}
@@ -105,19 +136,23 @@
     <div class="card border-primary mb-4">
         <div class="card-header"><i class="mdi mdi-rocket-launch-outline" aria-hidden="true"></i> Install automatically</div>
         <div class="card-body">
-            <p>The updater container is running. It will {{^dbIsFile}}take a database backup, {{/dbIsFile}}pull the new image,
+            <p>The updater will {{^dbIsFile}}take a database backup, {{/dbIsFile}}pull the new image,
                 restart WikiKT, verify the new version reports healthy, and roll back automatically if it
-                doesn't. WikiKT restarts partway through — expect a brief connection error on this page.</p>
+                doesn't. WikiKT will restart partway through (a breif connection error on this page is normal).</p>
             {{#dbIsFile}}
             {{! The updater's automatic backup is a pg_dump against a database service. On H2 the
                 database is a file in the app volume, so there is no service to dump and that step is
                 skipped -- making the admin's own backup the only one that exists. }}
             <div class="alert alert-warning py-2" role="alert"><i class="mdi mdi-database-alert-outline" aria-hidden="true"></i>
                 This instance uses H2, so the updater <b>cannot</b> take its automatic pre-update database
-                backup. Take a <a href="/a/backup/export" class="alert-link">full backup</a> first — if the
-                new version fails after migrating the schema, it is not rolled back automatically.</div>
+                backup. Take a <a href="/a/backup/export" class="alert-link">full backup</a> first for safety,
+                as there is no automatic rollback in case of failure.</div>
             {{/dbIsFile}}
-            <form method="post" action="/a/updates/install">
+            {{! onsubmit: instant feedback on the click (the button has no name/value, so disabling
+                it mid-submit never drops a form field). The real "it started" state is the pending
+                card the redirect lands on, derived from request.json — this is just the first paint. }}
+            <form method="post" action="/a/updates/install"
+                  onsubmit="var b = this.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Requesting…';">
                 {{{csrfField}}}
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" name="confirmInstall" id="confirmInstall" value="1">
@@ -137,27 +172,29 @@
     {{/installMinUpgradeBlocked}}
     {{#installComposeRevBlocked}}
     <div class="alert alert-warning" role="alert"><i class="mdi mdi-file-alert-outline" aria-hidden="true"></i>
-        This release requires a Compose file change that an image pull can't deliver — follow the
-        release notes and upgrade manually. One-click install is disabled.</div>
+        This release requires a Compose file change that the automatic update service cannot handle on its own.
+        Follow the release notes and upgrade manually. One-click install is disabled for this release.</div>
     {{/installComposeRevBlocked}}
     {{#installNotSelfUpdatable}}
     <div class="alert alert-warning" role="alert"><i class="mdi mdi-hand-back-left-outline" aria-hidden="true"></i>
-        This release is marked as requiring a manual upgrade — follow the release notes.</div>
+        This release is marked as requiring a manual upgrade; follow the release notes.</div>
     {{/installNotSelfUpdatable}}
     {{#installNoManifest}}
-    <p class="form-text">This release publishes no update manifest, so one-click install isn't offered for it.</p>
+    <p class="form-text">This release publishes no update manifest, so one-click install is not available.</p>
     {{/installNoManifest}}
     {{#updaterStale}}
     <div class="alert alert-warning" role="alert"><i class="mdi mdi-heart-off-outline" aria-hidden="true"></i>
-        The updater container isn't responding — check <code>docker compose logs wikikt-updater</code>.
-        One-click install is unavailable until it reports in.</div>
+        The updater container isn't responding. Check <code>docker compose logs wikikt-updater</code> on your
+        server. One-click install is unavailable until it reports in.</div>
     {{/updaterStale}}
 
     <div class="card mb-4">
-        <div class="card-header"><i class="mdi mdi-console" aria-hidden="true"></i> How to upgrade</div>
+        <div class="card-header"><i class="mdi mdi-console" aria-hidden="true"></i> How to upgrade manually</div>
         <div class="card-body">
+            <p class="mb-2">Use these steps for **manual upgrades** if automatic is not available or desired.</p>
             <p class="mb-2">Take a <a href="/a/backup/export">backup</a> first. Then, on the server, from the
-                directory holding your Compose file:</p>
+                directory holding your Compose file, perform one of the following sets of steps, depending on how
+                you installed WikiKT in the first place:</p>
             <p class="mb-1 fw-semibold">Using the prebuilt image (the default production setup):</p>
             <pre class="bg-body-tertiary p-2 rounded"><code>sudo docker compose -f docker-compose.prod.yml pull wikikt
 sudo docker compose -f docker-compose.prod.yml up -d</code></pre>

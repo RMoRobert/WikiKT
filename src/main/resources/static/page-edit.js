@@ -146,6 +146,52 @@
   var mde = function (name, action, icon, title, noDisable) {
     return { name: name, action: action, className: "mdi mdi-" + icon, title: title, noDisable: !!noDisable };
   };
+  // A dropdown menu row: a regular EasyMDE button plus a visible text label (site.css lays the
+  // rows out as a vertical menu; the label doubles as the hover tooltip).
+  var mdeItem = function (name, action, icon, label) {
+    var b = mde(name, action, icon, label);
+    b.text = label;
+    return b;
+  };
+  // Wiki.js-style callout inserts: quote the selection (or current line) and tag it with a
+  // `{.is-x}` marker — the decorate syntax the renderer turns into a styled callout box. On an
+  // already-tagged block the buttons retag instead: a different class switches the callout type,
+  // the same class removes the tag (leaving a plain quote).
+  var CALLOUT_CLASS = "is-(?:info|success|warning|danger|error)";
+  var CALLOUT_ONLY = new RegExp("^\\s*\\{\\.(" + CALLOUT_CLASS + ")}\\s*$");
+  var CALLOUT_TRAILING = new RegExp("\\s*\\{\\.(" + CALLOUT_CLASS + ")}\\s*$");
+  function insertCallout(editor, cls) {
+    var cm = editor.codemirror;
+    var start = cm.getCursor("from").line;
+    var to = cm.getCursor("to");
+    // A selection ending at column 0 shouldn't drag that line into the quote.
+    var end = (to.line > start && to.ch === 0) ? to.line - 1 : to.line;
+    cm.operation(function () {
+      var lastText = cm.getLine(end);
+      var below = end + 1 < cm.lineCount() ? cm.getLine(end + 1) : "";
+      var m = CALLOUT_ONLY.exec(below);
+      if (m) { // marker on its own line below the block
+        if (m[1] === cls) cm.replaceRange("", { line: end, ch: lastText.length }, { line: end + 1, ch: below.length });
+        else cm.replaceRange("{." + cls + "}", { line: end + 1, ch: 0 }, { line: end + 1, ch: below.length });
+        return;
+      }
+      m = CALLOUT_TRAILING.exec(lastText);
+      if (m) { // `> text {.is-x}` trailing form (also covers the cursor sitting on a marker line)
+        var head = lastText.slice(0, m.index).replace(/\s+$/, "");
+        cm.replaceRange(m[1] === cls ? head : head + " {." + cls + "}",
+          { line: end, ch: 0 }, { line: end, ch: lastText.length });
+        return;
+      }
+      // New callout: blank lines are quoted too, so a multi-paragraph selection stays one box.
+      for (var i = start; i <= end; i++) {
+        if (!/^\s*>/.test(cm.getLine(i))) cm.replaceRange("> ", { line: i, ch: 0 });
+      }
+      var endText = cm.getLine(end);
+      cm.replaceRange("\n{." + cls + "}", { line: end, ch: endText.length });
+      cm.setCursor({ line: end, ch: endText.length });
+    });
+    cm.focus();
+  }
   var easymde = new EasyMDE({
     element: textarea,
     autoDownloadFontAwesome: false,
@@ -163,7 +209,21 @@
       mde("italic", EasyMDE.toggleItalic, "format-italic", "Italic"),
       mde("heading", EasyMDE.toggleHeadingSmaller, "format-header-pound", "Heading"),
       "|",
-      mde("quote", EasyMDE.toggleBlockquote, "format-quote-close", "Quote"),
+      {
+        // An item with `children` renders as an EasyMDE dropdown (open while the button holds
+        // focus). Quote and Code block live here too, so all block inserts share one menu.
+        name: "insert-block",
+        className: "mdi mdi-alpha-t-box-outline",
+        title: "Insert block",
+        children: [
+          mdeItem("quote", EasyMDE.toggleBlockquote, "format-quote-close", "Quote"),
+          mdeItem("callout-info", function (editor) { insertCallout(editor, "is-info"); }, "information-outline", "Info"),
+          mdeItem("callout-success", function (editor) { insertCallout(editor, "is-success"); }, "check-circle-outline", "Success"),
+          mdeItem("callout-warning", function (editor) { insertCallout(editor, "is-warning"); }, "alert-outline", "Warning"),
+          mdeItem("callout-error", function (editor) { insertCallout(editor, "is-error"); }, "alert-octagon-outline", "Error"),
+          mdeItem("code", EasyMDE.toggleCodeBlock, "code-tags", "Code block"),
+        ],
+      },
       mde("unordered-list", EasyMDE.toggleUnorderedList, "format-list-bulleted", "Bulleted list"),
       mde("ordered-list", EasyMDE.toggleOrderedList, "format-list-numbered", "Numbered list"),
       "|",
@@ -209,7 +269,6 @@
             cm.focus();
           });
       }, "image", "Image"),
-      mde("code", EasyMDE.toggleCodeBlock, "code-tags", "Code block"),
       mde("table", EasyMDE.drawTable, "table", "Table"),
       "|",
       // Full-pane preview (swaps in place of the editor) — shown only on compact screens, where
@@ -256,6 +315,32 @@
     icon.className = 'mdi ' + iconClass;
     icon.setAttribute('aria-hidden', 'true');
     btn.insertBefore(icon, btn.firstChild);
+  });
+  // The "Insert block" dropdown opens on :focus-within (EasyMDE's own CSS), but EasyMDE sets
+  // tabIndex=-1 on every toolbar button, so without this it would be mouse-only. Make the dropdown
+  // and its items tabbable: the closed menu is visibility:hidden, so its items stay out of the tab
+  // order until it opens. Escape closes it by moving focus back to the editor.
+  document.querySelectorAll('.editor-toolbar .easymde-dropdown').forEach(function (dd) {
+    dd.tabIndex = 0;
+    dd.setAttribute('aria-haspopup', 'true');
+    var items = [].slice.call(dd.querySelectorAll('.easymde-dropdown-content button'));
+    items.forEach(function (item) { item.tabIndex = 0; });
+    dd.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); easymde.codemirror.focus(); return; }
+      var at = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        // Wrap around; from the dropdown button itself (at === -1) ArrowDown enters at the top.
+        e.preventDefault();
+        var next = at === -1 ? (e.key === 'ArrowDown' ? 0 : items.length - 1)
+          : (at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[next].focus();
+      } else if ((e.key === 'Enter' || e.key === ' ') && at !== -1) {
+        // These items are <button>s nested inside the dropdown <button> (EasyMDE's own structure),
+        // and browsers skip the normal Enter/Space activation for a nested button — so fire it here.
+        e.preventDefault();
+        items[at].click();
+      }
+    });
   });
   // Keep the formatting toolbar pinned just below the editor bar: expose the bar's rendered height
   // (it wraps to two rows on narrow screens) as --wk-editor-bar-h so the sticky offset in site.css
