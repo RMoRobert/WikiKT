@@ -433,6 +433,18 @@ fun Route.configureAdminRouting() {
             call.respondRedirect("/a/updates")
         }
 
+        // Dismisses the last update's result card. Hides it from this page only — the updater's
+        // status.json and its container logs are untouched (see SelfUpdateService.dismissOutcome).
+        post("/updates/dismiss") {
+            if (!call.requireRoot()) {
+                call.respondForbidden()
+                return@post
+            }
+            if (!call.validateFormCsrf(call.receiveParameters())) return@post
+            call.appContext.selfUpdate.dismissOutcome()
+            call.respondRedirect("/a/updates")
+        }
+
         post("/git-sync") {
             if (!call.requireManageGroups()) {
                 call.respondForbidden()
@@ -2213,12 +2225,13 @@ private suspend fun io.ktor.server.application.ApplicationCall.selfUpdateModel(c
         manifest != null && manifest.selfUpdatable && !minUpgradeBlocked && !composeRevBlocked
 
     // Terminal outcome of the last run, with the DB breadcrumb ("requested by X at Y") when it
-    // corroborates. Kept visible until the next run replaces it.
+    // corroborates. Visible until the next run replaces it or an admin dismisses it (a finished
+    // update's result is read once; nothing else would ever clear it).
     val anchor = ctx.settings.instanceAnchorSiteId()
     val lastRequestId = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUEST_ID)
     val requestedBy = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUESTED_BY)
     val requestedAt = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUESTED_AT)?.toLongOrNull()
-    val terminal = status?.takeIf { it.terminal }
+    val terminal = status?.takeIf { it.terminal && !su.isOutcomeDismissed(it) }
 
     return mapOf(
         "updaterConfigured" to true,
@@ -2249,11 +2262,21 @@ private suspend fun io.ktor.server.application.ApplicationCall.selfUpdateModel(c
         "updateUnclaimed" to (pending is com.wikikt.service.PendingInstall.Unclaimed),
         // Keep the page following the action (JS poller, or meta refresh under noscript).
         "updateAutoRefresh" to (running || pending is com.wikikt.service.PendingInstall.Waiting),
-        // Last terminal outcome.
+        // Last terminal outcome: one alert, coloured by phase (an unrecognised terminal phase from a
+        // newer updater still gets shown, as a neutral note, rather than silently vanishing).
         "lastOutcome" to (terminal != null),
-        "outcomeSuccess" to (terminal?.phase == "success"),
-        "outcomeRolledBack" to (terminal?.phase == "rolled-back"),
-        "outcomeBlocked" to (terminal?.phase == "blocked"),
+        "outcomeAlertClass" to when (terminal?.phase) {
+            "success" -> "alert-success"
+            "failed" -> "alert-danger"
+            "rolled-back" -> "alert-warning"
+            else -> "alert-info"
+        },
+        "outcomeIcon" to when (terminal?.phase) {
+            "success" -> "mdi-check-circle-outline"
+            "failed" -> "mdi-alert-circle-outline"
+            "rolled-back" -> "mdi-undo-variant"
+            else -> "mdi-hand-back-left-outline"
+        },
         "outcomeFailed" to (terminal?.phase == "failed"),
         "outcomeMessage" to terminal?.message,
         "outcomeBackupPath" to terminal?.backupPath?.ifBlank { null },

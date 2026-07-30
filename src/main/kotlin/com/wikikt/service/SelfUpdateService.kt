@@ -199,6 +199,33 @@ class SelfUpdateService(
         return InstallRequestOutcome.REQUESTED
     }
 
+    /**
+     * Hides the current terminal outcome from the Updates page. The result of a finished update is
+     * worth reading once; after that a success note would sit on the page forever, since only the
+     * next update replaces it. Nothing is destroyed: the updater owns `status.json` (the app's mount
+     * is read-only) and the container logs keep the full record — this just remembers which outcome
+     * was acknowledged, so the *next* one still shows unread.
+     */
+    suspend fun dismissOutcome() {
+        val terminal = status()?.takeIf { it.terminal } ?: return
+        settings.set(settings.instanceAnchorSiteId(), SettingsService.UPDATE_LAST_OUTCOME_DISMISSED, outcomeToken(terminal))
+    }
+
+    /** Whether [dismissOutcome] was already called for this exact outcome. */
+    suspend fun isOutcomeDismissed(status: UpdaterStatus?): Boolean {
+        val terminal = status?.takeIf { it.terminal } ?: return false
+        return settings.get(settings.instanceAnchorSiteId(), SettingsService.UPDATE_LAST_OUTCOME_DISMISSED) ==
+            outcomeToken(terminal)
+    }
+
+    /**
+     * Stable identity of one terminal outcome. The updater echoes the requestId it consumed, which is
+     * exactly per-run; a status without one (an updater-initiated run, or a future updater that omits
+     * it) falls back to the finish time so dismissing it can't also hide the next result.
+     */
+    private fun outcomeToken(status: UpdaterStatus): String =
+        status.requestId.ifEmpty { "finishedAt:${status.finishedAt ?: status.updatedAt}" }
+
     /** Size-capped, throw-proof JSON read. Any problem (missing, huge, garbage) is null. */
     private suspend inline fun <reified T> readJson(path: Path): T? = withContext(Dispatchers.IO) {
         try {

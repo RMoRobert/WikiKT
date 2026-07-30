@@ -106,8 +106,7 @@ Be sure to also add a DNS record per hostname pointing at the server (Caddy issu
 
 Note: `WIKIKT_PUBLIC_URL` is a single value (the primary domain). It only affects the host in outbound-email
 links (password reset, welcome). Because accounts are shared across all sites, this should not be an issue, but
-be aware that some users may notice the domain is different from the site they are working in and instead is
-the primary site domain.
+be aware that some users may notice the domain is different from the site they are working in.
 
 ## Home (behind your own reverse proxy)
 
@@ -363,10 +362,12 @@ cannot update *itself*; refresh it if ever necessary with
 `docker compose --profile selfupdate pull wikikt-updater && docker compose --profile selfupdate up -d`.
 
 While an update runs, the page auto-refreshes and briefly shows a connection error when WikiKT
-itself restarts. That is expected, as it reconnects to the new version and reports the outcome. Pre-update
-database dumps live in the `wikikt_update_state` volume under `backups/` (last 3 kept). They are not
-files on the host — the `wikikt` container has that volume mounted read-only at `/app/update/state`, so
-stream the dump straight out of it to restore (`-T` on both execs, or a TTY corrupts the piped bytes):
+itself restarts. That is expected, as it reconnects to the new version and reports the outcome. The
+result card stays on the page until the next update replaces it, or until you dismiss it (from UI only;
+`status.json` and the updater's logs still have it).
+Pre-update database dumps live in the `wikikt_update_state` volume under `backups/` (last 3 kept).
+They are not files on the host; the `wikikt` container has that volume mounted read-only at `/app/update/state`, so
+stream the dump directly out of it to restore (`-T` on both execs, or a TTY corrupts the piped bytes):
 
 ```bash
 # List the available dumps:

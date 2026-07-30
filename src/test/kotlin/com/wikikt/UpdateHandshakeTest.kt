@@ -190,6 +190,36 @@ class UpdateHandshakeTest {
     }
 
     @Test
+    fun `a finished outcome can be dismissed for good, and the next one still shows`() = runBlocking<Unit> {
+        val env = Env("dismiss")
+        assertFalse(env.service.isOutcomeDismissed(env.service.status()), "no outcome yet")
+
+        // A run in flight is not an outcome: dismissing does nothing (and must not pre-hide its result).
+        env.writeStatus("verifying", terminal = false)
+        env.service.dismissOutcome()
+        assertFalse(env.service.isOutcomeDismissed(env.service.status()))
+
+        env.writeStatus("success", terminal = true, requestId = "r1")
+        assertFalse(env.service.isOutcomeDismissed(env.service.status()), "shown until acknowledged")
+        env.service.dismissOutcome()
+        assertTrue(env.service.isOutcomeDismissed(env.service.status()), "and stays hidden across reloads")
+        assertEquals("success", env.service.status()?.phase, "status.json is untouched; only the UI hides it")
+
+        // The next update is a different run, so its result shows unread.
+        env.writeStatus("failed", terminal = true, requestId = "r2")
+        assertFalse(env.service.isOutcomeDismissed(env.service.status()))
+
+        // Without a requestId (an updater-initiated run) the finish time identifies the outcome, so
+        // dismissing one still can't silence a later one.
+        env.writeStatus("success", terminal = true, requestId = "")
+        env.service.dismissOutcome()
+        assertTrue(env.service.isOutcomeDismissed(env.service.status()))
+        env.now += 60_000
+        env.writeStatus("success", terminal = true, requestId = "")
+        assertFalse(env.service.isOutcomeDismissed(env.service.status()))
+    }
+
+    @Test
     fun `unconfigured service is inert`() = runBlocking<Unit> {
         val database = DatabaseFactory.connect(
             DatabaseConfig(
@@ -208,5 +238,7 @@ class UpdateHandshakeTest {
         assertIs<UpdaterPresence.NotInstalled>(service.presence())
         assertNull(service.status())
         assertEquals(InstallRequestOutcome.UPDATER_NOT_AVAILABLE, service.requestInstall("rob", "1.2.3", "1.3.0"))
+        service.dismissOutcome() // no status to dismiss: a no-op, not a stored ghost
+        assertFalse(service.isOutcomeDismissed(service.status()))
     }
 }

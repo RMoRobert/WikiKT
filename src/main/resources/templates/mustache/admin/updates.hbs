@@ -30,10 +30,9 @@
     {{#updatePending}}
     <div class="alert alert-info" role="alert">
         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-        <b>Update requested</b> — waiting for the updater to pick it up (usually within seconds).
+        <b>Update requested</b>; should begin within a few seconds.
         {{#pendingRequestedLine}}{{pendingRequestedLine}}{{/pendingRequestedLine}}
-        <div class="small mt-1">This page follows the update automatically, including through
-        WikiKT's own restart. Stay on this page or come back later — the result shows either way.</div></div>
+        <div class="small mt-1">This page will update automatically as upgrade progresses.</div></div>
     {{/updatePending}}
 
     {{#updateUnclaimed}}
@@ -59,18 +58,6 @@
         <code>docker compose logs wikikt-updater</code> on the server.</div>
     {{/updateAbandoned}}
 
-    {{#lastOutcome}}
-    {{#outcomeSuccess}}<div class="alert alert-success" role="alert"><i class="mdi mdi-check-circle-outline" aria-hidden="true"></i>
-        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}</div>{{/outcomeSuccess}}
-    {{#outcomeRolledBack}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-undo-variant" aria-hidden="true"></i>
-        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}</div>{{/outcomeRolledBack}}
-    {{#outcomeBlocked}}<div class="alert alert-info" role="alert"><i class="mdi mdi-hand-back-left-outline" aria-hidden="true"></i>
-        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}</div>{{/outcomeBlocked}}
-    {{#outcomeFailed}}<div class="alert alert-danger" role="alert"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i>
-        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}
-        {{#outcomeBackupPath}}<div class="small mt-1">Pre-update backup: <code>{{outcomeBackupPath}}</code> (inside the <code>wikikt_update_state</code> volume).</div>{{/outcomeBackupPath}}</div>{{/outcomeFailed}}
-    {{/lastOutcome}}
-
     {{! Running build info -- always shown, whatever the check state. }}
     <div class="card mb-4">
         <div class="card-body d-flex align-items-center gap-3">
@@ -81,6 +68,23 @@
             </div>
         </div>
     </div>
+
+    {{! Result of the last finished update. Colour and icon come from the model (phase-derived), and
+        Dismiss hides it for good: only the next update would otherwise replace it, so a one-time
+        "updated successfully" note would live on this page forever. Dismissing records just this
+        run's identity -- the updater's status.json (which the app mounts read-only) and
+        `docker compose logs wikikt-updater` keep the full record, and the next result shows unread. }}
+    {{#lastOutcome}}
+    <div class="alert {{outcomeAlertClass}} alert-dismissible" role="alert"><i class="mdi {{outcomeIcon}}" aria-hidden="true"></i>
+        {{outcomeMessage}} {{#outcomeRequestedLine}}{{outcomeRequestedLine}}{{/outcomeRequestedLine}}
+        {{#outcomeFailed}}{{#outcomeBackupPath}}<div class="small mt-1">Pre-update backup: <code>{{outcomeBackupPath}}</code> (inside the <code>wikikt_update_state</code> volume).</div>{{/outcomeBackupPath}}{{/outcomeFailed}}
+        {{! A form, not Bootstrap's data-bs-dismiss: the hide has to survive a reload. }}
+        <form method="post" action="/a/updates/dismiss">
+            {{{csrfField}}}
+            <button type="submit" class="btn-close" aria-label="Dismiss this result" title="Dismiss this result"></button>
+        </form>
+    </div>
+    {{/lastOutcome}}
 
     {{#stateDevBuild}}
     <div class="alert alert-secondary" role="alert"><i class="mdi mdi-wrench-outline" aria-hidden="true"></i>

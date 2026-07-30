@@ -84,6 +84,7 @@ class AdminUpdatePageTest {
         assertEquals(HttpStatusCode.Forbidden, ga.get("/a/updates").status)
         assertEquals(HttpStatusCode.Forbidden, ga.postForm("/a/updates/settings", gaCsrf, "updateChecks" to "enable").status)
         assertEquals(HttpStatusCode.Forbidden, ga.postForm("/a/updates/check", gaCsrf).status)
+        assertEquals(HttpStatusCode.Forbidden, ga.postForm("/a/updates/dismiss", gaCsrf).status)
 
         // Anonymous: also forbidden, never a render.
         val anon = createClient { followRedirects = false }
@@ -121,5 +122,13 @@ class AdminUpdatePageTest {
         val install = admin.postForm("/a/updates/install", csrf, "confirmInstall" to "1")
         assertEquals(HttpStatusCode.Found, install.status)
         assertEquals("/a/updates", install.headers["Location"])
+
+        // Dismissing the last result: CSRF required, PRG back to the page, and harmless here (no
+        // updater configured means there is no outcome to hide).
+        val dismissNoCsrf = admin.postForm("/a/updates/dismiss", csrf = null)
+        assertTrue(dismissNoCsrf.status != HttpStatusCode.Found, "missing CSRF must not be accepted")
+        val dismiss = admin.postForm("/a/updates/dismiss", csrf)
+        assertEquals(HttpStatusCode.Found, dismiss.status)
+        assertEquals("/a/updates", dismiss.headers["Location"])
     }
 }

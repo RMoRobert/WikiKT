@@ -361,6 +361,14 @@ class SettingsService(private val database: R2dbcDatabase) {
         const val UPDATE_LAST_REQUESTED_FROM = "update.lastRequestedFrom"
 
         /**
+         * Identity of the finished-update outcome an admin dismissed from the Updates page (see
+         * [SelfUpdateService.dismissOutcome]). The updater's `status.json` is its own single writer and
+         * keeps the outcome forever, so hiding it is recorded here instead — per outcome, so the next
+         * update's result still shows. Instance-wide, like the breadcrumb keys above.
+         */
+        const val UPDATE_LAST_OUTCOME_DISMISSED = "update.lastOutcomeDismissed"
+
+        /**
          * Settings whose values are plaintext credentials. A full backup NEVER writes these into its
          * database dump; they're either dropped (default) or carried separately, password-encrypted, in
          * `secrets.json` (see [BackupService] / [BackupCrypto]). Everything else — including one-way
