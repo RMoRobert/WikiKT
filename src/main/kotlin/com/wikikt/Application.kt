@@ -18,6 +18,7 @@ import com.wikikt.routing.configureWikiRouting
 import com.wikikt.config.isProductionEnvironment
 import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -25,7 +26,12 @@ import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
 import io.ktor.server.http.content.staticResources
 import io.ktor.server.mustache.MustacheContent
+import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.gzip
+import io.ktor.server.plugins.compression.matchContentType
+import io.ktor.server.plugins.compression.minimumSize
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.header
 import io.ktor.server.response.ApplicationSendPipeline
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
@@ -42,6 +48,17 @@ fun Application.module() {
     configureSerialization()
     configureMustache()
     configureSecurity()
+
+    // Compress text responses for deployments where clients reach the app directly (bare jar, or a
+    // proxy/LB that doesn't compress). The bundled Caddy stack instead strips Accept-Encoding toward
+    // the app (docker/Caddyfile) and compresses at the edge, where zstd is also on offer. Only
+    // text-shaped types are matched — images, fonts, and archives are already compressed.
+    install(Compression) {
+        gzip {
+            matchContentType(ContentType.Text.Any, ContentType.Application.Json, ContentType.Application.JavaScript, ContentType.Image.SVG)
+            minimumSize(1024)
+        }
+    }
 
     install(StatusPages) {
         exception<IllegalArgumentException> { call, cause ->
@@ -112,27 +129,41 @@ fun Application.module() {
     startGitSyncScheduler()
     startEmailWorker()
 
+    val production = environment.config.isProductionEnvironment()
     routing {
         staticResources("/static", "static") {
             // Every local /static reference carries ?v=assetVersion, so production can cache hard for a
-            // year — a new build changes the token and browsers fetch fresh files immediately. Dev keeps
-            // today's no-header behavior so edits show on a plain reload.
-            if (environment.config.isProductionEnvironment()) {
+            // year — a new build changes the token and browsers fetch fresh files immediately.
+            // `immutable` additionally spares revalidating the versioned URLs on plain reloads (Ktor's
+            // CacheControl.MaxAge can't express it, hence the literal). Dev keeps today's no-header
+            // behavior so edits show on a plain reload.
+            if (production) {
                 cacheControl {
-                    listOf(CacheControl.MaxAge(maxAgeSeconds = 31_536_000, visibility = CacheControl.Visibility.Public))
+                    listOf(object : CacheControl(Visibility.Public) {
+                        override fun toString() = "public, max-age=31536000, immutable"
+                    })
                 }
             }
         }
 
         // Bundled default favicon + logo, served at root paths. Admin-selected assets (site.faviconUrl
-        // / site.logoUrl) override them via the page <head> and header markup.
-        get("/favicon.svg") {
-            val bytes = call.application.environment.classLoader.getResourceAsStream("static/favicon.svg")?.readBytes()
-            if (bytes != null) call.respondBytes(bytes, ContentType.Image.SVG) else call.respond(HttpStatusCode.NotFound)
-        }
-        get("/logo.svg") {
-            val bytes = call.application.environment.classLoader.getResourceAsStream("static/logo.svg")?.readBytes()
-            if (bytes != null) call.respondBytes(bytes, ContentType.Image.SVG) else call.respond(HttpStatusCode.NotFound)
+        // / site.logoUrl) override them via the page <head> and header markup. Both defaults are
+        // referenced from every page without a version token, and previously went out header-less —
+        // no validator, no freshness — inviting a refetch per page view. So: bytes read once, an
+        // assetVersion ETag turns refetches into 304s (a new build changes it), and production adds a
+        // day of freshness so repeat views skip the request entirely.
+        val bundledSvgEtag = "\"${BuildInfo.assetVersion}\""
+        for (name in listOf("favicon.svg", "logo.svg")) {
+            val bytes = environment.classLoader.getResourceAsStream("static/$name")?.readBytes()
+            get("/$name") {
+                if (bytes == null) return@get call.respond(HttpStatusCode.NotFound)
+                if (call.request.header(HttpHeaders.IfNoneMatch) == bundledSvgEtag) {
+                    return@get call.respond(HttpStatusCode.NotModified)
+                }
+                call.response.headers.append(HttpHeaders.ETag, bundledSvgEtag)
+                if (production) call.response.headers.append(HttpHeaders.CacheControl, "public, max-age=86400")
+                call.respondBytes(bytes, ContentType.Image.SVG)
+            }
         }
 
         // Liveness probe for the container healthcheck (and any external monitor): no database, no

@@ -1,10 +1,10 @@
 # WikiKT serves multiple sites by Host header, so Caddy must hold a certificate for every hostname
 # a site answers to. List the primary domain in WIKIKT_DOMAIN and any additional site hostnames in
 # WIKIKT_EXTRA_DOMAINS (space-separated), e.g. WIKIKT_EXTRA_DOMAINS="docs.example.com team.example.com".
-# Caddy obtains + renews a Let's Encrypt cert for EACH name and routes them all to WikiKT, which then
-# resolves the per-request Host to a site (exact hostname match, else the catch-all site).
+# Caddy obtains and renews a Let's Encrypt cert for each name and routes them all to WikiKT, which itself
+# resolves the per-request Host to a site (exact hostname match or the catch-all site).
 #
-# IMPORTANT: a new site's hostname must be set in TWO places, and changing this one needs a redeploy:
+# IMPORTANT: a new site's hostname must be set in TWO places, and changing #1 one needs a redeploy:
 #   1. This Caddy config (WIKIKT_EXTRA_DOMAINS) so Caddy gets a cert and routes it. Adding the site in
 #      the WikiKT admin console alone is *not* enough; without a cert here, HTTPS to that host fails.
 #   2. The WikiKT admin console (Administration > Sites) so WikiKT maps the hostname to a site.
@@ -13,8 +13,14 @@
     # HTTP -> HTTPS redirect and cert issuance/renewal are automatic. reverse_proxy sets
     # X-Forwarded-For / X-Forwarded-Proto and passes the Host header through; WikiKT honors them
     # because WIKIKT_TRUST_PROXY=true, and resolves the site from that Host.
-    encode gzip
-    reverse_proxy wikikt:8080
+    # zstd is negotiated per-request via Accept-Encoding, so OK to have even if browser falls back to gzip:
+    encode zstd gzip
+    reverse_proxy wikikt:8080 {
+        # The edge owns compression here (zstd + gzip above). Hiding client's Accept-Encoding
+        # keeps the app, which can gzip for bare deployments, sending identity upstream, so Caddy
+        # encodes once and zstd-capable clients aren't stuck with app-level gzip.
+        header_up -Accept-Encoding
+    }
 
     header {
         # No includeSubDomains: a self-hosted wiki often shares its parent domain with other services,

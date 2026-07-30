@@ -186,8 +186,11 @@ internal suspend fun ApplicationCall.serveAssetIfPresent(locale: String, path: S
         respond(HttpStatusCode.NotFound, MustacheContent("error.hbs", errorModel("Not found", 404)))
         return true
     }
-    // Revalidate on every request via an ETag derived from updatedAt, so a replaced file shows
-    // immediately (changed ETag → fresh bytes) while unchanged files get a cheap 304.
+    // Short private freshness window + ETag revalidation. Within max-age the browser reuses the
+    // bytes with no request at all — sparing the resolve + permission check + 304 round-trip that
+    // image-heavy pages otherwise repeat per image on every view. After it, the ETag (derived from
+    // updatedAt) revalidates, so a replaced file propagates within the window — or immediately on a
+    // hard reload. `private` because assets are permission-gated; shared caches must not hold them.
     val etag = "\"${asset.id}-${asset.updatedAt}\""
     if (request.header(HttpHeaders.IfNoneMatch) == etag) {
         respond(HttpStatusCode.NotModified)
@@ -201,7 +204,7 @@ internal suspend fun ApplicationCall.serveAssetIfPresent(locale: String, path: S
         ContentDisposition.Inline.withParameter(ContentDisposition.Parameters.FileName, asset.originalFilename).toString(),
     )
     response.headers.append(HttpHeaders.ETag, etag)
-    response.headers.append(HttpHeaders.CacheControl, "private, no-cache")
+    response.headers.append(HttpHeaders.CacheControl, "private, max-age=300")
     respond(LocalFileContent(file, contentType = ContentType.parse(asset.mime)))
     return true
 }

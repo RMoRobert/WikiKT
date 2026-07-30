@@ -1,6 +1,7 @@
 package com.wikikt
 
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.config.MapApplicationConfig
@@ -30,11 +31,16 @@ class FaviconTest {
             assertTrue(html.contains("""<link rel="icon" href="/favicon.svg""""), "default favicon linked in <head>")
         }
 
-        // The default favicon is actually served at the conventional root path.
+        // The default favicon is actually served at the conventional root path, with an ETag —
+        // it's referenced on every page without a version token, so refetches must 304.
         val res = client.get("/favicon.svg")
         assertEquals(HttpStatusCode.OK, res.status)
         assertTrue(res.headers["Content-Type"].orEmpty().contains("svg"), "served as an SVG")
         assertTrue(res.bodyAsText().contains("<svg"), "is the SVG document")
+        val etag = res.headers["ETag"]
+        assertTrue(!etag.isNullOrBlank(), "bundled favicon carries an ETag")
+        val conditional = client.get("/favicon.svg") { header("If-None-Match", etag!!) }
+        assertEquals(HttpStatusCode.NotModified, conditional.status, "matching If-None-Match yields a 304")
     }
 
     @Test

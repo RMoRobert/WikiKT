@@ -83,20 +83,50 @@ class SeoFooterTest {
             assertTrue(html.contains("Powered by WikiKT"), "default footer keeps the Powered-by line")
         }
 
-        // A Markdown footer override replaces the generated footer entirely (no "Powered by").
+        // An org name that ends in a period supplies its own sentence break before the license.
         client.post("/a/settings") {
             setBody(
                 FormDataContent(
                     Parameters.build {
                         append("_csrf", csrf)
-                        append("siteFooterOverride", "Custom **footer** text")
+                        append("siteName", "Acme Wiki")
+                        append("siteOrgName", "Acme, Inc.")
+                        append("siteContentLicense", "All rights reserved")
+                        append("siteFooterOverride", "")
+                        append("siteDescription", "The Acme knowledge base")
+                        append("siteMetaRobots", "noindex,nofollow")
                     },
                 ),
             )
         }
         client.get("/en/$SAMPLE_PAGE_PATH").bodyAsText().let { html ->
+            assertTrue(html.contains("Acme, Inc. All rights reserved"), "no period is added after an org name that has one")
+            assertFalse(html.contains("Acme, Inc.. "), "the org name's period is not doubled")
+        }
+
+        // A Markdown footer override replaces the generated line; {{year}} resolves to the current year.
+        client.post("/a/settings") {
+            setBody(
+                FormDataContent(
+                    Parameters.build {
+                        append("_csrf", csrf)
+                        append("siteName", "Acme Wiki")
+                        append("siteOrgName", "Acme, Inc.")
+                        append("siteContentLicense", "All rights reserved")
+                        append("siteFooterOverride", "Custom **footer** {{year}} [text](/en/terms)")
+                        append("siteDescription", "The Acme knowledge base")
+                        append("siteMetaRobots", "noindex,nofollow")
+                    },
+                ),
+            )
+        }
+        client.get("/en/$SAMPLE_PAGE_PATH").bodyAsText().let { html ->
+            val year = java.time.Year.now().value.toString()
             assertTrue(html.contains("<strong>footer</strong>"), "override is rendered as Markdown")
-            assertFalse(html.contains("Powered by WikiKT"), "override replaces the default footer")
+            assertTrue(html.contains("""<a href="/en/terms">text</a>"""), "override keeps Markdown links")
+            assertTrue(html.contains("Custom <strong>footer</strong> $year"), "{{year}} resolves to the current year")
+            assertFalse(html.contains("All rights reserved"), "override replaces the generated footer")
+            assertTrue(html.contains("Powered by WikiKT"), "override keeps powered-by tag")
         }
     }
 }

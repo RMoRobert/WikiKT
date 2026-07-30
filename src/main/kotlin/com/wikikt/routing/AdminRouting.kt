@@ -117,12 +117,10 @@ fun Route.configureAdminRouting() {
             ctx.settings.setBool(siteId, s.EDITOR_PLAIN_VIEW, params["editorPlainView"] != null)
             // Branding: stored trimmed; empty clears (falls back to the default site name).
             ctx.settings.set(siteId, s.SITE_NAME, params["siteName"].orEmpty().trim())
-            // Footer: org + license build the default footer; the override (Markdown) replaces it. The
-            // override has no dedicated form field, so only update it when the param is actually present
-            // (else a normal save would silently clear it).
+            // Footer: org + license build the default footer; the override (Markdown) replaces it.
             ctx.settings.set(siteId, s.SITE_ORG_NAME, params["siteOrgName"].orEmpty().trim())
             ctx.settings.set(siteId, s.SITE_CONTENT_LICENSE, params["siteContentLicense"].orEmpty().trim())
-            params["siteFooterOverride"]?.let { ctx.settings.set(siteId, s.SITE_FOOTER_OVERRIDE, it.trim()) }
+            ctx.settings.set(siteId, s.SITE_FOOTER_OVERRIDE, params["siteFooterOverride"].orEmpty().trim())
             // SEO defaults: description used when a page sets none; robots must be a known directive.
             ctx.settings.set(siteId, s.SITE_DESCRIPTION, params["siteDescription"].orEmpty().trim())
             val robots = params["siteMetaRobots"].orEmpty().trim()

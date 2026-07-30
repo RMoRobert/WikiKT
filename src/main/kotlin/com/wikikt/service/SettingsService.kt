@@ -509,6 +509,11 @@ class SettingsService(private val database: R2dbcDatabase) {
             return null
         }
 
+        /** `{{year}}` in the custom footer, replaced with the current year on every render. Double
+         *  braces to match the other custom extensions. */
+        private val FOOTER_YEAR = Regex("""\{\{year}}""")
+        private val FOOTER_NO_TAG = Regex("""\{\{notag}}""")
+
         /** Escapes text for safe interpolation into the (raw-HTML) default footer. */
         private fun htmlEscape(s: String): String = s
             .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -793,16 +798,39 @@ class SettingsService(private val database: R2dbcDatabase) {
     }
 
     /**
-     * The site footer as safe HTML. When [SITE_FOOTER_OVERRIDE] is set, it's rendered as Markdown
-     * (sanitized) and used verbatim. Otherwise the default is built from the org name + license:
+     * The site footer as safe HTML. When [SITE_FOOTER_OVERRIDE] is set, it replaces the generated line:
+     * it's rendered as Markdown (sanitized), with [FOOTER_YEAR] swapped for the current year, and keeps
+     * the `Powered by WikiKT` tag. Otherwise the default is built from the org name + license:
      * `© {year} {Org}. {License} | Powered by WikiKT` (each piece omitted when blank).
      */
     private fun footerHtml(s: Map<String, String>, markdown: MarkdownRenderer, year: Int): String {
-        s[SITE_FOOTER_OVERRIDE]?.ifBlank { null }?.let { return markdown.render(it, ContentFormat.MARKDOWN) }
+        val poweredBy = htmlEscape("Powered by $DEFAULT_SITE_NAME")
+        s[SITE_FOOTER_OVERRIDE]?.ifBlank { null }?.let { raw ->
+            val tag = !FOOTER_NO_TAG.containsMatchIn(raw)
+            val text = FOOTER_NO_TAG.replace(raw, "").replace(FOOTER_YEAR, year.toString()).trim()
+            val html = if (text.isBlank()) "" else markdown.render(text, ContentFormat.MARKDOWN)
+            if (!tag) return html
+            if (html.isBlank()) return "<span>$poweredBy</span>"
+            // Keep the tag on the footer's own line: a one-paragraph footer (the normal case) is unwrapped
+            // so both sit in a single span; anything richer gets the tag as a trailing paragraph.
+            val inline = soleParagraphOf(html)
+            return if (inline != null) "<span>$inline | $poweredBy</span>" else "$html<p>$poweredBy</p>"
+        }
         val org = s[SITE_ORG_NAME]?.ifBlank { null }
         val license = s[SITE_CONTENT_LICENSE]?.ifBlank { null }
         val copyright = "© $year" + (org?.let { " $it" } ?: "")
-        val sentence = if (license != null) "$copyright. $license" else copyright
+        // An org name that already ends in a period ("Acme, Inc.") supplies the sentence break itself —
+        // dropping the one it carries avoids "Acme, Inc.. All rights reserved". Only the stored value the
+        // admin typed is left untouched; this is purely the joining rule.
+        val sentence = if (license != null) "${copyright.removeSuffix(".")}. $license" else copyright
         return "<span>${htmlEscape("$sentence | Powered by $DEFAULT_SITE_NAME")}</span>"
+    }
+
+    /** The inner HTML of a single-paragraph render, or null when the Markdown produced anything else. */
+    private fun soleParagraphOf(html: String): String? {
+        val trimmed = html.trim()
+        if (!trimmed.startsWith("<p>") || !trimmed.endsWith("</p>")) return null
+        val inner = trimmed.substring(3, trimmed.length - 4)
+        return if (inner.contains("<p>") || inner.contains("</p>")) null else inner
     }
 }

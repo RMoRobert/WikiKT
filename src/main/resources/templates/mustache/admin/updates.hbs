@@ -166,7 +166,7 @@
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" name="confirmInstall" id="confirmInstall" value="1">
                     <label class="form-check-label" for="confirmInstall">I understand, and I have a recent
-                        <a href="/a/backup/export">backup</a>{{^dbIsFile}} beyond the automatic pre-update database dump{{/dbIsFile}}.</label>
+                        <a href="/a/backup/export">backup</a>.</label>
                 </div>
                 <button type="submit" class="btn btn-primary"><i class="mdi mdi-download" aria-hidden="true"></i> Install {{latestVersion}}</button>
             </form>
@@ -189,7 +189,7 @@
         This release is marked as requiring a manual upgrade; follow the release notes.</div>
     {{/installNotSelfUpdatable}}
     {{#installNoManifest}}
-    <p class="form-text">This release publishes no update manifest, so one-click install is not available.</p>
+    <p class="form-text">This release has no published update manifest. One-click install is not available.</p>
     {{/installNoManifest}}
     {{#updaterStale}}
     <div class="alert alert-warning" role="alert"><i class="mdi mdi-heart-off-outline" aria-hidden="true"></i>
@@ -209,7 +209,7 @@
         </div>
         <div class="collapse" id="manualUpgradeSteps">
         <div class="card-body">
-            <p class="mb-2">Use these steps for <b>manual upgrades</b> if automatic is not available or desired.</p>
+            <p class="mb-2">Use these steps for <span class="fw-semibold">manual upgrades</span> if automatic is not available or desired.</p>
             <p class="mb-2">Take a <a href="/a/backup/export">backup</a> first. Then, on the server, from the
                 directory holding your Compose file, perform one of the following sets of steps, depending on how
                 you installed WikiKT in the first place:</p>

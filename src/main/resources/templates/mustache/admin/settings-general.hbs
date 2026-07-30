@@ -29,7 +29,12 @@
         <div class="mb-3">
             <label class="form-label">Content license <span class="text-secondary">(optional)</span></label>
             <input class="form-control" type="text" name="siteContentLicense" value="{{siteContentLicenseValue}}" maxlength="200" placeholder="e.g. All rights reserved">
-            <p class="form-text">By default, a footer is automatically generated using the above text. Basic Markdown is supported (links, emphasis, etc.).</p>
+            <p class="form-text">A footer is generated from the two fields above, e.g. &ldquo;&copy; 2026 Acme, Inc. All rights reserved&rdquo;.</p>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Custom footer <span class="text-secondary">(optional)</span></label>
+            <textarea class="form-control" name="siteFooterOverride" maxlength="1000" placeholder="e.g. &copy; &#123;&#123;year&#125;&#125; Acme, Inc. &mdash; [Privacy](/en/privacy)">{{siteFooterOverrideValue}}</textarea>
+            <p class="form-text">Used instead of the generated footer above. Basic Markdown is supported (links, bold, italic, etc.), and <code>&#123;&#123;year&#125;&#125;</code> is replaced with the current year.</p>
         </div>
 
         <h2>SEO</h2>
