@@ -107,12 +107,14 @@ object DateDisplay {
     fun formatDate(millis: Long, formats: DisplayFormats): String = formats.formatLongDate(millis)
 
     /**
-     * Fixed machine-style UTC stamp (e.g. `2026-07-29 14:05 UTC`) for build/release metadata, where a
-     * stable, viewer-independent rendering matters more than locale preferences.
+     * Compact machine-style UTC stamp (e.g. `20260729140531`) for build/release metadata, where a
+     * stable, viewer-independent rendering matters more than locale preferences. Always UTC, and
+     * unlabelled: it identifies a build artifact for a developer comparing it against release
+     * metadata, not a time an end user reads.
      */
     fun formatUtc(millis: Long): String = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).format(UTC_STAMP)
 
-    private val UTC_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'", Locale.ROOT)
+    private val UTC_STAMP = DateTimeFormatter.ofPattern("yyyyMMddHHmmss", Locale.ROOT)
 
     /** The value for an `<input type="datetime-local">` — wall-clock time in [zone] (or "" for null). */
     fun toInput(millis: Long?, zone: ZoneId): String =

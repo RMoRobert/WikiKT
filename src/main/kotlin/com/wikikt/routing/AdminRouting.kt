@@ -2182,8 +2182,8 @@ internal suspend fun io.ktor.server.application.ApplicationCall.updatesModel(): 
     return adminBaseModel() + mapOf(
         "appVersion" to com.wikikt.BuildInfo.version,
         "appGitSha" to com.wikikt.BuildInfo.gitSha.takeIf { it != "unknown" },
-        // Build stamp is fixed UTC (not the viewer's locale format): it identifies a build artifact,
-        // so it should read identically for every admin comparing against release metadata.
+        // Build stamp is a compact, fixed UTC yyyyMMddHHmmss (not the viewer's locale format; identical for
+        // all comparing against release metadata. builtAt is epoch SECONDS in wikikt.properties, hence the *1000).
         "appBuiltAt" to com.wikikt.BuildInfo.builtAt?.let { DateDisplay.formatUtc(it * 1000) },
         "releasesUrl" to UpdateService.RELEASES_PAGE_URL,
         // The Check now button renders only in states where checks are actually running.

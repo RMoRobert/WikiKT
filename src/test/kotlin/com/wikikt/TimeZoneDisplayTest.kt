@@ -45,6 +45,17 @@ class TimeZoneDisplayTest {
     }
 
     @Test
+    fun `formatUtc is a compact, unlabelled, viewer-independent UTC stamp`() {
+        // What the Updates page prints for BuildInfo.builtAt: yyyyMMddHHmmss, always UTC, no zone
+        // label — it identifies a build artifact rather than telling a reader the local time.
+        val withSeconds = java.time.LocalDateTime.of(2026, 1, 2, 3, 4, 5)
+            .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+        assertEquals("20260102030405", DateDisplay.formatUtc(withSeconds))
+        // No viewer preference (zone, locale, format) can change it.
+        assertEquals("20260102030400", DateDisplay.formatUtc(instant))
+    }
+
+    @Test
     fun `DateDisplay honors the short-date and time-format preferences`() {
         assertEquals("2026-01-02 03:04", DateDisplay.format(instant, formats("UTC", short = "iso", time = "24")))
         assertEquals("01/02/2026 03:04", DateDisplay.format(instant, formats("UTC", short = "us")))

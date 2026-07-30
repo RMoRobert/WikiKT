@@ -1,7 +1,25 @@
 // Header behaviors, loaded right after the fixed navbar markup in partials/header.hbs (every
-// page). Independent pieces, each a no-op when its markup is absent: height sync for the
-// fixed navbar, the compact-screen sidebar hamburger, the theme switcher (persists via the
-// data-persist/data-csrf attributes on .wk-theme-menu), and the live search suggestions combobox.
+// page). Independent pieces, each a no-op when its markup is absent: the focus-modality flag,
+// height sync for the fixed navbar, the compact-screen sidebar hamburger, the theme switcher
+// (persists via the data-persist/data-csrf attributes on .wk-theme-menu), and the live search
+// suggestions combobox.
+
+// Focus modality: flag <html> while the last interaction came from a pointer, so CSS can drop
+// decorative focus rings for mouse/touch users while keeping them for keyboard ones — WCAG 2.4.7
+// asks for a visible indicator on KEYBOARD focus, and a pointer user already knows what they just
+// clicked. Deliberately NOT :focus-visible: the spec has text inputs match it unconditionally (so
+// typing state stays discoverable), which lights the search pill's ring on plain clicks too.
+// The flag is negative — set by pointer, cleared by Tab — so if this script never runs, nothing is
+// marked and every ring stays visible. Failing back to "too many rings" beats failing back to
+// "no keyboard focus indicator". Capture phase so a stopPropagation() downstream can't strand it.
+(function () {
+  var root = document.documentElement;
+  document.addEventListener('pointerdown', function () { root.setAttribute('data-wk-pointer', ''); }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Tab') root.removeAttribute('data-wk-pointer');   // the only keyboard route into the pill
+  }, true);
+})();
+
 // The navbar is `position: fixed` to take it out of flow (better behavior for macOS/iOS overscroll), so
 // site.css reserves `--wikikt-header-h` for it — correct for the default single row, but below lg the
 // search box expands into a second row and the bar grows. Republish the measured height into that same

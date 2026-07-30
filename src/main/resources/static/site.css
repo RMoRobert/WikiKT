@@ -769,13 +769,18 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     border-radius: 2rem;
     background: var(--bs-body-bg, var(--bs-body-bg));
 }
-.header-search-box:focus-within {
-    border-color: var(--bs-secondary-color);
-    /* Visible keyboard-focus ring for the search pill (WCAG 2.4.7); the input itself keeps
-       outline:none below because the wrapper carries the indicator. Drawn over the bar, so the
-       navbar tint stays legible. */
+/* Pointer focus gets the border shift alone — clicking is its own indicator. */
+.header-search-box:focus-within { border-color: var(--bs-secondary-color); }
+/* Keyboard-focus ring for the search pill (WCAG 2.4.7); the input itself keeps outline:none below
+   because the wrapper carries the indicator. Gated on the modality flag site-header.js puts on
+   <html> rather than :focus-visible, which text inputs match even on a click (see that file), and
+   negated so a missing/broken script leaves the ring on for everyone. Drawn over the bar, so the
+   navbar tint stays legible. Offset stays 0 deliberately: any offset opens a band of navbar between
+   the pill border and the ring, which reads as a distracting double halo. Sitting on the border it
+   just looks like the pill thickened, and 2px still meets WCAG 2.4.11. */
+:root:not([data-wk-pointer]) .header-search-box:focus-within {
     outline: 2px solid rgba(var(--wk-navbar-tint), 0.9);
-    outline-offset: 2px;
+    outline-offset: 0;
 }
 .header-search-box .mdi { color: var(--bs-secondary-color); font-size: 1.2rem; }
 .header-search-box input[type="search"] {
@@ -1776,6 +1781,27 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     }
     .admin-main { padding: 1rem; }
 }
+
+/* A .card-header that is itself the collapse toggle for the card body (Bootstrap collapse). Strips
+   the button chrome so it still reads as the plain header, with a chevron that flips when open. */
+.card-collapse-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+}
+.card-collapse-toggle .card-collapse-caret {
+    margin-left: auto;
+    color: var(--bs-secondary-color);
+    transition: transform 0.15s ease-in-out;
+}
+.card-collapse-toggle[aria-expanded="true"] .card-collapse-caret { transform: rotate(180deg); }
 
 /* Nav menu divider (a horizontal rule between items) in the wiki sidebar. */
 .wiki-sidebar .nav-divider {

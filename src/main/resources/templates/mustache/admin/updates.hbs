@@ -22,6 +22,10 @@
     <title>Admin | Updates | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
     {{>partials/head-styles.hbs}}
+    {{! The manual-upgrade card collapses via Bootstrap, i.e. via JS. Without JS its toggle can't run,
+        so leave the steps open instead of unreachable — a failed automatic update is exactly when an
+        admin needs them. The id beats Bootstrap's .collapse:not(.show) on specificity. }}
+    <noscript><style>#manualUpgradeSteps { display: block; }</style></noscript>
 </head>
 <body>
 {{>partials/admin-shell.hbs}}
@@ -46,9 +50,8 @@
     <div class="alert alert-info" role="alert">
         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
         <b>Update in progress</b> ({{runPhase}}). {{runMessage}}
-        <div class="small mt-1">This page follows the update automatically, including through
-        WikiKT's own restart, and will show the result when it finishes.
-        <noscript>Without JavaScript, expect a brief connection error while WikiKT restarts — wait a
+        <div class="small mt-1">Status will update automatically and show success or failure when finished.
+        <noscript>Without JavaScript, expect a brief connection error while WikiKT restarts. Wait a
         minute, then reload this page for the result.</noscript></div></div>
     {{/updateRunning}}
 
@@ -63,8 +66,10 @@
         <div class="card-body d-flex align-items-center gap-3">
             <i class="mdi mdi-package-variant-closed fs-1 text-secondary" aria-hidden="true"></i>
             <div>
-                <div class="fw-bold">WikiKT {{appVersion}}{{#appGitSha}} <span class="fw-normal text-secondary" title="Git commit">{{appGitSha}}</span>{{/appGitSha}}</div>
-                <div class="small text-secondary">{{#appBuiltAt}}Built {{appBuiltAt}} &middot; {{/appBuiltAt}}<a href="{{releasesUrl}}" target="_blank" rel="noopener">Release history</a></div>
+                {{! The separator leads the optional part in each line, so a missing stamp (dev build)
+                    or sha (source build without git) can't leave a dangling middot. }}
+                <div class="fw-bold">WikiKT {{appVersion}}{{#appBuiltAt}} &middot; <span title="Build time (UTC)">{{appBuiltAt}}</span>{{/appBuiltAt}}</div>
+                <div class="small text-secondary">{{#appGitSha}}<span title="Git commit">{{appGitSha}}</span> &middot; {{/appGitSha}}<a href="{{releasesUrl}}" target="_blank" rel="noopener">Release history</a></div>
             </div>
         </div>
     </div>
@@ -87,7 +92,7 @@
     {{/lastOutcome}}
 
     {{#stateDevBuild}}
-    <div class="alert alert-secondary" role="alert"><i class="mdi mdi-wrench-outline" aria-hidden="true"></i>
+    <div class="alert alert-secondary" role="alert">
         You are using a development build (<code>{{appVersion}}</code>). Automatic check for updates disabled; only stamped
         release builds have a published version to compare against.</div>
     {{/stateDevBuild}}
@@ -192,10 +197,19 @@
         server. One-click install is unavailable until it reports in.</div>
     {{/updaterStale}}
 
+    {{! Collapsed by default (Bootstrap collapse): these steps are the fallback, not the normal path,
+        and they're long enough to bury the Install card above them. }}
     <div class="card mb-4">
-        <div class="card-header"><i class="mdi mdi-console" aria-hidden="true"></i> How to upgrade manually</div>
+        <div class="card-header">
+            <button class="card-collapse-toggle" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#manualUpgradeSteps" aria-expanded="false" aria-controls="manualUpgradeSteps">
+                <i class="mdi mdi-console" aria-hidden="true"></i> How to upgrade manually
+                <i class="mdi mdi-chevron-down card-collapse-caret" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="collapse" id="manualUpgradeSteps">
         <div class="card-body">
-            <p class="mb-2">Use these steps for **manual upgrades** if automatic is not available or desired.</p>
+            <p class="mb-2">Use these steps for <b>manual upgrades</b> if automatic is not available or desired.</p>
             <p class="mb-2">Take a <a href="/a/backup/export">backup</a> first. Then, on the server, from the
                 directory holding your Compose file, perform one of the following sets of steps, depending on how
                 you installed WikiKT in the first place:</p>
@@ -214,6 +228,7 @@ sudo docker compose -f docker-compose.prod.yml up -d --build wikikt</code></pre>
                 <code>docker compose up -d</code> — see "One-click updates" in <code>docker/README.md</code>
                 (it holds the Docker socket, so read the trust note there first).</p>
             {{/updaterInstalled}}
+        </div>
         </div>
     </div>
     {{/stateAvailable}}
