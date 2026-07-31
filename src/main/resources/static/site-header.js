@@ -1,8 +1,8 @@
 // Header behaviors, loaded right after the fixed navbar markup in partials/header.hbs (every
 // page). Independent pieces, each a no-op when its markup is absent: the focus-modality flag,
 // height sync for the fixed navbar, the compact-screen sidebar hamburger, the theme switcher
-// (persists via the data-persist/data-csrf attributes on .wk-theme-menu), and the live search
-// suggestions combobox.
+// (persists via the data-persist/data-csrf attributes on .wk-theme-menu), the compact search's
+// click-away close, and the live search suggestions combobox.
 
 // Focus modality: flag <html> while the last interaction came from a pointer, so CSS can drop
 // decorative focus rings for mouse/touch users while keeping them for keyboard ones — WCAG 2.4.7
@@ -107,6 +107,70 @@
     });
   });
   mark();
+})();
+// Compact search (below lg) — opening it, and the two ways back out of it:
+//  - Opening via the toggle moves focus into the input (same pattern as the sidebar pop-over
+//    focusing its first control): the person who tapped "search" came to type, and on iOS the
+//    keyboard only rises if focus() runs synchronously inside the tap's dispatch — deferring to
+//    shown.bs.collapse (a timer, even a ~5ms one) silently loses it.
+//  - Clicking/tapping anywhere outside the open search row closes it again, matching the results
+//    popup's own click-away dismissal — on a phone, "tap elsewhere" reads as "never mind".
+//    Everything inside #wkSearch (pill, input, results popup) is left alone so the box stays
+//    usable, and the toggle already flips the collapse itself (closing here too = net reopen).
+//  - Escape closes it from the keyboard, one layer at a time (see that handler below).
+// Tabbing out deliberately does NOT close it: this is a disclosure, not a menu, and closing it
+// under a keyboard user would delete the element they just left, so Shift-Tab would land on the
+// toggle instead of returning them where they were. Escape is the explicit way out.
+// Registration is deferred to DOMContentLoaded, and that ordering is load-bearing: Bootstrap's
+// bundle loads in the footer, so by DOMContentLoaded its delegated data-api listener is already on
+// the document, and ours lands AFTER it. Within one click dispatch Bootstrap therefore acts first
+// — the toggle's collapse is open and rendered (focusable) by the time we run, aria-expanded is
+// already flipped (our open/close signal), and we are still inside the gesture for the iOS
+// keyboard. If Bootstrap ever failed to load, aria-expanded stays "false" and the collapse never
+// opens, so both branches degrade to no-ops. At lg+ the toggle is display:none and the bar shows
+// the box regardless of .show, so neither branch has anything visible to do there.
+(function () {
+  var search = document.getElementById('wkSearch');
+  if (!search) return;
+  function wire() {
+    document.addEventListener('click', function (e) {
+      var toggle = e.target.closest && e.target.closest('[data-bs-target="#wkSearch"]');
+      if (toggle) {
+        if (toggle.getAttribute('aria-expanded') === 'true') {
+          var input = document.getElementById('siteSearch');
+          if (input) input.focus({ preventScroll: true });
+        }
+        return;
+      }
+      if (!search.classList.contains('show')) return;
+      if (search.contains(e.target)) return;
+      close();
+    });
+    // Escape closes the search row itself — but only after the suggestions popup has had its turn,
+    // so the two dismissals stack instead of collapsing into one keypress. The combobox handler
+    // further down calls preventDefault() exactly when it consumes an Escape to close an open
+    // popup, so a defaultPrevented event here means "that keypress belonged to the popup"; the
+    // next one arrives with the flag clear and closes the row. (Nothing to dismiss first — opened
+    // but never typed in — means the first Escape closes it, which is what you'd expect.)
+    // Listening on the row, not the document, keeps it away from the other Escape handlers on the
+    // page (sidebar pop-over, Bootstrap modals); the input is inside it, so the key still arrives
+    // by bubbling, and after the input's own handler since that one is on the target itself.
+    search.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!search.classList.contains('show')) return;
+      close();
+      // Hand focus back to the toggle (the sidebar pop-over's Escape does the same): the input is
+      // about to be display:none, and focus left on it would strand the caret on nothing.
+      var toggle = document.querySelector('[data-bs-target="#wkSearch"]');
+      if (toggle) toggle.focus();
+    });
+  }
+  function close() {
+    var Collapse = window.bootstrap && window.bootstrap.Collapse;
+    if (Collapse) Collapse.getOrCreateInstance(search, { toggle: false }).hide();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
 })();
 (function () {
   var input = document.getElementById('siteSearch');

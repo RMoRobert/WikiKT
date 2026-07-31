@@ -635,12 +635,12 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     .wk-navbar .navbar-brand.brand { flex: 1 1 0; min-width: 0; }
     .wk-navbar .header-actions { flex-shrink: 0; }
 
-    /* --- Compact search opens INTO the top row, never onto a second one ---
+    /* --- Compact search opens into the top row, avoiding second row ---
        A .navbar-collapse is a 100%-basis flex item, so by default revealing #wkSearch wraps it below the
        brand and doubles the bar's height. A taller bar is not a local cost: it eats viewport on the
        device with the least of it, and everything anchored beneath the header (sidebar pop-over, sticky
        TOC, scroll-margin) has to shift with it. So re-box the collapse as an ordinary item on the
-       existing row. Still Bootstrap's collapse — same toggle, same .show, same show/hide animation,
+       existing row. Still Bootstrap's collapse: same toggle, same .show, same show/hide animation,
        which now grows the pill's height inside a row whose height the 2.6rem icons already fix.
 
        flex-basis 0 (not auto) for the same reason the brand uses it: a flex container assigns items to
@@ -648,6 +648,31 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
        measuring its 28rem max-width bumps the icons onto a second row before min-width:0 ever gets a
        chance to squeeze it. Basis 0 means it claims only leftover space and can never force a wrap. */
     .wk-navbar #wkSearch { flex: 1 1 0; min-width: 0; }
+    /* ...but not Bootstrap's open/close animation. That animates height (main-thread layout every
+       frame) yet this collapse opens into a row whose height the 2.6rem icons already fix, so the
+       350ms bought only a clip-wipe of the pill (looks laggy on small screens) and ended in a width jump
+       when `.show` finally landed and the brand stepped aside (below md, next block). Zero duration
+       is the same path Bootstrap ships for prefers-reduced-motion; its JS completes via the emulated
+       transitionend, so toggle state and events are unaffected. */
+    .wk-navbar #wkSearch.collapsing { transition: none; }
+    /* The motion comes back on the pill instead: a short compositor-only fade/slide, so the entrance
+       costs no per-frame layout and cannot desync from the brand hand-off — the row's geometry is
+       final from the first frame. Keyed on .collapsing so it starts the frame the collapse becomes
+       visible; the .show selector then computes the same animation-name through Bootstrap's class
+       swap, which continues the run rather than restarting it (and covers the close the same way,
+       where .collapsing returns for a frame). On the box, not the .header-search form: an animated
+       transform makes an element a containing block, and the position:fixed suggestions panel below
+       would resolve against the form instead of the viewport. No fill mode, so the computed
+       transform returns to none once done (same reason). Close stays instant: display:none lands
+       before any exit could play, and a dismissal doesn't need same treatment. */
+    .wk-navbar #wkSearch.collapsing .header-search-box,
+    .wk-navbar #wkSearch.show .header-search-box { animation: wk-search-reveal 0.18s ease-out; }
+    /* Horizontal, from the toggle's side: the pill reads as sliding out of the search button to its
+       right, rather than dropping in from the bar edge. */
+    @keyframes wk-search-reveal {
+        from { opacity: 0; transform: translateX(0.5rem); }
+        to   { opacity: 1; transform: none; }
+    }
     /* Ordered last so the pill lands between the brand and the icons: everything else is order 0 and
        falls in DOM order (toggle, brand, search), and the icons then follow. */
     .wk-navbar .header-actions { order: 1; }
@@ -668,14 +693,18 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
         max-width: none;
     }
 }
-/* Phones only (below md, matching the `d-none d-md-flex` icons in the markup): the title steps aside
-   while the search is open. This row seats the search box OR the title, not both — split between them
-   the search is too cramped to type in and the title is an ellipsis anyway. Deliberately NOT applied up
-   to lg: between md and lg the bar is wide enough for both, and there's no reason to drop the site's
-   identity where it fits. The whole brand goes, logo included, so nothing is left stranded mid-row. It
-   returns the moment the search closes. */
+/* Small screens/mobile only (below md, matching the `d-none d-md-flex` icons in the markup): the title steps aside
+   while the search is open. This row seats the search box OR the title, not both to save space and not
+   overly truncate title. Deliberately not applied up to lg: between md and lg the bar is wide enough for both,
+   so keep if fits. Eliminate title and logo so nothing is left stranded mid-row, but return when search closes.
+
+   `.collapsing` is in the selector because Bootstrap adds `.show` only once the open transition ends
+   (and drops it as the close begins): keyed on `.show` alone, the brand held its ground while the
+   search opened, so the pill first expanded into the leftover space beside it and then jumped to full
+   width -- and popped back early on close. Matching the transient class hides the brand for the whole
+   open lifecycle (now that the transition above is gone). */
 @media (max-width: 767.98px) {
-    .wk-navbar:has(#wkSearch.show) .navbar-brand.brand { display: none; }
+    .wk-navbar:has(#wkSearch.show, #wkSearch.collapsing) .navbar-brand.brand { display: none; }
 }
 
 /* Large icon action buttons in the top navbar (flat, no labels). */
