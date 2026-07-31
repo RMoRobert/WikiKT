@@ -30,12 +30,13 @@ import org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
 import org.jetbrains.exposed.v1.r2dbc.update
 
 /**
- * Infoboxes: admin-defined [templates][InfoboxTemplate] (a named set of fields) are bound to pages by
- * rules ([InfoboxPathRulesTable], matched by path or tag). A page can match more than one rule/template
- * at once. Every infobox is always optional: a page fills in whichever fields it wants (stored as a
- * JSON object in `pages.infobox`, keyed by template slug); a template with nothing filled in simply
- * doesn't render. This service resolves the templates matched for a page and renders its data to the
- * infobox card HTML.
+ * Infoboxes: admin-defined [templates][InfoboxTemplate] (a named, ordered list of fields, optionally
+ * broken up by section headings — see [InfoboxFieldDef]) are bound to pages by rules
+ * ([InfoboxPathRulesTable], matched by path or tag). A page can match more than one rule/template at
+ * once. Every infobox is always optional: a page fills in whichever fields it wants (stored as a JSON
+ * object in `pages.infobox`, keyed by template slug); a template with nothing filled in simply doesn't
+ * render. This service resolves the templates matched for a page and renders its data to the infobox
+ * card HTML.
  *
  * Field values may carry inline Markdown (bold/italic/links); [renderCard] runs each through the
  * Markdown pipeline and unwraps the block `<p>` so only inline markup survives — matching the
@@ -83,15 +84,30 @@ class InfoboxService(
      * rules), then position: if the SAME template is bound by more than one matching rule, it appears once.
      */
     suspend fun resolveAllFor(siteId: UInt, path: String, tags: List<String>): List<InfoboxTemplate> {
-        val matching = rulesFor(siteId).filter { ruleMatches(it, path, tags) }
+        val rules = rulesFor(siteId)
+        if (rules.none { ruleMatches(it, path, tags) }) return emptyList()
+        return resolveFrom(rules, listTemplates(siteId).associateBy { it.id }, path, tags)
+    }
+
+    /**
+     * [resolveAllFor]'s matching and ordering against rules and templates the caller already holds.
+     * Split out for [usageReport], which asks the same question of every page on the site and would
+     * otherwise re-read both tables per page.
+     */
+    private fun resolveFrom(
+        rules: List<Rule>,
+        templatesById: Map<UInt, InfoboxTemplate>,
+        path: String,
+        tags: List<String>,
+    ): List<InfoboxTemplate> {
+        val matching = rules.filter { ruleMatches(it, path, tags) }
         if (matching.isEmpty()) return emptyList()
-        val byTemplate = matching.groupBy { it.templateId }
-        val ordered = byTemplate.entries.sortedWith(
-            compareByDescending<Map.Entry<UInt, List<Rule>>> { (_, rules) -> rules.maxOf { specificity(it) } }
-                .thenBy { (_, rules) -> rules.minOf { it.position } }
+        val ordered = matching.groupBy { it.templateId }.entries.sortedWith(
+            compareByDescending<Map.Entry<UInt, List<Rule>>> { (_, rs) -> rs.maxOf { specificity(it) } }
+                .thenBy { (_, rs) -> rs.minOf { it.position } }
                 .thenBy { (templateId, _) -> templateId },
         )
-        return ordered.mapNotNull { (templateId, _) -> templateById(templateId) }
+        return ordered.mapNotNull { (templateId, _) -> templatesById[templateId] }
     }
 
     private fun ruleMatches(rule: Rule, path: String, tags: List<String>): Boolean = when (rule.matchType) {
@@ -191,6 +207,7 @@ class InfoboxService(
         description: String?,
         fields: List<InfoboxFieldDef>,
     ) {
+        val siteId = templateById(id)?.siteId
         suspendTransaction(database) {
             InfoboxTemplatesTable.update({ InfoboxTemplatesTable.id eq id }) {
                 it[InfoboxTemplatesTable.slug] = slug
@@ -200,20 +217,39 @@ class InfoboxService(
                 it[updatedAt] = nowMillis()
             }
         }
+        siteId?.let { invalidateRenders(it) }
     }
 
     /** Deletes a template and its path rules (pages keep their now-orphaned infobox data, unrendered). */
     suspend fun deleteTemplate(id: UInt) {
+        val siteId = templateById(id)?.siteId
         suspendTransaction(database) {
             InfoboxPathRulesTable.deleteWhere { InfoboxPathRulesTable.templateId eq id }
             InfoboxTemplatesTable.deleteWhere { InfoboxTemplatesTable.id eq id }
         }
+        siteId?.let { invalidateRenders(it) }
     }
 
     suspend fun deletePathRule(id: UInt) {
+        val siteId = suspendTransaction(database) {
+            InfoboxPathRulesTable.selectAll().where { InfoboxPathRulesTable.id eq id }
+                .map { it[InfoboxPathRulesTable.siteId].value }.singleOrNull()
+        }
         suspendTransaction(database) {
             InfoboxPathRulesTable.deleteWhere { InfoboxPathRulesTable.id eq id }
         }
+        siteId?.let { invalidateRenders(it) }
+    }
+
+    /**
+     * Bumps the render epoch, marking every cached page render stale (see [PageRenderService]). Template
+     * and rule edits change the infobox HTML baked into that cache — labels, help text, field order, or
+     * whether a template applies to the page at all — but touch no page's `updatedAt`, which is the only
+     * other thing the cache keys on. Without this an admin's edit would reach a page only the next time
+     * someone saved it. Creating a template needs no bump: nothing renders it until a rule points at it.
+     */
+    private suspend fun invalidateRenders(siteId: UInt) {
+        settings.bumpRenderEpoch(siteId)
     }
 
     suspend fun createPathRule(
@@ -234,6 +270,7 @@ class InfoboxService(
                 it[InfoboxPathRulesTable.position] = position
             }
         }
+        invalidateRenders(siteId)
     }
 
     suspend fun listPathRules(siteId: UInt): List<RuleRow> = suspendTransaction(database) {
@@ -299,6 +336,116 @@ class InfoboxService(
         return obj.any { (slug, value) -> slug !in matchedSlugs && !value.isEmptyContent() }
     }
 
+    // --- Usage report ---
+
+    /** How one page stands against one template it matches. [missingRequired] holds field LABELS. */
+    data class PageUsage(
+        val locale: String,
+        val path: String,
+        val title: String,
+        val templateSlug: String,
+        val templateName: String,
+        val filledFields: Int,
+        val totalFields: Int,
+        val missingRequired: List<String>,
+    ) {
+        /** Matched but not filled in at all — the page shows no card for this template. */
+        val isUnfilled: Boolean get() = filledFields == 0
+
+        /** Filled in, but a field the template marks required was left blank. */
+        val isIncomplete: Boolean get() = !isUnfilled && missingRequired.isNotEmpty()
+    }
+
+    /** A page carrying infobox data under a key no template applied there claims. */
+    data class OrphanUsage(val locale: String, val path: String, val title: String, val keys: List<String>)
+
+    /** Per-template totals for the report's summary table. */
+    data class TemplateUsage(
+        val slug: String,
+        val name: String,
+        val ruleCount: Int,
+        val matched: Int,
+        val filled: Int,
+        val unfilled: Int,
+        val incomplete: Int,
+    )
+
+    data class UsageReport(
+        val templates: List<TemplateUsage>,
+        val pages: List<PageUsage>,
+        val orphans: List<OrphanUsage>,
+    )
+
+    /**
+     * Which pages use each infobox, which are eligible and haven't filled one in, and which filled one
+     * in but left a required field blank — the questions the per-page editor nudges can't answer,
+     * because each page only ever sees itself. Backs the admin usage report.
+     *
+     * [pages] is passed in rather than looked up so this service stays independent of PageService; the
+     * caller supplies the site's pages (each needing path/tags/infobox). Rules and templates are read
+     * once and matched in memory, so the cost is one pass over the pages, not a query per page.
+     *
+     * "Required" is advisory throughout WikiKT — an infobox is never enforced at save time (see
+     * [unfilledTemplateNames]) — so a missing required field is reported here, not prevented there.
+     */
+    suspend fun usageReport(siteId: UInt, pages: List<com.wikikt.model.PageRecord>): UsageReport {
+        val rules = rulesFor(siteId)
+        val templates = listTemplates(siteId)
+        val byId = templates.associateBy { it.id }
+        val ruleCounts = rules.groupingBy { it.templateId }.eachCount()
+
+        val usages = mutableListOf<PageUsage>()
+        val orphans = mutableListOf<OrphanUsage>()
+        for (page in pages) {
+            val matched = resolveFrom(rules, byId, page.path, page.tags)
+            val stored = page.infobox?.takeIf { it.isNotBlank() }
+                ?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+            val perTemplate = matched.associate { it.slug to (stored?.get(it.slug) as? JsonObject) }
+            for (template in matched) {
+                val data = perTemplate[template.slug] ?: JsonObject(emptyMap())
+                // Headings hold nothing, so they're neither filled nor fillable: counting them would
+                // make a fully completed page read as "4 of 6 fields".
+                val fields = template.fields.filter { it.isValueField }
+                val filled = fields.count { !(data[it.name] ?: JsonNull).isEmptyContent() }
+                usages += PageUsage(
+                    locale = page.locale,
+                    path = page.path,
+                    title = page.title,
+                    templateSlug = template.slug,
+                    templateName = template.name,
+                    filledFields = filled,
+                    totalFields = fields.size,
+                    missingRequired = fields
+                        .filter { it.required && (data[it.name] ?: JsonNull).isEmptyContent() }
+                        .map { it.label },
+                )
+            }
+            val matchedSlugs = matched.map { it.slug }.toSet()
+            val leftover = stored.orEmpty().filter { (slug, value) -> slug !in matchedSlugs && !value.isEmptyContent() }
+            if (leftover.isNotEmpty()) {
+                orphans += OrphanUsage(page.locale, page.path, page.title, leftover.keys.sorted())
+            }
+        }
+
+        val bySlug = usages.groupBy { it.templateSlug }
+        return UsageReport(
+            templates = templates.map { t ->
+                val rows = bySlug[t.slug].orEmpty()
+                TemplateUsage(
+                    slug = t.slug,
+                    name = t.name,
+                    ruleCount = ruleCounts[t.id] ?: 0,
+                    matched = rows.size,
+                    filled = rows.count { !it.isUnfilled },
+                    unfilled = rows.count { it.isUnfilled },
+                    incomplete = rows.count { it.isIncomplete },
+                )
+            },
+            pages = usages.sortedWith(compareBy({ it.locale }, { it.path }, { it.templateName })),
+            orphans = orphans.sortedWith(compareBy({ it.locale }, { it.path })),
+        )
+    }
+
     /** True when a JSON value carries no meaningful content: null, a blank string, or an empty object/array. */
     private fun JsonElement.isEmptyContent(): Boolean = when (this) {
         is JsonNull -> true
@@ -325,25 +472,79 @@ class InfoboxService(
         return cards.takeIf { it.isNotEmpty() }?.joinToString("")
     }
 
-    /** One template's complete `<aside>` card, or null if [data] is null/has nothing that renders. */
+    /** A run of rendered rows under an optional heading — the unit [renderOneCard] emits. */
+    private class Section(val heading: String?) {
+        val rows = StringBuilder()
+    }
+
+    /**
+     * One template's complete `<aside>` card, or null if [data] is null/has nothing that renders.
+     *
+     * The card is a sequence of sections: any fields before the first heading form an unheaded one,
+     * and each `# Heading` in the template starts another. A section whose fields are all blank is
+     * dropped entirely, heading and all — so a heading never appears over nothing, and a template that
+     * uses no headings renders exactly the single unheaded `<dl>` it always did.
+     *
+     * Each section is its own `<dl>` rather than one list with headings interleaved: a `<dl>` may only
+     * contain `<dt>`/`<dd>` (optionally in wrapper `<div>`s), so a heading between rows would have no
+     * valid home inside it.
+     */
     private fun renderOneCard(template: InfoboxTemplate, data: JsonObject?, options: com.wikikt.markdown.RenderOptions): String? {
         if (data == null) return null
-        val rows = StringBuilder()
+        val sections = mutableListOf(Section(heading = null))
         for (field in template.fields) {
+            if (field.isHeading) {
+                sections.add(Section(heading = field.label))
+                continue
+            }
             val value = data[field.name] ?: continue
             val cell = renderValue(field, value, options) ?: continue
-            rows.append("<div class=\"wk-infobox-row\"><dt>")
-                .append(escape(field.label))
+            sections.last().rows
+                .append("<div class=\"wk-infobox-row\"><dt>")
+                .append(labelHtml(field))
                 .append("</dt><dd>")
                 .append(cell)
                 .append("</dd></div>")
         }
-        if (rows.isEmpty()) return null
+        val filled = sections.filter { it.rows.isNotEmpty() }
+        if (filled.isEmpty()) return null
         return buildString {
             append("<aside class=\"page-card wk-infobox\" aria-label=\"Page information\">")
             append("<p class=\"page-toc-title wk-infobox-title\">").append(escape(template.name)).append("</p>")
-            append("<dl class=\"wk-infobox-list\">").append(rows).append("</dl>")
+            for (section in filled) {
+                section.heading?.let {
+                    append("<p class=\"wk-infobox-section\">").append(escape(it)).append("</p>")
+                }
+                append("<dl class=\"wk-infobox-list\">").append(section.rows).append("</dl>")
+            }
             append("</aside>")
+        }
+    }
+
+    /**
+     * A field's `<dt>` content. Without help text that's just the escaped label, exactly as before; a
+     * field the template gave help text becomes a button that reveals that text — so a *reader* can
+     * find out what a label means, not just the editor filling it in. One `help` string serves both
+     * audiences (the editor form shows it under the input, this shows it on the card), so an admin
+     * writes the explanation once.
+     *
+     * The popup itself is a Bootstrap popover, wired up in page-view.js from these data attributes:
+     * hover on a pointer, tap or keyboard focus everywhere else. `title` carries the same text as a
+     * plain-HTML fallback — Bootstrap consumes and removes the attribute when it initializes the
+     * popover, so it only ever surfaces (as a native tooltip) if the script never runs.
+     */
+    private fun labelHtml(field: InfoboxFieldDef): String {
+        val label = escape(field.label)
+        val help = field.help?.trim()?.takeIf { it.isNotEmpty() }?.let { escape(it) } ?: return label
+        return buildString {
+            append("<button type=\"button\" class=\"wk-infobox-help\" data-bs-toggle=\"popover\"")
+            append(" data-bs-trigger=\"hover focus\" data-bs-placement=\"top\"")
+            append(" data-bs-custom-class=\"wk-infobox-popover\"")
+            append(" data-bs-title=\"").append(label).append("\"")
+            append(" data-bs-content=\"").append(help).append("\"")
+            append(" title=\"").append(help).append("\">")
+            append("<span class=\"wk-infobox-help-label\">").append(label).append("</span>")
+            append("</button>")
         }
     }
 
@@ -352,7 +553,7 @@ class InfoboxService(
      * with the template's name/slug, an `unfilled` flag (true when this specific template has no data
      * yet — every infobox is optional, this only drives the "you could fill this in" note), and a
      * Mustache-ready list of fields with type flags, current value decoded from [currentJson], and (for
-     * select/array) its options with the current selection marked. Input names are
+     * enum/multi) its options with the current selection marked. Input names are
      * `infobox.<slug>.<field>` — namespaced by template so two templates' same-named fields never
      * collide — collected back by [com.wikikt.routing.infoboxFromParams] on save.
      */
@@ -372,9 +573,11 @@ class InfoboxService(
         }
     }
 
-    /** One field's editor-form model (input name, current value, and select/array options if any). */
+    /** One field's editor-form model (input name, current value, and enum/multi options if any). */
     private fun fieldModel(templateSlug: String, f: InfoboxFieldDef, el: JsonElement?): Map<String, Any?> {
         val type = f.type.lowercase()
+        // A heading has no input of any kind — the form just prints it above the fields it groups.
+        if (f.isHeading) return mapOf("label" to f.label, "isHeading" to true)
         val curStr = (el as? JsonPrimitive)?.contentOrNull ?: ""
         // Booleans are tri-state in the editor: unset ("") / true / false, so a field can be left blank.
         val curBool = when ((el as? JsonPrimitive)?.booleanOrNull) {
@@ -390,18 +593,18 @@ class InfoboxService(
             "inputName" to "infobox.$templateSlug.${f.name}",
             "isString" to (type == "string"),
             // Select and boolean both render as a dropdown (a boolean is a fixed —/Yes/No choice).
-            "isChoice" to (type == "select" || type == "boolean"),
-            "isArray" to (type == "array"),
+            "isChoice" to (type == "enum" || type == "boolean"),
+            "isMulti" to (type == "multi"),
             "value" to curStr,
             "options" to when (type) {
-                "select" -> listOf(mapOf("value" to "", "label" to "—", "selected" to curStr.isEmpty())) +
+                "enum" -> listOf(mapOf("value" to "", "label" to "—", "selected" to curStr.isEmpty())) +
                     f.options.map { o -> mapOf("value" to o, "label" to o, "selected" to (o == curStr)) }
                 "boolean" -> listOf(
                     mapOf("value" to "", "label" to "—", "selected" to curBool.isEmpty()),
                     mapOf("value" to "true", "label" to "Yes", "selected" to (curBool == "true")),
                     mapOf("value" to "false", "label" to "No", "selected" to (curBool == "false")),
                 )
-                "array" -> f.options.map { o -> mapOf("value" to o, "label" to o, "selected" to (o in curArr)) }
+                "multi" -> f.options.map { o -> mapOf("value" to o, "label" to o, "selected" to (o in curArr)) }
                 else -> emptyList()
             },
         )
@@ -416,14 +619,14 @@ class InfoboxService(
                 false -> "<span class=\"wk-infobox-bool wk-infobox-bool--no\"><i class=\"mdi mdi-close\" aria-hidden=\"true\"></i> No</span>"
                 null -> null
             }
-            "array" -> {
+            "multi" -> {
                 val items = (value as? JsonArray)?.mapNotNull { el ->
                     (el as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }?.let { inline(it, options) }
                 }.orEmpty()
                 if (items.isEmpty()) null
                 else items.joinToString("") { "<span class=\"wk-infobox-tag\">$it</span>" }
             }
-            else -> { // string, select, or unknown → treat as inline text
+            else -> { // string, enum, or unknown → treat as inline text
                 val raw = (value as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() } ?: return null
                 inline(raw, options)
             }

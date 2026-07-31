@@ -1,7 +1,7 @@
 // Page-view behaviors, loaded at the end of <body> on page/view.hbs (after heading-anchors.js — the
-// TOC builder reuses the heading ids that script assigns). Two independent pieces, each a no-op when
-// its markup is absent: the table-of-contents builder (markup only rendered when tocEnabled) and the
-// share box (e-mail / copy-URL / print).
+// TOC builder reuses the heading ids that script assigns). Independent pieces, each a no-op when its
+// markup is absent: the table-of-contents builder (markup only rendered when tocEnabled), the share
+// box (e-mail / copy-URL / print), and the infobox field-help popovers.
 (function () {
   var toc = document.getElementById('pageToc');
   var content = document.querySelector('.wiki-content');
@@ -132,4 +132,34 @@
   }
   var printBtn = document.getElementById('printPage');
   if (printBtn) printBtn.addEventListener('click', function () { window.print(); });
+})();
+
+(function () {
+  // Infobox field help: an infobox label whose template supplied help text is rendered as a
+  // .wk-infobox-help button (InfoboxService.labelHtml) carrying the explanation in data-bs-content.
+  // Turn each into a Bootstrap popover — the trigger ('hover focus', set in the markup) covers pointer
+  // hover, keyboard focus, and touch alike, since tapping a button focuses it and tapping away blurs
+  // it. container:'body' lifts the popup out of the infobox card, which floats and would otherwise
+  // clip it or be widened by it. No-op without infobox help on the page; if the Bootstrap bundle is
+  // missing the buttons keep their title attribute and degrade to native tooltips.
+  var helps = document.querySelectorAll('.wk-infobox-help');
+  if (!helps.length || !window.bootstrap || !window.bootstrap.Popover) return;
+  Array.prototype.forEach.call(helps, function (el) {
+    new window.bootstrap.Popover(el, {
+      container: 'body',
+      // Two corrections to Popper's defaults, both about narrow screens, where the card is full width
+      // and its labels sit right against the left edge. Left to itself Popper answers a label with no
+      // room to its left by flipping the popup to the SIDE of it, which then runs off the right edge
+      // (its default overflow guard only works along the placement's own axis, so a side placement is
+      // free to overflow horizontally). Restricting the fallback to bottom keeps the popup above or
+      // below the label where it belongs, and altAxis then holds it inside the viewport, 8px in.
+      popperConfig: function (config) {
+        config.modifiers = (config.modifiers || []).concat([
+          { name: 'flip', options: { fallbackPlacements: ['bottom'] } },
+          { name: 'preventOverflow', options: { altAxis: true, padding: 8 } },
+        ]);
+        return config;
+      },
+    });
+  });
 })();

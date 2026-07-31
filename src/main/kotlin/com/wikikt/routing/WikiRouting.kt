@@ -859,6 +859,8 @@ private suspend fun infoboxFromParams(
         for (template in matches) {
             val sub = kotlinx.serialization.json.buildJsonObject {
                 for (field in template.fields) {
+                    // Section headings post no input and hold no value; they'd otherwise write a "" key.
+                    if (!field.isValueField) continue
                     val key = "infobox.${template.slug}.${field.name}"
                     when (field.type.lowercase()) {
                         // Tri-state select: "true"/"false" store the boolean; "" (or absent) omits the field.
@@ -866,7 +868,7 @@ private suspend fun infoboxFromParams(
                             "true" -> put(field.name, true)
                             "false" -> put(field.name, false)
                         }
-                        "array" -> {
+                        "multi" -> {
                             val values = params.getAll(key)?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
                             if (values.isNotEmpty()) {
                                 put(field.name, kotlinx.serialization.json.JsonArray(values.map { kotlinx.serialization.json.JsonPrimitive(it) }))

@@ -259,9 +259,29 @@ data class PageStagedRecord(
 // --- Infobox templates ---------------------------------------------------------------------------
 
 /**
- * One field in an infobox template. [type] is string | select | boolean | array; [options] lists the
- * allowed values for a select/array. String/select/array-item values may contain inline Markdown
- * (bold/italic/links); block markup is stripped on render.
+ * One entry in an infobox template. Usually a field: [type] is string | enum | multi | boolean, and
+ * [options] lists the allowed values for an enum/multi. String/enum/multi-item values may contain
+ * inline Markdown (bold/italic/links); block markup is stripped on render.
+ *
+ * The exception is [TYPE_HEADING], which stores no value at all — it groups the fields that follow it
+ * under a subheading on the card (see [isHeading]). Templates are free to use none, so a template
+ * written before headings existed behaves exactly as it did. Because a heading holds nothing, its
+ * [name] is empty and every value-side path — reading form params, rendering a value, counting fields
+ * filled in — must skip it; [isValueField] is the guard those call sites use.
+ *
+ * TODO (image fields): the intended next type is `image`, a field whose value is an asset path shown
+ * as a picture at the top of the card rather than as a label/value row. Nothing here blocks it:
+ *  - storage is a plain string, so `pages.infobox` needs no schema change;
+ *  - the asset usage scan already tallies `page.infobox` (see AssetRouting), so an image referenced
+ *    only from an infobox is NOT reported as unused — no risk of it being deleted out from under a
+ *    page. Per-locale asset resolution already runs over the rendered card too (renderAssetRefs);
+ *  - the card renderer no longer assumes every entry is a `<dt>`/`<dd>` row — headings introduced
+ *    that split (InfoboxService.renderOneCard builds a list of nodes), so a full-width image node
+ *    slots in beside them;
+ *  - the editor form model is a set of `is*` flags (isString/isChoice/isMulti/isHeading), so `isImage`
+ *    plus an asset-picker control is additive.
+ * The work left would be: the new type + its editor control, a render branch, and deciding whether an
+ * image pins to the top of the card or renders in document order.
  */
 @Serializable
 data class InfoboxFieldDef(
@@ -271,7 +291,20 @@ data class InfoboxFieldDef(
     val required: Boolean = false,
     val help: String? = null,
     val options: List<String> = emptyList(),
-)
+) {
+    /** A subheading grouping the fields below it — not a field, and never carries a value. */
+    val isHeading: Boolean get() = type.equals(TYPE_HEADING, ignoreCase = true)
+
+    /** Everything that does hold a page value: the guard for any read/write/count of field data. */
+    val isValueField: Boolean get() = !isHeading
+
+    companion object {
+        const val TYPE_HEADING = "heading"
+
+        /** A section heading entry. Named "" deliberately: it stores nothing, so it has no key. */
+        fun heading(label: String) = InfoboxFieldDef(name = "", label = label, type = TYPE_HEADING)
+    }
+}
 
 /** An admin-defined infobox template (its fields decoded from the stored JSON). */
 data class InfoboxTemplate(

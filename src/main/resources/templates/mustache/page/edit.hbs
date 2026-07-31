@@ -180,15 +180,18 @@
         {{#infoboxTabs}}
         <div class="tab-pane fade" id="pi-infobox-{{tabId}}" role="tabpanel" aria-labelledby="pi-tab-infobox-{{tabId}}">
         {{#unfilled}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-alert-outline" aria-hidden="true"></i> This page is specified to use this infobox template. Please fill it in below.</div>{{/unfilled}}
-        <p class="text-secondary">Fields for the <strong>{{templateName}}</strong> infobox shown on this page. Leave a field blank to omit it; values support basic inline Markdown (bold, italic, links).</p>
+        <p class="text-secondary">Fields for the <strong>{{templateName}}</strong> infobox shown on this page. Leave a field blank to omit it; values support basic inline Markdown (bold, italic, links). A note marked <i class="mdi mdi-help-circle-outline" aria-hidden="true"></i> is the template's explanation of that field. Readers see this too: on the page its label carries a dotted underline they can hover or tap.</p>
         {{#fields}}
+        {{#isHeading}}<p class="ib-form-section">{{label}}</p>{{/isHeading}}
+        {{^isHeading}}
         <div class="mb-3">
             <label class="form-label" for="ib-{{inputName}}">{{label}}</label>
             {{#isString}}<input class="form-control" type="text" name="{{inputName}}" id="ib-{{inputName}}" value="{{value}}" autocomplete="off">{{/isString}}
             {{#isChoice}}<select class="form-select" name="{{inputName}}" id="ib-{{inputName}}">{{#options}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/options}}</select>{{/isChoice}}
-            {{#isArray}}<div class="d-flex flex-wrap gap-3">{{#options}}<div class="form-check"><input class="form-check-input" type="checkbox" name="{{inputName}}" id="ib-{{inputName}}-{{value}}" value="{{value}}" {{#selected}}checked{{/selected}}><label class="form-check-label" for="ib-{{inputName}}-{{value}}">{{label}}</label></div>{{/options}}</div>{{/isArray}}
-            {{#hasHelp}}<p class="form-text">{{help}}</p>{{/hasHelp}}
+            {{#isMulti}}<div class="d-flex flex-wrap gap-3">{{#options}}<div class="form-check"><input class="form-check-input" type="checkbox" name="{{inputName}}" id="ib-{{inputName}}-{{value}}" value="{{value}}" {{#selected}}checked{{/selected}}><label class="form-check-label" for="ib-{{inputName}}-{{value}}">{{label}}</label></div>{{/options}}</div>{{/isMulti}}
+            {{#hasHelp}}<p class="form-text"><i class="mdi mdi-help-circle-outline" aria-hidden="true"></i> {{help}}</p>{{/hasHelp}}
         </div>
+        {{/isHeading}}
         {{/fields}}
         </div>{{! end of one infobox pane. Keep this comment free of nested tag braces: Mustache closes a comment at the first closing braces and would leak the rest as a stray text node. }}
         {{/infoboxTabs}}

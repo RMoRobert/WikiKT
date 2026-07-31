@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Infobox Usage | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/admin-shell.hbs}}
+    <div class="page-meta"><h1><i class="mdi mdi-clipboard-list-outline" aria-hidden="true"></i> Infobox Usage</h1><a class="btn btn-outline-secondary" href="/a/infoboxes">Back to Infoboxes</a></div>
+    <p>Which pages a rule selects for each infobox, and how far they've been filled in. Infobox data is
+    always optional, so nothing here is an error — this is the view of the site an individual page editor
+    can't give you, since each page only ever sees itself.</p>
+
+    {{^hasTemplates}}
+    <p class="text-secondary">No templates yet. <a href="/a/infoboxes/new">Create one</a> to get started.</p>
+    {{/hasTemplates}}
+
+    {{#hasTemplates}}
+    <h2 class="h5 mt-4">By template</h2>
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Template</th><th>Rules</th><th>Pages selected</th><th>Filled in</th><th>Not filled in</th><th>Missing required</th></tr></thead>
+        <tbody>
+        {{#templates}}
+        <tr>
+            <td>{{name}} <code class="text-secondary">{{slug}}</code></td>
+            <td>{{#noRules}}<span class="text-warning-emphasis" title="No page can use this template until a rule points at it"><i class="mdi mdi-alert-outline" aria-hidden="true"></i> none</span>{{/noRules}}{{^noRules}}{{ruleCount}}{{/noRules}}</td>
+            <td>{{matched}}</td>
+            <td>{{filled}}</td>
+            <td>{{#hasUnfilled}}<span class="text-secondary">{{unfilled}}</span>{{/hasUnfilled}}{{^hasUnfilled}}—{{/hasUnfilled}}</td>
+            <td>{{#hasIncomplete}}<span class="text-danger">{{incomplete}}</span>{{/hasIncomplete}}{{^hasIncomplete}}—{{/hasIncomplete}}</td>
+        </tr>
+        {{/templates}}
+        </tbody>
+    </table>
+
+    {{#nothingMatched}}
+    <div class="alert alert-info d-flex align-items-center gap-2" role="alert">
+        <i class="mdi mdi-information-outline" aria-hidden="true"></i>
+        <span>No page matches any rule yet. Add a path or tag rule on the <a href="/a/infoboxes" class="alert-link">Infoboxes</a> page to select pages for a template.</span>
+    </div>
+    {{/nothingMatched}}
+
+    {{! Everything actionable in one table: a page that's eligible but blank, or filled in with a
+        required field left out. Both are "someone could improve this page", never a failure. }}
+    {{#hasAttention}}
+    <h2 class="h5 mt-4">Needs attention <span class="badge text-bg-secondary">{{attentionCount}}</span></h2>
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Page</th><th>Infobox</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        {{#attention}}
+        <tr>
+            <td><a href="{{url}}">{{title}}</a> <code class="text-secondary">{{path}}</code>{{#otherLocale}} <span class="badge text-bg-light">{{locale}}</span>{{/otherLocale}}</td>
+            <td>{{templateName}}</td>
+            <td>
+                {{#isUnfilled}}<span class="text-secondary"><i class="mdi mdi-circle-outline" aria-hidden="true"></i> Not filled in</span>{{/isUnfilled}}
+                {{^isUnfilled}}<span class="text-danger"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i> Missing required: {{missingRequired}}</span> <span class="text-secondary">({{filledFields}} of {{totalFields}} fields)</span>{{/isUnfilled}}
+            </td>
+            <td><a class="btn btn-sm btn-primary" href="{{editUrl}}">Fill in</a></td>
+        </tr>
+        {{/attention}}
+        </tbody>
+    </table>
+    {{/hasAttention}}
+    {{^hasAttention}}
+    {{^nothingMatched}}
+    <div class="alert alert-success d-flex align-items-center gap-2" role="alert">
+        <i class="mdi mdi-check-circle-outline" aria-hidden="true"></i>
+        <span>Every selected page has its infobox filled in, with no required field left blank.</span>
+    </div>
+    {{/nothingMatched}}
+    {{/hasAttention}}
+
+    {{#hasComplete}}
+    <details class="mt-4">
+        <summary class="h5 d-inline">Filled in <span class="badge text-bg-secondary">{{completeCount}}</span></summary>
+        <table class="table table-hover align-middle mt-2">
+            <thead><tr><th>Page</th><th>Infobox</th><th>Fields</th><th></th></tr></thead>
+            <tbody>
+            {{#complete}}
+            <tr>
+                <td><a href="{{url}}">{{title}}</a> <code class="text-secondary">{{path}}</code>{{#otherLocale}} <span class="badge text-bg-light">{{locale}}</span>{{/otherLocale}}</td>
+                <td>{{templateName}}</td>
+                <td class="text-secondary">{{filledFields}} of {{totalFields}}</td>
+                <td><a class="btn btn-sm btn-outline-secondary" href="{{editUrl}}">Edit</a></td>
+            </tr>
+            {{/complete}}
+            </tbody>
+        </table>
+    </details>
+    {{/hasComplete}}
+    {{/hasTemplates}}
+
+    {{! Data saved under a template key that no rule applies to this page any more — after a template
+        was deleted, a rule changed, or the page moved. It renders nowhere; saving the page clears it
+        as long as some other template still applies there. }}
+    {{#hasOrphans}}
+    <h2 class="h5 mt-4">Leftover data</h2>
+    <p class="text-secondary">These pages carry infobox data under a name no template applied there uses, so none of it is shown. It was left behind by a deleted template, a changed rule, or a page move.</p>
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Page</th><th>Stored under</th><th></th></tr></thead>
+        <tbody>
+        {{#orphans}}
+        <tr>
+            <td>{{title}} <code class="text-secondary">{{path}}</code></td>
+            <td><code>{{keys}}</code></td>
+            <td><a class="btn btn-sm btn-outline-secondary" href="{{editUrl}}">Open editor</a></td>
+        </tr>
+        {{/orphans}}
+        </tbody>
+    </table>
+    {{/hasOrphans}}
+{{>partials/admin-shell-end.hbs}}
+{{{bodyHtml}}}</body>
+</html>

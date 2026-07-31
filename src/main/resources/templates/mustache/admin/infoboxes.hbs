@@ -9,12 +9,13 @@
 </head>
 <body>
 {{>partials/admin-shell.hbs}}
-    <div class="page-meta"><h1><i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Infoboxes</h1><a class="btn btn-primary" href="/a/infoboxes/new">New template</a></div>
+    <div class="page-meta"><h1><i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Infoboxes</h1><div class="d-flex gap-2"><a class="btn btn-outline-secondary" href="/a/infoboxes/usage"><i class="mdi mdi-clipboard-list-outline" aria-hidden="true"></i> Usage report</a><a class="btn btn-primary" href="/a/infoboxes/new">New template</a></div></div>
     {{#otherSite}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-information-outline" aria-hidden="true"></i> That template belongs to a different site. Showing <strong>{{managedSiteName}}</strong>'s templates instead.</div>{{/otherSite}}
-    <p>An infobox is a way to standardize the apprearance and provision of specific information across a set of pages. A
+    <p>An infobox is a way to standardize the appearance and provision of specific information across a set of pages. A
     <strong>template</strong> is a named set of fields that define the requested information. A <strong>rule</strong>
     suggests this template to pages by path or tag; editors then fill in the values on the Page Info tab of matching
-    pages.</p>
+    pages. Give a field help text and its label picks up a dotted underline on the page, which readers can
+    hover or tap for an explanation of what it means.</p>
 
     <h2 class="h5 mt-4">Templates</h2>
     {{#hasTemplates}}

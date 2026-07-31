@@ -11,34 +11,87 @@
 {{>partials/admin-shell.hbs}}
     <h1>{{#isNew}}New Infobox Template{{/isNew}}{{^isNew}}Edit Infobox Template{{/isNew}}</h1>
     {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
-    <form method="post" action="{{#isNew}}/a/infoboxes{{/isNew}}{{^isNew}}/a/infoboxes/{{id}}{{/isNew}}" class="edit-form">
+    {{! ib-form widens the form past the admin default so the field editor's rows and card preview fit
+        side by side; the identity inputs above it keep the normal width of their own accord. }}
+    <form method="post" action="{{#isNew}}/a/infoboxes{{/isNew}}{{^isNew}}/a/infoboxes/{{id}}{{/isNew}}" class="edit-form ib-form">
         {{{csrfField}}}
-        <div class="mb-3">
+        <div class="mb-3" style="max-width:32rem">
             <label class="form-label">Name</label>
-            <input class="form-control" type="text" name="name" value="{{name}}" placeholder="e.g. Integration" required>
+            <input class="form-control" type="text" name="name" id="infoboxName" value="{{name}}" placeholder="e.g. City Info" required>
             <p class="form-text">Shown as the infobox card's heading on the page.</p>
         </div>
-        <div class="mb-3">
+        <div class="mb-3" style="max-width:32rem">
             <label class="form-label">Slug</label>
             <input class="form-control" type="text" name="slug" value="{{slug}}" placeholder="e.g. app_info">
-            <p class="form-text">Stable identifier (lowercase letters, numbers, <code>-</code>, <code>_</code>). Leave blank to derive it from the name.</p>
+            <p class="form-text">Stable identifier (lowercase letters, numbers, <code>-</code>, <code>_</code>). Leave blank to derive from name.</p>
         </div>
-        <div class="mb-3">
+        <div class="mb-3" style="max-width:32rem">
             <label class="form-label">Description</label>
-            <input class="form-control" type="text" name="description" value="{{description}}" placeholder="Optional — a note for editors">
+            <input class="form-control" type="text" name="description" value="{{description}}" placeholder="Optional note for editors">
         </div>
         <div class="mb-3">
             <label class="form-label">Fields</label>
-            <textarea class="form-control font-monospace" name="fields" rows="8" placeholder="platform_version | Introduced in | string | | Platform version the app first shipped in.&#10;deployment | Runs | array | Local, Cloud&#10;transport | Communication | select | Polling, Push&#10;official | Official | boolean | | Uses a documented API.&#10;notes | Notes | string">{{fieldsText}}</textarea>
-            <div class="form-text">
-                One field per line: <code>name | label | type | options | help</code>
-                <ul class="mb-0 mt-1">
-                    <li><strong>name</strong> — the key stored on the page (required); <strong>label</strong> — shown on the card (defaults to name).</li>
-                    <li><strong>type</strong> — <code>string</code>, <code>select</code>, <code>boolean</code>, or <code>array</code>. Append <code>*</code> to mark it required (e.g. <code>string*</code>).</li>
-                    <li><strong>options</strong> — comma-separated, for <code>select</code> and <code>array</code>. <strong>help</strong> — optional hint shown in the editor.</li>
-                    <li>Only trailing columns can be omitted. Values support inline Markdown (bold, italic, links).</li>
-                </ul>
+            {{! Visual field editor. Revealed by wk-infobox-editor.js, which keeps the textarea below in
+                sync as the authoritative form value — so with JS off (or via "Edit Source") the plain
+                text format is still the whole story. Same arrangement as the navigation menu editor. }}
+            <div id="infoboxFieldEditor" class="ib-editor" hidden>
+                <div class="ib-ed-bar">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-add><i class="mdi mdi-plus" aria-hidden="true"></i> Add field</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-add-heading title="Group the fields below it under a subheading on the card"><i class="mdi mdi-format-header-pound" aria-hidden="true"></i> Add section</button>
+                    <button type="button" class="btn btn-sm btn-link ms-auto" data-toggle-source><i class="mdi mdi-code-tags" aria-hidden="true"></i> Edit Source</button>
+                </div>
+                <div class="ib-ed-main">
+                    <div class="ib-ed-rows" data-rows></div>
+                    <div class="ib-ed-preview">
+                        <p class="ib-ed-preview-label">Card preview</p>
+                        <aside class="page-card wk-infobox ib-ed-preview-card">
+                            <p class="page-toc-title wk-infobox-title" data-preview-title>Infobox</p>
+                            <div data-preview></div>
+                        </aside>
+                        <p class="form-text mt-2 mb-0">Above is a sample rendering with stand-in values to simulate what a reader would see. (NOTE: on a real page a blank field is dropped, and a section with every field left blank is dropped along with its heading.)</p>
+                    </div>
+                </div>
             </div>
+            <textarea class="form-control font-monospace" name="fields" id="infoboxFields" rows="8" placeholder="population | Population | string | | Residents at the most recent census.&#10;climate | Climate | enum | Tropical, Temperate, Arid | Köppen climate group.&#10;languages | Languages | multi | English, French, Spanish | Every language with official status here.&#10;capital | Capital city | boolean | | Whether this is the country's seat of government.">{{fieldsText}}</textarea>
+            <details id="infoboxSyntaxHelp" class="form-text">
+                <summary>Field syntax</summary>
+                <p class="mb-1 mt-1">One field per line, columns divided by <code>|</code>. Only trailing columns may be left off.</p>
+                <p class="mb-2 font-monospace">name | label | type | options | help</p>
+                <ul class="mb-2">
+                    <li><strong>name</strong> — required. The key the value is stored under; readers never see it.</li>
+                    <li><strong>label</strong> — the caption on the card (defaults to the name).</li>
+                    <li><strong>type</strong> — one of the four below. Append <code>*</code> (e.g. <code>enum*</code>) to mark the field required.</li>
+                    <li><strong>options</strong> — the choices, comma-separated. <em>Required</em> for <code>enum</code> and <code>multi</code>, which have nothing to offer without it; ignored by the other two.</li>
+                    <li><strong>help</strong> — what the field means, in a sentence. Shown to editors under the input <em>and</em> to readers: on the page the label picks up a dotted underline that reveals this on hover or tap. Worth filling in wherever a label alone could be read two ways.</li>
+                </ul>
+                <table class="table table-sm align-middle mb-2">
+                    <thead><tr><th>Type</th><th>Allowed values</th><th>Shown on page as...</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>string</code></td>
+                            <td>any text</td>
+                            <td>the text, with inline Markdown (bold, italic, links) applied</td>
+                        </tr>
+                        <tr>
+                            <td><code>enum</code></td>
+                            <td>one option from the dropdown (or none)</td>
+                            <td>the selected option</td>
+                        </tr>
+                        <tr>
+                            <td><code>multi</code></td>
+                            <td>any number of items from the list (or none)</td>
+                            <td>the selected options, each in its own capsule</td>
+                        </tr>
+                        <tr>
+                            <td><code>boolean</code></td>
+                            <td>yes or no from the dropdown (or neither)</td>
+                            <td>a green "Yes" or a gray "No"</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="mb-2">A line beginning with <code>#</code> is a <strong>section heading</strong>, e.g. <code># Geography</code>, grouping every field below it, until the next heading. Headings with no content under them are dropped automatically.</p>
+                <p class="mb-0"><code>enum</code> and <code>multi</code> take their choices from the same options column and differ only in how many of them an editor may pick.</p>
+            </details>
         </div>
         <button type="submit" class="btn btn-primary">Save</button>
         <a class="btn btn-outline-secondary" href="/a/infoboxes">Cancel</a>
@@ -50,5 +103,6 @@
     </form>
     {{/isNew}}
 {{>partials/admin-shell-end.hbs}}
+<script src="/static/wk-infobox-editor.js?v={{assetVersion}}"></script>
 {{{bodyHtml}}}</body>
 </html>

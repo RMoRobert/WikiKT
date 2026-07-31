@@ -1601,6 +1601,14 @@ fun Route.configureAdminRouting() {
             call.respond(MustacheContent("admin/infobox-form.hbs", call.infoboxFormModel(isNew = true)))
         }
 
+        get("/infoboxes/usage") {
+            if (!call.requireManageGroups()) {
+                call.respondForbidden()
+                return@get
+            }
+            call.respond(MustacheContent("admin/infobox-usage.hbs", call.infoboxUsageModel()))
+        }
+
         post("/infoboxes") {
             if (!call.requireManageGroups()) {
                 call.respondForbidden()
@@ -2748,31 +2756,85 @@ private data class InfoboxTemplateFields(
     val fieldDefs: List<InfoboxFieldDef>,
 )
 
-private val INFOBOX_FIELD_TYPES = setOf("string", "select", "boolean", "array")
+private val INFOBOX_FIELD_TYPES = setOf("string", "enum", "boolean", "multi")
+
+/** The two types whose whole point is a fixed list of choices — useless without an options column. */
+private val INFOBOX_CHOICE_TYPES = setOf("enum", "multi")
+
 private val SLUG_PATTERN = Regex("[a-z0-9_-]+")
+
+/** The type a line names, normalized (blank means string), or null if it names no type at all. */
+private fun canonicalInfoboxType(raw: String): String? {
+    val t = raw.trim().lowercase()
+    if (t.isEmpty()) return "string"
+    return t.takeIf { it in INFOBOX_FIELD_TYPES }
+}
 
 /**
  * Parses the fields textarea (one field per line: `name | label | type | options | help`, where a `*`
- * on the type marks it required and options are comma-separated for select/array) into field defs.
- * Blank lines and lines without a name are skipped; an unknown type falls back to string.
+ * on the type marks it required and options are comma-separated for enum/multi) into field defs.
+ * Deliberately total — blank/nameless lines are skipped and an unrecognized type falls back to string
+ * — so re-rendering the form can never fail on bad input. Refusing to *save* such input is
+ * [infoboxFieldsError]'s job, so a typo'd type is reported rather than silently becoming a string.
  */
-private fun parseInfoboxFieldLines(text: String): List<InfoboxFieldDef> = text.lines().mapNotNull { line ->
+internal fun parseInfoboxFieldLines(text: String): List<InfoboxFieldDef> = text.lines().mapNotNull { line ->
     val trimmed = line.trim()
     if (trimmed.isEmpty()) return@mapNotNull null
+    // `# Label` is a section heading, borrowed from the navigation menu format so the one "this line
+    // is a heading, not an entry" convention in WikiKT means the same thing in both places.
+    if (trimmed.startsWith("#")) {
+        val label = trimmed.removePrefix("#").trim()
+        return@mapNotNull label.takeIf { it.isNotEmpty() }?.let { InfoboxFieldDef.heading(it) }
+    }
     val parts = trimmed.split("|").map { it.trim() }
     val name = parts.getOrNull(0)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
     val label = parts.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: name
-    var type = parts.getOrNull(2)?.lowercase()?.ifBlank { "string" } ?: "string"
-    val required = type.endsWith("*")
-    type = type.removeSuffix("*").trim()
-    if (type !in INFOBOX_FIELD_TYPES) type = "string"
+    val rawType = parts.getOrNull(2).orEmpty()
+    val required = rawType.endsWith("*")
+    val type = canonicalInfoboxType(rawType.removeSuffix("*")) ?: "string"
     val options = parts.getOrNull(3)?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
     val help = parts.getOrNull(4)?.takeIf { it.isNotEmpty() }
     InfoboxFieldDef(name = name, label = label, type = type, required = required, help = help, options = options)
 }
 
+/**
+ * The first problem in the fields textarea, or null when every line is usable. Catches the two
+ * mistakes the format makes easy and used to swallow: a misspelt type (silently saved as a plain text
+ * field) and an enum/multi with no options — which is not a smaller version of the field but a dead
+ * one, since its choices ARE the options column: an enum would offer only the empty "—" and a multi
+ * would render no checkboxes at all, leaving an editor no way to fill the field in.
+ */
+internal fun infoboxFieldsError(text: String): String? {
+    text.lines().forEachIndexed { index, line ->
+        val trimmed = line.trim()
+        if (trimmed.isEmpty()) return@forEachIndexed
+        val where = "Line ${index + 1}"
+        if (trimmed.startsWith("#")) {
+            if (trimmed.removePrefix("#").isBlank()) return "$where: a section heading needs a title, e.g. # Geography"
+            return@forEachIndexed
+        }
+        val parts = trimmed.split("|").map { it.trim() }
+        val name = parts[0]
+        if (name.isEmpty()) return "$where: a field needs a name in the first column."
+        val rawType = parts.getOrNull(2).orEmpty().removeSuffix("*").trim()
+        // A heading is its own line syntax, not a type — point at it rather than at the type list.
+        if (rawType.lowercase() in setOf(InfoboxFieldDef.TYPE_HEADING, "section", "group")) {
+            return "$where: a section heading is written on its own line as # ${parts.getOrNull(1)?.ifEmpty { null } ?: name}, not as a field type."
+        }
+        val type = canonicalInfoboxType(rawType)
+            ?: return "$where: '$rawType' isn't a field type. Use string, enum, multi or boolean."
+        if (type in INFOBOX_CHOICE_TYPES && parts.getOrNull(3).orEmpty().isBlank()) {
+            val label = parts.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: name
+            return "$where: a $type field is a choice between fixed options, so it needs them listed " +
+                "in the fourth column — e.g. $name | $label | $type | First choice, Second choice"
+        }
+    }
+    return null
+}
+
 /** Serializes field defs back to the textarea line format, trimming trailing empty columns. */
 private fun fieldsToText(fields: List<InfoboxFieldDef>): String = fields.joinToString("\n") { f ->
+    if (f.isHeading) return@joinToString "# ${f.label}"
     val cols = listOf(
         f.name,
         f.label,
@@ -2802,7 +2864,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.infoboxTemplateEr
     if (!SLUG_PATTERN.matches(fields.slug)) return "Slug may contain only lowercase letters, numbers, hyphens and underscores."
     val existing = appContext.infobox.templateBySlug(adminSiteId(), fields.slug)
     if (existing != null && existing.id != excludeId) return "A template with the slug '${fields.slug}' already exists on this site."
-    return null
+    return infoboxFieldsError(fields.fieldsText)
 }
 
 private suspend fun io.ktor.server.application.ApplicationCall.infoboxFormModel(
@@ -2827,7 +2889,8 @@ private suspend fun io.ktor.server.application.ApplicationCall.infoboxListModel(
     val templateModels = templates.map {
         mapOf(
             "id" to it.id.toString(), "slug" to it.slug, "name" to it.name,
-            "fieldCount" to it.fields.size, "description" to it.description,
+            // Section headings aren't fields, so they don't count towards the listed total.
+            "fieldCount" to it.fields.count { f -> f.isValueField }, "description" to it.description,
         )
     }
     val rules = appContext.infobox.listPathRules(siteId).map { r ->
@@ -2847,6 +2910,68 @@ private suspend fun io.ktor.server.application.ApplicationCall.infoboxListModel(
         "templateOptions" to templateOptions,
         "hasTemplateOptions" to templateOptions.isNotEmpty(),
         "otherSite" to (request.queryParameters["otherSite"] != null),
+    )
+}
+
+/**
+ * The infobox usage report: who uses each template, who is eligible and hasn't filled one in, and who
+ * filled one in but left a required field blank. Split into "needs attention" and "complete" here
+ * rather than in the view, so the template stays a list of rows.
+ */
+private suspend fun io.ktor.server.application.ApplicationCall.infoboxUsageModel(): Map<String, Any?> {
+    val siteId = adminSiteId()
+    val report = appContext.infobox.usageReport(siteId, appContext.pages.list(siteId))
+    val defaultLocale = appContext.config.defaultLocale
+
+    fun row(u: InfoboxService.PageUsage): Map<String, Any?> = mapOf(
+        "title" to u.title,
+        "path" to u.path,
+        "locale" to u.locale,
+        // The page as a reader reaches it, and the editor URL the "Fill in" action needs.
+        "url" to "/${u.locale}/${u.path}",
+        "editUrl" to "/e/${u.locale}/${u.path}",
+        "otherLocale" to (u.locale != defaultLocale),
+        "templateName" to u.templateName,
+        "filledFields" to u.filledFields,
+        "totalFields" to u.totalFields,
+        "isUnfilled" to u.isUnfilled,
+        "missingRequired" to u.missingRequired.joinToString(", "),
+        "hasMissingRequired" to u.missingRequired.isNotEmpty(),
+    )
+
+    val attention = report.pages.filter { it.isUnfilled || it.isIncomplete }.map(::row)
+    val complete = report.pages.filter { !it.isUnfilled && !it.isIncomplete }.map(::row)
+    val orphans = report.orphans.map {
+        mapOf(
+            "title" to it.title, "path" to it.path, "locale" to it.locale,
+            "editUrl" to "/e/${it.locale}/${it.path}",
+            "keys" to it.keys.joinToString(", "),
+        )
+    }
+    return adminBaseModel() + mapOf(
+        "templates" to report.templates.map {
+            mapOf(
+                "name" to it.name, "slug" to it.slug, "ruleCount" to it.ruleCount,
+                "matched" to it.matched, "filled" to it.filled,
+                "unfilled" to it.unfilled, "incomplete" to it.incomplete,
+                "noRules" to (it.ruleCount == 0),
+                // Explicit flags: Mustache treats the number 0 as a present value, so `{{#unfilled}}`
+                // would render its block for a template with none outstanding.
+                "hasUnfilled" to (it.unfilled > 0),
+                "hasIncomplete" to (it.incomplete > 0),
+            )
+        },
+        "hasTemplates" to report.templates.isNotEmpty(),
+        "attention" to attention,
+        "hasAttention" to attention.isNotEmpty(),
+        "attentionCount" to attention.size,
+        "complete" to complete,
+        "hasComplete" to complete.isNotEmpty(),
+        "completeCount" to complete.size,
+        "orphans" to orphans,
+        "hasOrphans" to orphans.isNotEmpty(),
+        // Nothing matched any rule at all — a different message from "all done".
+        "nothingMatched" to (report.pages.isEmpty() && report.templates.isNotEmpty()),
     )
 }
 
