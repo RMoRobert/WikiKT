@@ -32,7 +32,9 @@ object HtmlSanitizer {
             // <details open> renders expanded by default (boolean attribute, inert/safe).
             .addAttributes("details", "open")
             // Allow class (code blocks / tables / callouts / icons) and aria attributes; nothing executable.
-            .addAttributes(":all", "class", "aria-hidden", "aria-label")
+            // `data-line` is the editor preview's scroll anchor (MarkdownRenderer.SourceLineAttributeProvider,
+            // emitted only for that render); inert everywhere else, so it needs no separate safelist variant.
+            .addAttributes(":all", "class", "aria-hidden", "aria-label", "data-line")
             .addAttributes("ol", "start")
             .addAttributes("td", "colspan", "rowspan")
             .addAttributes("th", "colspan", "rowspan", "scope")

@@ -31,8 +31,8 @@
         {{{csrfField}}}
         <h3 class="h5 mt-3">Synchronization</h3>
         <div class="mb-3">
-            <label class="form-label">Mode</label>
-            <select class="form-select" name="gitSyncMode">
+            <label for="gitSyncMode" class="form-label">Mode</label>
+            <select class="form-select" name="gitSyncMode" id="gitSyncMode">
                 {{#modeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/modeOptions}}
             </select>
             <p class="form-text">Push mirrors local content into the repository,
@@ -40,30 +40,30 @@
                 to the local content, overwriting it if necessary. Bidirectional pulls first, then pushes.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Automatic sync</label>
-            <select class="form-select" name="gitSyncInterval">
+            <label for="gitSyncInterval" class="form-label">Automatic sync</label>
+            <select class="form-select" name="gitSyncInterval" id="gitSyncInterval">
                 {{#intervalOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/intervalOptions}}
             </select>
             <p class="form-text">How often a sync runs on its own (if enabled). Use "Sync now" below to run manually any time.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Repository URL</label>
-            <input class="form-control" type="text" name="gitSyncRepoUrl" value="{{repoUrlValue}}" placeholder="https://github.com/you/wiki.git" maxlength="500">
+            <label for="gitSyncRepoUrl" class="form-label">Repository URL</label>
+            <input class="form-control" type="text" name="gitSyncRepoUrl" value="{{repoUrlValue}}" placeholder="https://github.com/you/wiki.git" maxlength="500" id="gitSyncRepoUrl">
             <p class="form-text">HTTPS or SSH. SSH URLs (<code>git@github.com:you/wiki.git</code>) use this server's own SSH keys and git configuration.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Branch</label>
-            <input class="form-control" type="text" name="gitSyncBranch" value="{{branchValue}}" placeholder="{{branchDefault}}" maxlength="200">
+            <label for="gitSyncBranch" class="form-label">Branch</label>
+            <input class="form-control" type="text" name="gitSyncBranch" value="{{branchValue}}" placeholder="{{branchDefault}}" maxlength="200" id="gitSyncBranch">
         </div>
 
         <h3 class="h5 mt-3">HTTPS authentication <span class="text-secondary fs-6">(optional)</span></h3>
         <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input class="form-control" type="text" name="gitSyncUsername" value="{{usernameValue}}" placeholder="git" maxlength="200" autocomplete="off">
+            <label for="gitSyncUsername" class="form-label">Username</label>
+            <input class="form-control" type="text" name="gitSyncUsername" value="{{usernameValue}}" placeholder="git" maxlength="200" autocomplete="off" id="gitSyncUsername">
         </div>
         <div class="mb-3">
-            <label class="form-label">Personal access token/password</label>
-            <input class="form-control" type="password" name="gitSyncToken" value="" placeholder="{{#hasToken}}(unchanged — a token is stored){{/hasToken}}{{^hasToken}}(none stored){{/hasToken}}" maxlength="500" autocomplete="new-password">
+            <label for="gitSyncToken" class="form-label">Personal access token/password</label>
+            <input class="form-control" type="password" name="gitSyncToken" value="" placeholder="{{#hasToken}}(unchanged — a token is stored){{/hasToken}}{{^hasToken}}(none stored){{/hasToken}}" maxlength="500" autocomplete="new-password" id="gitSyncToken">
             {{#hasToken}}
             <div class="form-check mt-1">
                 <input class="form-check-input" type="checkbox" name="gitSyncClearToken" id="gitSyncClearToken">
@@ -75,12 +75,12 @@
 
         <h3 class="h5 mt-3">Commit author</h3>
         <div class="mb-3">
-            <label class="form-label">Name</label>
-            <input class="form-control" type="text" name="gitSyncAuthorName" value="{{authorNameValue}}" placeholder="WikiKT" maxlength="200">
+            <label for="gitSyncAuthorName" class="form-label">Name</label>
+            <input class="form-control" type="text" name="gitSyncAuthorName" value="{{authorNameValue}}" placeholder="WikiKT" maxlength="200" id="gitSyncAuthorName">
         </div>
         <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input class="form-control" type="text" name="gitSyncAuthorEmail" value="{{authorEmailValue}}" placeholder="wikikt@localhost" maxlength="200">
+            <label for="gitSyncAuthorEmail" class="form-label">Email</label>
+            <input class="form-control" type="text" name="gitSyncAuthorEmail" value="{{authorEmailValue}}" placeholder="wikikt@localhost" maxlength="200" id="gitSyncAuthorEmail">
         </div>
         <button type="submit" class="btn btn-primary">Save</button>
     </form>
@@ -227,7 +227,7 @@
               : 'CONTENT RESTORE: matching content will be overwritten with content from the backup, new pages added, and nothing deleted. This can only be undone manually for affected pages/assets. Continue?');">
         {{{csrfField}}}
         <div class="mb-3">
-            <input class="form-control" type="file" name="backupFile" accept=".zip,application/zip" required>
+            <input class="form-control" type="file" name="backupFile" aria-label="Backup file to restore (.zip)" accept=".zip,application/zip" required>
         </div>
         {{#isRoot}}
         <div class="form-check mb-3">

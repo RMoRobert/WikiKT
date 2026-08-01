@@ -74,7 +74,12 @@ fun Route.configureWikiRouting() {
         val locale = params["locale"]?.takeIf { isLocaleSegment(it) } ?: ctx.config.defaultLocale
         // The path lets the preview resolve directory-relative links the same way the saved page will.
         val path = params["path"].orEmpty()
-        call.respondText(call.renderContent(siteId, content, format, locale, path), ContentType.Text.Html)
+        // sourceLines: stamp blocks with data-line so the split view can scroll the preview to the line
+        // being edited (page-edit.js) instead of scrolling both panes by the same proportion.
+        call.respondText(
+            call.renderContent(siteId, content, format, locale, path, sourceLines = true),
+            ContentType.Text.Html,
+        )
     }
 }
 
@@ -1025,9 +1030,11 @@ private suspend fun io.ktor.server.application.ApplicationCall.renderContent(
     format: ContentFormat,
     locale: String,
     pagePath: String,
+    sourceLines: Boolean = false,
 ): String {
     val ctx = appContext
-    return renderAssetRefs(ctx.renderCache.renderBody(siteId, content, format, locale, pagePath), locale, ctx.config.defaultLocale)
+    val html = ctx.renderCache.renderBody(siteId, content, format, locale, pagePath, sourceLines)
+    return renderAssetRefs(html, locale, ctx.config.defaultLocale)
 }
 
 /** A live page's rendered body + infobox card, served from the render cache (rendered + stored on a

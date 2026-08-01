@@ -90,7 +90,7 @@
     <form method="post" action="/a/mail/test" class="edit-form">
         {{{csrfField}}}
         <div class="input-group" style="max-width:32rem">
-            <input class="form-control" type="email" name="testRecipient" placeholder="you@example.com" maxlength="255" required>
+            <input class="form-control" type="email" name="testRecipient" aria-label="Send the test email to" placeholder="you@example.com" maxlength="255" required>
             <button type="submit" class="btn btn-outline-primary"{{^isConfigured}} disabled title="Configure the SMTP host and From address first"{{/isConfigured}}><i class="mdi mdi-send" aria-hidden="true"></i> Send test</button>
         </div>
     </form>

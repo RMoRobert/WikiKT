@@ -132,11 +132,11 @@
                 </li>
                 {{/backlinks}}
             </ul>
-            <p class="form-text"><i class="mdi mdi-alert-outline text-warning" aria-hidden="true"></i> Moving or renaming this page will break these links — they are not updated automatically.</p>
+            <p class="form-text"><i class="mdi mdi-alert-outline text-warning" aria-hidden="true"></i> Moving or renaming this page will break these links.</p>
         </div>
         {{/hasBacklinks}}
         {{^hasBacklinks}}
-        <p class="text-secondary d-flex align-items-center gap-2 mb-0"><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> No other pages link to this page yet.</p>
+        <p class="text-secondary d-flex align-items-center gap-2 mb-0"><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> No other pages currently link to this page.</p>
         {{/hasBacklinks}}
         </div>{{! /#pi-linked }}
 
@@ -146,7 +146,7 @@
             <select class="form-select" name="metaRobots" id="metaRobots" aria-describedby="metaRobotsHelp">
                 {{#metaRobotsOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/metaRobotsOptions}}
             </select>
-            <p class="form-text" id="metaRobotsHelp">Overrides the site-wide default <code>&lt;meta name="robots"&gt;</code> for this page. Applies on "Update live now".</p>
+            <p class="form-text" id="metaRobotsHelp">Overrides the site-wide default <code>&lt;meta name="robots"&gt;</code> for this page.</p>
         </div>
         </div>{{! /#pi-metadata }}
 
@@ -221,7 +221,7 @@
             <label class="form-label" for="stagedPublishAt">Publish at</label>
             <input class="form-control" type="datetime-local" id="stagedPublishAt" name="stagedPublishAt" value="{{stagedPublishAtInput}}">
         </div>
-        <p class="form-text">Staged saves capture content only; tags, path &amp; permissions apply only with "Update live now". The live page stays unchanged until publish.</p>
+        <p class="form-text">Staged saves capture content only (and robots data); tags, path, and permissions apply only with "Update live now". The live page stays unchanged until publish.</p>
         {{#hasStaged}}
         <button type="submit" name="discardStaged" value="1" formnovalidate class="btn btn-outline-danger" onclick="return confirm('Discard the staged update and go back to editing the live page?');">Discard staged update</button>
         {{/hasStaged}}

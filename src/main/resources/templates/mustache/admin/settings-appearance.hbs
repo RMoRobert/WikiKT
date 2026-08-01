@@ -64,43 +64,43 @@
             <p class="form-text">The link color used in dark mode, where the primary color above is usually too dark to read on the dark background. It must reach 4.5:1 against the dark background, so pick a lighter shade (e.g. <code>#6ea8fe</code>). Leave blank to keep the default dark-mode link color.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Header color <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteHeaderColor" value="{{siteHeaderColorValue}}" placeholder="#1f2933" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteHeaderColor" class="form-label">Header color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteHeaderColor" value="{{siteHeaderColorValue}}" placeholder="#1f2933" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteHeaderColor">
             <p class="form-text">A hex color for the top header bar in light mode (e.g. <code>#1f2933</code> for a dark bar). Leave blank for a subtly tinted default.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Header color (dark mode) <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteHeaderColorDark" value="{{siteHeaderColorDarkValue}}" placeholder="#1f2933" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteHeaderColorDark" class="form-label">Header color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteHeaderColorDark" value="{{siteHeaderColorDarkValue}}" placeholder="#1f2933" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteHeaderColorDark">
             <p class="form-text">The header bar color used when the site is in dark mode. Leave blank for the default dark bar.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Sidebar color <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteSidebarColor" value="{{siteSidebarColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteSidebarColor" class="form-label">Sidebar color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarColor" value="{{siteSidebarColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteSidebarColor">
             <p class="form-text">A hex color for the navigation sidebar in light mode. Text switches between light and dark automatically for contrast. Leave blank for the default blue.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Sidebar color (dark mode) <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteSidebarColorDark" value="{{siteSidebarColorDarkValue}}" placeholder="#212529" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteSidebarColorDark" class="form-label">Sidebar color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarColorDark" value="{{siteSidebarColorDarkValue}}" placeholder="#212529" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteSidebarColorDark">
             <p class="form-text">The sidebar color used when the site is in dark mode. Leave blank for the default dark surface.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Sidebar divider color <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteSidebarHeaderLineColor" value="{{siteSidebarHeaderLineColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteSidebarHeaderLineColor" class="form-label">Sidebar divider color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarHeaderLineColor" value="{{siteSidebarHeaderLineColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteSidebarHeaderLineColor">
             <p class="form-text">The thin line along the top of the navigation sidebar, where it meets the header bar, in light mode. Useful when the header and sidebar colors match and the seam between them disappears. Leave blank to keep the tint derived from the sidebar color.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Sidebar divider color (dark mode) <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteSidebarHeaderLineColorDark" value="{{siteSidebarHeaderLineColorDarkValue}}" placeholder="#212529" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteSidebarHeaderLineColorDark" class="form-label">Sidebar divider color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteSidebarHeaderLineColorDark" value="{{siteSidebarHeaderLineColorDarkValue}}" placeholder="#212529" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteSidebarHeaderLineColorDark">
             <p class="form-text">The sidebar divider color used when the site is in dark mode.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Sidebar menu header color <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteNavHeadingColor" value="{{siteNavHeadingColorValue}}" placeholder="#ffffff" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteNavHeadingColor" class="form-label">Sidebar menu header color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteNavHeadingColor" value="{{siteNavHeadingColorValue}}" placeholder="#ffffff" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteNavHeadingColor">
             <p class="form-text">A hex color for <em>Header</em> items in the sidebar menu (the group labels you add under <a href="/a/navigation">Navigation</a>) in light mode. Leave blank to keep the muted tint derived from the sidebar color.</p>
         </div>
         <div class="mb-3">
-            <label class="form-label">Sidebar menu header color (dark mode) <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteNavHeadingColorDark" value="{{siteNavHeadingColorDarkValue}}" placeholder="#ffffff" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteNavHeadingColorDark" class="form-label">Sidebar menu header color (dark mode) <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteNavHeadingColorDark" value="{{siteNavHeadingColorDarkValue}}" placeholder="#ffffff" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteNavHeadingColorDark">
             <p class="form-text">The sidebar menu header color used when the site is in dark mode.</p>
         </div>
         <div class="mb-3">
@@ -110,15 +110,15 @@
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Heading underline color <span class="text-secondary">(optional)</span></label>
-            <input class="form-control" type="text" name="siteHeadingLineColor" value="{{siteHeadingLineColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})">
+            <label for="siteHeadingLineColor" class="form-label">Heading underline color <span class="text-secondary">(optional)</span></label>
+            <input class="form-control" type="text" name="siteHeadingLineColor" value="{{siteHeadingLineColorValue}}" placeholder="#1976d2" pattern="#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})" id="siteHeadingLineColor">
             <p class="form-text">Section headings on wiki pages get a fading underline, and subsection headings a thin hairline, in this color. Leave blank for a neutral gray.</p>
         </div>
 
         <h2>Table of contents</h2>
         <div class="mb-3">
-            <label class="form-label">Position</label>
-            <select class="form-select" name="tocMode">
+            <label for="tocMode" class="form-label">Position</label>
+            <select class="form-select" name="tocMode" id="tocMode">
                 {{#tocModeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/tocModeOptions}}
             </select>
             <p class="form-text">Auto-built from each page's H1 and H2 headings. If enabled, shown beside the content or, on narrow screens, under the page title.</p>
@@ -132,7 +132,7 @@
                     {{#bodyFontOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/bodyFontOptions}}
                 </select>
                 <div class="mt-2 {{^bodyFontIsCustom}}d-none{{/bodyFontIsCustom}}" id="bodyFontCustomWrap">
-                    <input class="form-control" type="text" name="bodyFontCustom" value="{{bodyFontCustomValue}}" placeholder="'Inter', sans-serif" maxlength="200">
+                    <input class="form-control" type="text" name="bodyFontCustom" aria-label="Custom body font" value="{{bodyFontCustomValue}}" placeholder="'Inter', sans-serif" maxlength="200">
                     <p class="form-text mb-0">CSS <code>font-family</code> value; load the font itself in Custom CSS below.</p>
                 </div>
             </div>
@@ -142,7 +142,7 @@
                     {{#headingFontOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/headingFontOptions}}
                 </select>
                 <div class="mt-2 {{^headingFontIsCustom}}d-none{{/headingFontIsCustom}}" id="headingFontCustomWrap">
-                    <input class="form-control" type="text" name="headingFontCustom" value="{{headingFontCustomValue}}" placeholder="'Merriweather', serif" maxlength="200">
+                    <input class="form-control" type="text" name="headingFontCustom" aria-label="Custom heading font" value="{{headingFontCustomValue}}" placeholder="'Merriweather', serif" maxlength="200">
                     <p class="form-text mb-0">CSS <code>font-family</code> value; load the font itself in Custom CSS below.</p>
                 </div>
             </div>
@@ -168,7 +168,7 @@
 
         <h2>Custom CSS <span class="text-secondary fs-6">(advanced)</span></h2>
         <div class="mb-3">
-            <textarea class="form-control text-body-emphasis" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="customCss" name="customCss" rows="8" spellcheck="false" placeholder=".content h1 { letter-spacing: -0.02em; }&#10;:root { --bs-border-radius: 0.75rem; }" maxlength="20000">{{customCssValue}}</textarea>
+            <textarea class="form-control text-body-emphasis" style="font-family:var(--bs-font-monospace);font-size:0.85rem" id="customCss" name="customCss" aria-label="Custom CSS" rows="8" spellcheck="false" placeholder=".content h1 { letter-spacing: -0.02em; }&#10;:root { --bs-border-radius: 0.75rem; }" maxlength="20000">{{customCssValue}}</textarea>
             <p class="form-text">Injected into <code>&lt;head&gt;</code> of every page after the theme, so it overrides built-i
                 styles. Examples: theme via CSS variables like <code>--bs-primary</code>. External resources (images,
                 <code>@import</code>, <code>@font-face</code>) may load from this server, Google Fonts, and jsDelivr by default;

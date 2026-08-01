@@ -204,6 +204,11 @@
     toolbarButtonClassPrefix: "mde",
     // Side-by-side preview should NOT force fullscreen, so our sticky top bar stays visible.
     sideBySideFullscreen: false,
+    // EasyMDE's own split-view sync scrolls both panes to the same *proportion* of their heights, so
+    // the preview drifts away from what you're editing as soon as the two differ in density (a fenced
+    // block is tall in the source and short rendered, an image is the reverse). Replaced by the
+    // line-anchored sync further down, which follows the source line each rendered block came from.
+    syncSideBySidePreviewScroll: false,
     toolbar: [
       mde("bold", EasyMDE.toggleBold, "format-bold", "Bold"),
       mde("italic", EasyMDE.toggleItalic, "format-italic", "Italic"),
@@ -276,11 +281,11 @@
       mde("preview", EasyMDE.togglePreview, "eye-outline", "Preview", true),
       mde("side-by-side", function (editor) {
         EasyMDE.toggleSideBySide(editor);
-        positionSidePreview();
+        afterLayoutChange();
       }, "view-split-vertical", "Side-by-side", true),
       mde("fullscreen", function (editor) {
         EasyMDE.toggleFullScreen(editor);
-        positionSidePreview();
+        afterLayoutChange();
       }, "fullscreen", "Fullscreen", true),
       "|",
       mde("plain-view", function (editor) {
@@ -288,21 +293,15 @@
         if (c) c.classList.toggle("editor--plain");
       }, "file-code-outline", "Plain text view", true),
     ],
+    // Rendering goes through the server (/preview), so the preview is async — but EasyMDE calls this on
+    // every CodeMirror "update" (every keystroke AND every scroll, since scrolling redraws the viewport)
+    // and synchronously writes whatever we return into the pane. Returning HTML-or-placeholder therefore
+    // meant a request per keystroke and a "Loading…" flash that threw away the preview's scroll position
+    // each time. So: always return null (EasyMDE leaves the pane alone), and let schedulePreview skip
+    // no-op renders and debounce the rest — see renderPreviewInto.
     previewRender: function (plainText, preview) {
-      var fmt = formatSelect ? formatSelect.value : 'MARKDOWN';
-      var pageLoc = (form && form.dataset.pageLocale) || '';
-      var pagePath = (form && form.dataset.pagePath) || '';
-      fetch('/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        credentials: 'same-origin',
-        body: 'contentFormat=' + encodeURIComponent(fmt) + '&locale=' + encodeURIComponent(pageLoc)
-          + '&path=' + encodeURIComponent(pagePath) + '&content=' + encodeURIComponent(plainText)
-      })
-        .then(function (r) { return r.text(); })
-        .then(function (html) { preview.innerHTML = '<div class="wiki-content">' + html + '</div>'; })
-        .catch(function () { preview.innerHTML = '<p class="text-danger">Preview failed.</p>'; });
-      return 'Loading preview…';
+      schedulePreview(preview, plainText);
+      return null;
     }
   });
   // Firefox doesn't reliably paint ::before icons on <button>; move each toolbar icon into a
@@ -342,17 +341,22 @@
       }
     });
   });
-  // Keep the formatting toolbar pinned just below the editor bar: expose the bar's rendered height
-  // (it wraps to two rows on narrow screens) as --wk-editor-bar-h so the sticky offset in site.css
-  // tracks it. ResizeObserver covers the wrap/unwrap; resize covers browsers without it.
+  // Expose both chrome bars' rendered heights (each wraps to a second row on narrow screens) as CSS
+  // variables: site.css pins the formatting toolbar just below the editor bar with --wk-editor-bar-h,
+  // and sizes the split view's two scrolling panes against both. ResizeObserver covers the wrap/unwrap;
+  // resize covers browsers without it.
   var editorBar = document.querySelector('.editor-bar');
-  if (editorBar) {
-    var syncBarHeight = function () {
-      document.documentElement.style.setProperty('--wk-editor-bar-h', editorBar.offsetHeight + 'px');
-    };
-    syncBarHeight();
-    window.addEventListener('resize', syncBarHeight);
-    if (window.ResizeObserver) new ResizeObserver(syncBarHeight).observe(editorBar);
+  var editorToolbar = document.querySelector('.editor-content .editor-toolbar');
+  var syncBarHeights = function () {
+    if (editorBar) document.documentElement.style.setProperty('--wk-editor-bar-h', editorBar.offsetHeight + 'px');
+    if (editorToolbar) document.documentElement.style.setProperty('--wk-editor-toolbar-h', editorToolbar.offsetHeight + 'px');
+  };
+  syncBarHeights();
+  window.addEventListener('resize', syncBarHeights);
+  if (window.ResizeObserver) {
+    var barObserver = new ResizeObserver(syncBarHeights);
+    if (editorBar) barObserver.observe(editorBar);
+    if (editorToolbar) barObserver.observe(editorToolbar);
   }
 
   var cm = easymde.codemirror;
@@ -394,25 +398,204 @@
   // Guarantee the latest editor content is written back to the textarea before submit.
   if (form) form.addEventListener('submit', function () { cm.save(); });
 
-  // EasyMDE's side-by-side preview is position:fixed and sized for fullscreen. With
-  // sideBySideFullscreen:false it shows inline, so re-anchor it to the editor's box (below the
-  // sticky bar). In real fullscreen, clear our overrides and let EasyMDE's own CSS govern.
-  function positionSidePreview() {
-    var preview = editorContainer.querySelector('.editor-preview-side');
-    if (!preview) return;
-    if (cm.getWrapperElement().classList.contains('CodeMirror-fullscreen')) {
-      preview.style.top = '';
-      preview.style.height = '';
-      return;
-    }
-    var rect = cm.getWrapperElement().getBoundingClientRect();
-    preview.style.top = rect.top + 'px';
-    preview.style.height = rect.height + 'px';
+  // EasyMDE flips the split/fullscreen classes inside its own setTimeout(…, 1), so the panes are still
+  // the old size when the toolbar action returns. Re-measure once they've settled: CodeMirror caches its
+  // viewport height and won't notice the change on its own, and the preview's scroll anchors move with it.
+  function afterLayoutChange() {
+    setTimeout(function () {
+      cm.refresh();
+      invalidateAnchors();
+    }, 20);
   }
-  // Keep the inline preview aligned as the page scrolls, the window resizes, or the editor grows.
-  window.addEventListener('scroll', positionSidePreview, { passive: true });
-  window.addEventListener('resize', positionSidePreview);
-  cm.on('changes', positionSidePreview);
+
+  // ---- Live preview rendering ------------------------------------------------------------------
+  // Where previewRender (in the EasyMDE options above) hands off. Two jobs: drop the re-renders where
+  // nothing changed (EasyMDE asks on scroll as well as on edit), and debounce the rest so typing isn't
+  // a POST per keystroke. The pane's contents are only ever replaced by a *finished* render, so it
+  // never blanks to a placeholder and never loses its scroll position mid-edit.
+  var PREVIEW_DEBOUNCE_MS = 250;
+  var previewTimer = null;
+  var previewPane = null;   // pane the current text was rendered into (side-by-side vs. the full-pane one)
+  var previewText = null;   // text of the render that is showing, or in flight
+  var previewSeq = 0;       // discards a slow response that a newer one has overtaken
+
+  function schedulePreview(pane, text) {
+    if (pane === previewPane && text === previewText) return;
+    var firstFill = pane !== previewPane;
+    previewPane = pane;
+    previewText = text;
+    if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
+    // Opening a preview pane renders straight away; only ongoing edits wait for the debounce.
+    if (firstFill) renderPreviewInto(pane, text);
+    else previewTimer = setTimeout(function () { previewTimer = null; renderPreviewInto(pane, text); }, PREVIEW_DEBOUNCE_MS);
+  }
+
+  function renderPreviewInto(pane, text) {
+    var fmt = formatSelect ? formatSelect.value : 'MARKDOWN';
+    var pageLoc = (form && form.dataset.pageLocale) || '';
+    var pagePath = (form && form.dataset.pagePath) || '';
+    var seq = ++previewSeq;
+    if (!pane.firstChild) pane.innerHTML = '<p class="text-secondary">Loading preview…</p>';
+    fetch('/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      credentials: 'same-origin',
+      body: 'contentFormat=' + encodeURIComponent(fmt) + '&locale=' + encodeURIComponent(pageLoc)
+        + '&path=' + encodeURIComponent(pagePath) + '&content=' + encodeURIComponent(text)
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        if (seq !== previewSeq) return;
+        pane.innerHTML = '<div class="wiki-content">' + html + '</div>';
+        onPreviewRendered(pane);
+      })
+      .catch(function () {
+        if (seq !== previewSeq) return;
+        previewText = null; // let the next edit retry, so a transient failure isn't sticky
+        pane.innerHTML = '<p class="text-danger">Preview failed.</p>';
+      });
+  }
+
+  // ---- Split-view scroll sync ------------------------------------------------------------------
+  // Wiki.js-style line following, in place of EasyMDE's proportional sync (disabled via
+  // syncSideBySidePreviewScroll above). The server stamps every rendered block with the source line it
+  // came from — data-line, emitted for /preview only (MarkdownRenderer.SourceLineAttributeProvider) — so
+  // the line at the top of the editor viewport maps to a real offset in the preview, interpolating
+  // between the blocks on either side of it. Both directions: dragging the preview scrolls the source.
+  var sidePreview = editorContainer.querySelector('.editor-preview-side');
+  var anchors = null;   // [{line, top}], ascending in both; rebuilt lazily after a render or a resize
+  var SCROLL_EPSILON = 2; // px; also CodeMirror's own threshold for "this scroll is a no-op"
+
+  function previewActive() {
+    return !!sidePreview && sidePreview.classList.contains('editor-preview-active-side');
+  }
+
+  function onPreviewRendered(pane) {
+    if (pane !== sidePreview) return;
+    anchors = null;
+    // An image shifts every offset below it once it loads, so re-anchor as each one settles.
+    pane.querySelectorAll('img').forEach(function (img) {
+      if (img.complete) return;
+      img.addEventListener('load', invalidateAnchors);
+      img.addEventListener('error', invalidateAnchors);
+    });
+    syncPreviewToEditor();
+  }
+
+  function invalidateAnchors() {
+    anchors = null;
+    syncPreviewToEditor();
+  }
+  window.addEventListener('resize', invalidateAnchors);
+
+  function buildAnchors() {
+    var nodes = sidePreview.querySelectorAll('[data-line]');
+    // Offsets within the pane's scrolled content. Measured off getBoundingClientRect rather than
+    // offsetTop, which is relative to whichever ancestor happens to be positioned.
+    var base = sidePreview.getBoundingClientRect().top - sidePreview.scrollTop;
+    var out = [{ line: 0, top: 0 }];
+    for (var i = 0; i < nodes.length; i++) {
+      var line = parseInt(nodes[i].getAttribute('data-line'), 10);
+      var top = nodes[i].getBoundingClientRect().top - base;
+      var last = out[out.length - 1];
+      // Nested blocks repeat their parent's line (a <ul> and its first <li>) — keep the outermost. The
+      // list has to stay strictly ascending in both fields or the interpolation below can run backwards.
+      if (isNaN(line) || line <= last.line || top < last.top) continue;
+      out.push({ line: line, top: top });
+    }
+    // Close the range so the last block interpolates against the end of the document, not a cliff.
+    var tail = out[out.length - 1];
+    if (cm.lineCount() > tail.line && sidePreview.scrollHeight >= tail.top) {
+      out.push({ line: cm.lineCount(), top: sidePreview.scrollHeight });
+    }
+    return out;
+  }
+
+  function getAnchors() {
+    if (!anchors) anchors = buildAnchors();
+    return anchors.length > 1 ? anchors : null;
+  }
+
+  // Index of the last anchor whose `field` is <= value (the list is ascending in both fields).
+  function anchorIndex(list, field, value) {
+    var lo = 0, hi = list.length - 1;
+    while (lo < hi) {
+      var mid = (lo + hi + 1) >> 1;
+      if (list[mid][field] <= value) lo = mid; else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  // Straight-line interpolation from one anchor field to the other, between the pair bracketing `value`.
+  function interpolate(list, from, to, value) {
+    var i = anchorIndex(list, from, value);
+    var a = list[i], b = list[i + 1];
+    if (!b || b[from] <= a[from]) return a[to];
+    return a[to] + (b[to] - a[to]) * ((value - a[from]) / (b[from] - a[from]));
+  }
+
+  // The (fractional) source line sitting at the top of the editor viewport, and its inverse.
+  function editorTopLine() {
+    var top = cm.getScrollInfo().top;
+    var line = cm.lineAtHeight(top, 'local');
+    var lineTop = cm.heightAtLine(line, 'local');
+    var lineBottom = cm.heightAtLine(line + 1, 'local');
+    return lineBottom > lineTop ? line + (top - lineTop) / (lineBottom - lineTop) : line;
+  }
+  function editorTopForLine(line) {
+    var whole = Math.floor(line);
+    var lineTop = cm.heightAtLine(whole, 'local');
+    var lineBottom = cm.heightAtLine(whole + 1, 'local');
+    return lineTop + (lineBottom - lineTop) * (line - whole);
+  }
+
+  // Each pane drives the other, minus the scroll event our own write is about to cause: remember the
+  // offset written and skip the one event that reports it back. Clamping first is what makes that
+  // reliable — an out-of-range write would come back clamped, read as a user scroll, and bounce. (A
+  // timer or requestAnimationFrame guard would be shorter, but rAF does not run at all while the tab is
+  // hidden, which leaves the guard stuck on and the sync dead for the rest of the session.)
+  var expectPreviewTop = null;
+  var expectEditorTop = null;
+
+  function clamp(value, max) { return value < 0 ? 0 : (value > max ? max : value); }
+  function consumed(expected, actual) {
+    return expected !== null && Math.abs(actual - expected) <= SCROLL_EPSILON;
+  }
+
+  function syncPreviewToEditor() {
+    var list = previewActive() ? getAnchors() : null;
+    if (!list) return;
+    var top = clamp(interpolate(list, 'line', 'top', editorTopLine()),
+      sidePreview.scrollHeight - sidePreview.clientHeight);
+    // Writing an offset it already sits at fires no event, so don't leave an expectation stranded.
+    if (Math.abs(sidePreview.scrollTop - top) <= SCROLL_EPSILON) { expectPreviewTop = null; return; }
+    expectPreviewTop = top;
+    sidePreview.scrollTop = top;
+  }
+
+  function syncEditorToPreview() {
+    var list = previewActive() ? getAnchors() : null;
+    if (!list) return;
+    var info = cm.getScrollInfo();
+    var top = clamp(editorTopForLine(interpolate(list, 'top', 'line', sidePreview.scrollTop)),
+      info.height - info.clientHeight);
+    if (Math.abs(info.top - top) <= SCROLL_EPSILON) { expectEditorTop = null; return; }
+    expectEditorTop = top;
+    cm.scrollTo(null, top);
+  }
+
+  if (sidePreview) {
+    cm.on('scroll', function () {
+      var expected = expectEditorTop;
+      expectEditorTop = null;
+      if (!consumed(expected, cm.getScrollInfo().top)) syncPreviewToEditor();
+    });
+    sidePreview.addEventListener('scroll', function () {
+      var expected = expectPreviewTop;
+      expectPreviewTop = null;
+      if (!consumed(expected, sidePreview.scrollTop)) syncEditorToPreview();
+    }, { passive: true });
+  }
 
   // After each Markdown image link that points at a known wiki asset, show a small "open in asset
   // editor" icon in the source. These are CodeMirror bookmark WIDGETS — display only: they are never

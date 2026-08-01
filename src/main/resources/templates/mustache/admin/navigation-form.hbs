@@ -14,8 +14,8 @@
     <form method="post" action="{{#isNew}}/a/navigation{{/isNew}}{{^isNew}}/a/navigation/{{id}}{{/isNew}}" class="edit-form nav-form">
         {{{csrfField}}}
         <div class="mb-3" style="max-width:32rem">
-            <label class="form-label">Scope</label>
-            <input class="form-control" type="text" name="scope" value="{{scope}}" placeholder="e.g. apps/rule-machine (empty = default menu)">
+            <label for="scope" class="form-label">Scope</label>
+            <input class="form-control" type="text" name="scope" value="{{scope}}" placeholder="e.g. apps/rule-machine (empty = default menu)" id="scope">
             <p class="form-text">Leave empty to configure the default menu (used when no path matches). Otherwise, specify a path, and the menu will appear for all pages at that path (and under any subpaths). Longer paths override shorter paths (e.g., <code>/path1/path2/page1</code> page will show menu configured for <code>/path1/path2</code> and not <code>/path1</code> if both are configured).</p>
         </div>
         <div class="mb-3">
@@ -30,14 +30,18 @@
                 </div>
                 <div class="nav-ed-main">
                     <div class="nav-ed-rows" data-rows></div>
-                    <div class="nav-ed-preview">
+                    {{! Purely a visual rendering of the rows beside it — same items, same order, and its
+                        links go nowhere. Hidden from assistive tech so it isn't read out twice; the rows
+                        are the accessible copy (each field is named with its item number in
+                        wk-nav-editor.js). }}
+                    <div class="nav-ed-preview" aria-hidden="true">
                         <p class="nav-ed-preview-label">Sidebar preview</p>
                         <div class="wiki-sidebar nav-ed-preview-side"><nav data-preview></nav></div>
                     </div>
                 </div>
             </div>
 
-            <textarea class="form-control" name="definition" id="navDefinition" rows="10" placeholder="One item per line">{{definition}}</textarea>
+            <textarea class="form-control" name="definition" id="navDefinition" aria-label="Menu items (source)" rows="10" placeholder="One item per line">{{definition}}</textarea>
             <details id="navSyntaxHelp">
                 <summary>Item syntax</summary>
                 <pre><code># Section heading        a non-link heading

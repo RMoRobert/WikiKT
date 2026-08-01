@@ -16,18 +16,18 @@
     <form method="post" action="{{#isNew}}/a/infoboxes{{/isNew}}{{^isNew}}/a/infoboxes/{{id}}{{/isNew}}" class="edit-form ib-form">
         {{{csrfField}}}
         <div class="mb-3" style="max-width:32rem">
-            <label class="form-label">Name</label>
+            <label for="infoboxName" class="form-label">Name</label>
             <input class="form-control" type="text" name="name" id="infoboxName" value="{{name}}" placeholder="e.g. City Info" required>
             <p class="form-text">Shown as the infobox card's heading on the page.</p>
         </div>
         <div class="mb-3" style="max-width:32rem">
-            <label class="form-label">Slug</label>
-            <input class="form-control" type="text" name="slug" value="{{slug}}" placeholder="e.g. app_info">
+            <label for="slug" class="form-label">Slug</label>
+            <input class="form-control" type="text" name="slug" value="{{slug}}" placeholder="e.g. app_info" id="slug">
             <p class="form-text">Stable identifier (lowercase letters, numbers, <code>-</code>, <code>_</code>). Leave blank to derive from name.</p>
         </div>
         <div class="mb-3" style="max-width:32rem">
-            <label class="form-label">Description</label>
-            <input class="form-control" type="text" name="description" value="{{description}}" placeholder="Optional note for editors">
+            <label for="description" class="form-label">Description</label>
+            <input class="form-control" type="text" name="description" value="{{description}}" placeholder="Optional note for editors" id="description">
         </div>
         <div class="mb-3">
             <label class="form-label">Fields</label>
@@ -52,7 +52,7 @@
                     </div>
                 </div>
             </div>
-            <textarea class="form-control font-monospace" name="fields" id="infoboxFields" rows="8" placeholder="population | Population | string | | Residents at the most recent census.&#10;climate | Climate | enum | Tropical, Temperate, Arid | Köppen climate group.&#10;languages | Languages | multi | English, French, Spanish | Every language with official status here.&#10;capital | Capital city | boolean | | Whether this is the country's seat of government.">{{fieldsText}}</textarea>
+            <textarea class="form-control font-monospace" name="fields" id="infoboxFields" aria-label="Infobox fields (source)" rows="8" placeholder="population | Population | string | | Residents at the most recent census.&#10;climate | Climate | enum | Tropical, Temperate, Arid | Köppen climate group.&#10;languages | Languages | multi | English, French, Spanish | Every language with official status here.&#10;capital | Capital city | boolean | | Whether this is the country's seat of government.">{{fieldsText}}</textarea>
             <details id="infoboxSyntaxHelp" class="form-text">
                 <summary>Field syntax</summary>
                 <p class="mb-1 mt-1">One field per line, columns divided by <code>|</code>. Only trailing columns may be left off.</p>

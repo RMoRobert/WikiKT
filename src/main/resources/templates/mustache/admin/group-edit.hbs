@@ -31,7 +31,7 @@
         {{#settingsError}}<div class="alert alert-danger" role="alert">{{settingsError}}</div>{{/settingsError}}
         <form method="post" action="/a/groups/{{group.id}}/settings" class="edit-form">
             {{{csrfField}}}
-            <div class="mb-3"><label class="form-label">Name</label><input class="form-control" type="text" name="name" value="{{group.name}}" {{#group.isSystem}}readonly{{/group.isSystem}} required></div>
+            <div class="mb-3"><label for="name" class="form-label">Name</label><input class="form-control" type="text" name="name" value="{{group.name}}" {{#group.isSystem}}readonly{{/group.isSystem}} required id="name"></div>
             {{#group.isSystem}}<p class="form-text">This is a system group; its name can't be changed and it can't be deleted.</p>{{/group.isSystem}}
             <button type="submit" class="btn btn-primary">Save</button>
         </form>
@@ -52,7 +52,9 @@
             {{{csrfField}}}
             <fieldset class="mb-3">
                 {{#permissions}}
-                <div class="form-check"><input class="form-check-input" type="checkbox" name="{{verb}}" {{#granted}}checked{{/granted}}><label class="form-check-label">{{label}} <code class="text-secondary">{{verb}}</code></label></div>
+                {{! ids are keyed on the verb (and prefixed, since the page-rule form below repeats the
+                    same verbs) so every checkbox/label pair is unique. }}
+                <div class="form-check"><input class="form-check-input" type="checkbox" name="{{verb}}" id="perm-{{verb}}" {{#granted}}checked{{/granted}}><label class="form-check-label" for="perm-{{verb}}">{{label}} <code class="text-secondary">{{verb}}</code></label></div>
                 {{/permissions}}
             </fieldset>
             <button type="submit" class="btn btn-primary">Save</button>
@@ -92,8 +94,8 @@
         <form method="post" action="/a/groups/{{group.id}}/rules" class="edit-form">
             {{{csrfField}}}
             <div class="mb-3">
-                <label class="form-label">Effect</label>
-                <select class="form-select" name="effect">
+                <label for="effect" class="form-label">Effect</label>
+                <select class="form-select" name="effect" id="effect">
                     <option value="ALLOW">ALLOW (grant)</option>
                     <option value="DENY">DENY (revoke)</option>
                 </select>
@@ -101,23 +103,23 @@
             <div class="mb-3">
                 <label class="form-label">Actions <span class="text-secondary">(what this rule grants/denies)</span></label>
                 {{#verbOptions}}
-                <div class="form-check"><input class="form-check-input" type="checkbox" name="{{verb}}" {{#isRead}}checked{{/isRead}}><label class="form-check-label">{{label}} <code class="text-secondary">{{verb}}</code></label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" name="{{verb}}" id="rule-{{verb}}" {{#isRead}}checked{{/isRead}}><label class="form-check-label" for="rule-{{verb}}">{{label}} <code class="text-secondary">{{verb}}</code></label></div>
                 {{/verbOptions}}
             </div>
             <div class="mb-3">
-                <label class="form-label">Match type</label>
-                <select class="form-select" name="matchType">
+                <label for="matchType" class="form-label">Match type</label>
+                <select class="form-select" name="matchType" id="matchType">
                     {{#matchTypes}}<option value="{{value}}">{{label}}</option>{{/matchTypes}}
                 </select>
             </div>
-            <div class="mb-3"><label class="form-label">Pattern <span class="text-secondary">(blank path = whole site)</span></label><input class="form-control" type="text" name="pattern" placeholder="e.g. docs/  or  ^(.*/)?beta-"></div>
+            <div class="mb-3"><label for="pattern" class="form-label">Pattern <span class="text-secondary">(blank path = whole site)</span></label><input class="form-control" type="text" name="pattern" placeholder="e.g. docs/  or  ^(.*/)?beta-" id="pattern"></div>
             <div class="mb-3">
-                <label class="form-label">Sites <span class="text-secondary">(none selected = all sites)</span></label>
-                <select class="form-select" name="sites" multiple size="3">
+                <label for="sites" class="form-label">Sites <span class="text-secondary">(none selected = all sites)</span></label>
+                <select class="form-select" name="sites" multiple size="3" id="sites">
                     {{#siteOptions}}<option value="{{id}}">{{name}}</option>{{/siteOptions}}
                 </select>
             </div>
-            <div class="mb-3"><label class="form-label">Locale <span class="text-secondary">(optional; blank = all locales)</span></label><input class="form-control" type="text" name="locale" placeholder="all locales"></div>
+            <div class="mb-3"><label for="locale" class="form-label">Locale <span class="text-secondary">(optional; blank = all locales)</span></label><input class="form-control" type="text" name="locale" placeholder="all locales" id="locale"></div>
             <button type="submit" class="btn btn-primary">Add rule</button>
         </form>
 
@@ -135,7 +137,7 @@
             {{{csrfField}}}
             <fieldset class="mb-3">
                 {{#users}}
-                <div class="form-check"><input class="form-check-input" type="checkbox" name="userIds" value="{{id}}" {{#selected}}checked{{/selected}}><label class="form-check-label">{{username}}</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" name="userIds" value="{{id}}" id="user-{{id}}" {{#selected}}checked{{/selected}}><label class="form-check-label" for="user-{{id}}">{{username}}</label></div>
                 {{/users}}
                 {{^users}}<p class="text-secondary">No users exist yet.</p>{{/users}}
             </fieldset>

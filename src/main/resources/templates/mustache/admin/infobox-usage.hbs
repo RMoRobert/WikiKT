@@ -10,9 +10,7 @@
 <body>
 {{>partials/admin-shell.hbs}}
     <div class="page-meta"><h1><i class="mdi mdi-clipboard-list-outline" aria-hidden="true"></i> Infobox Usage</h1><a class="btn btn-outline-secondary" href="/a/infoboxes">Back to Infoboxes</a></div>
-    <p>Which pages a rule selects for each infobox, and how far they've been filled in. Infobox data is
-    always optional, so nothing here is an error — this is the view of the site an individual page editor
-    can't give you, since each page only ever sees itself.</p>
+    <p>This report which page(s) a rule selects for each infobox and whether any optional or required data is missing.</p>
 
     {{^hasTemplates}}
     <p class="text-secondary">No templates yet. <a href="/a/infoboxes/new">Create one</a> to get started.</p>
@@ -21,7 +19,7 @@
     {{#hasTemplates}}
     <h2 class="h5 mt-4">By template</h2>
     <table class="table table-hover align-middle">
-        <thead><tr><th>Template</th><th>Rules</th><th>Pages selected</th><th>Filled in</th><th>Not filled in</th><th>Missing required</th></tr></thead>
+        <thead><tr><th>Template</th><th>Rules</th><th>Pages selected</th><th>Data provided</th><th>Data not provided</th><th>Missing required</th></tr></thead>
         <tbody>
         {{#templates}}
         <tr>
@@ -55,8 +53,8 @@
             <td><a href="{{url}}">{{title}}</a> <code class="text-secondary">{{path}}</code>{{#otherLocale}} <span class="badge text-bg-light">{{locale}}</span>{{/otherLocale}}</td>
             <td>{{templateName}}</td>
             <td>
-                {{#isUnfilled}}<span class="text-secondary"><i class="mdi mdi-circle-outline" aria-hidden="true"></i> Not filled in</span>{{/isUnfilled}}
-                {{^isUnfilled}}<span class="text-danger"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i> Missing required: {{missingRequired}}</span> <span class="text-secondary">({{filledFields}} of {{totalFields}} fields)</span>{{/isUnfilled}}
+                {{#isUnfilled}}<span class="text-secondary"><i class="mdi mdi-circle-outline" aria-hidden="true"></i> No data provided</span>{{/isUnfilled}}
+                {{^isUnfilled}}<span class="text-danger"><i class="mdi mdi-alert-circle-outline" aria-hidden="true"></i> Missing required data: {{missingRequired}}</span> <span class="text-secondary">({{filledFields}} of {{totalFields}} fields)</span>{{/isUnfilled}}
             </td>
             <td><a class="btn btn-sm btn-primary" href="{{editUrl}}">Fill in</a></td>
         </tr>
@@ -68,7 +66,7 @@
     {{^nothingMatched}}
     <div class="alert alert-success d-flex align-items-center gap-2" role="alert">
         <i class="mdi mdi-check-circle-outline" aria-hidden="true"></i>
-        <span>Every selected page has its infobox filled in, with no required field left blank.</span>
+        <span>All pages matches by rule for this infobox have all required data filled in.</span>
     </div>
     {{/nothingMatched}}
     {{/hasAttention}}
@@ -98,7 +96,7 @@
         as long as some other template still applies there. }}
     {{#hasOrphans}}
     <h2 class="h5 mt-4">Leftover data</h2>
-    <p class="text-secondary">These pages carry infobox data under a name no template applied there uses, so none of it is shown. It was left behind by a deleted template, a changed rule, or a page move.</p>
+    <p class="text-secondary">These pages carry infobox data under a name no template applied there uses, so none of it is shown. It may have been left behind by a deleted template, a changed rule, or a page move.</p>
     <table class="table table-hover align-middle">
         <thead><tr><th>Page</th><th>Stored under</th><th></th></tr></thead>
         <tbody>

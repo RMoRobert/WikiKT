@@ -273,10 +273,30 @@ h2 { margin-top: 2rem; }
 .page-info-row > .pi-path { flex: 4 1 16rem; }
 .editor-content { padding: 1rem; }
 
-/* Inline side-by-side preview (sideBySideFullscreen:false): JS sets its top/height to match the
-   editor; keep it under the sticky editor bar (z-index 5). Real fullscreen restores z-index 9. */
+/* Inline side-by-side preview (sideBySideFullscreen:false): keep it under the sticky editor bar
+   (z-index 5). Real fullscreen restores z-index 9. */
 .editor-preview-side { z-index: 4; }
 .CodeMirror-fullscreen ~ .editor-preview-side { z-index: 9; }
+
+/* Split view fills the viewport and each pane scrolls on its own. EasyMDE's inline side-by-side
+   otherwise lays both panes out at full content height as flex siblings, so the *page* scrollbar drags
+   them along as one column — which is why the preview could only ever follow the editor proportionally.
+   Once each pane owns its scrolling, page-edit.js can scroll the preview to the line being edited.
+   Deliberately scoped to the split state (.sided--no-fullscreen is EasyMDE's own class) and to the
+   widths where the split is offered at all — the toolbar swaps it for the full-pane preview at 768px and
+   below — so single-pane editing keeps its page-scrolling, auto-growing layout on every screen size.
+   Both bar heights are measured in page-edit.js; each wraps to a second row when narrow. */
+@media (min-width: 769px) {
+    .editor-content .EasyMDEContainer.sided--no-fullscreen {
+        height: calc(100dvh - var(--wk-editor-bar-h, 3.25rem) - 2rem);
+        /* Leave the toolbar row its natural height instead of splitting the slack between both rows. */
+        align-content: flex-start;
+    }
+    .editor-content .EasyMDEContainer.sided--no-fullscreen .CodeMirror-sided,
+    .editor-content .EasyMDEContainer.sided--no-fullscreen .editor-preview-side {
+        height: calc(100% - var(--wk-editor-toolbar-h, 2.6rem));
+    }
+}
 
 /* Editor heading sizes track the *rendered* size, not the Markdown level. EasyMDE ships cm-header-N
    sized to match Bootstrap's hN exactly, but the renderer demotes every content heading one level
@@ -1990,6 +2010,23 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    and gets card corners since the full-bleed column has none. */
 .nav-ed-preview-side { width: auto; max-height: none; border-radius: 0.375rem; }
 @media (max-width: 767.98px) { .nav-ed-main { grid-template-columns: 1fr; } .nav-ed-preview { position: static; } }
+/* Long menus: cap the sticky preview to the viewport and scroll it internally, so it can always show
+   the entry for the row being edited (revealActive in wk-nav-editor.js) instead of running off the
+   bottom of the page. Desktop only — below the breakpoint the preview drops in-flow under the rows,
+   where a scroll box would just be a second scrollbar to fight with. */
+@media (min-width: 768px) {
+    .nav-ed-preview-side { max-height: calc(100vh - 7rem); overflow-y: auto; scrollbar-width: thin; }
+}
+/* The row you're editing and the item it produces, marked together. Both are outlines rather than
+   background fills so they read against the preview panel's own (admin-customizable) sidebar color. */
+.nav-ed-row:focus-within { border-color: var(--bs-primary); }
+.nav-ed-preview .nav-ed-pv-active {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 1px;
+    border-radius: var(--bs-border-radius);
+}
+/* A marked divider is a 0-height rule, so an outline round it reads as a line — color it instead. */
+.nav-ed-preview hr.nav-ed-pv-active { outline: none; border-top-color: var(--bs-primary); opacity: 1; }
 
 /* Nav editor link row: label + (target field with a Browse button). */
 /* Two-line row body: (icon + label) over (path + Browse). The body grows; the grip/badge/actions

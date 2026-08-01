@@ -14,14 +14,14 @@
     <form method="post" action="{{baseUrl}}" class="edit-form">
         {{{csrfField}}}
         <div class="mb-3">
-            <label class="form-label">Name</label>
-            <input class="form-control" type="text" name="name" value="{{name}}" maxlength="255" required placeholder="e.g. CI publisher">
+            <label for="name" class="form-label">Name</label>
+            <input class="form-control" type="text" name="name" value="{{name}}" maxlength="255" required placeholder="e.g. CI publisher" id="name">
             <div class="form-text">A label to recognize this key later. Not secret.</div>
         </div>
         {{#showOwnerPicker}}
         <div class="mb-3">
-            <label class="form-label">Owner</label>
-            <select class="form-select" name="userId" required>
+            <label for="userId" class="form-label">Owner</label>
+            <select class="form-select" name="userId" required id="userId">
                 <option value="" disabled {{^users}}selected{{/users}}>Choose a user…</option>
                 {{#users}}
                 <option value="{{id}}" {{#selected}}selected{{/selected}}>{{username}}</option>
@@ -31,8 +31,8 @@
         </div>
         {{/showOwnerPicker}}
         <div class="mb-3">
-            <label class="form-label">Expires</label>
-            <select class="form-select" name="expiresIn">
+            <label for="expiresIn" class="form-label">Expires</label>
+            <select class="form-select" name="expiresIn" id="expiresIn">
                 {{#expiryOptions}}
                 <option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>
                 {{/expiryOptions}}

@@ -52,10 +52,21 @@ class PageRenderService(
      * Renders a page body to sanitized HTML: expand `{{fragment:key}}` (Markdown only), then render with
      * the current global [RenderOptions][com.wikikt.markdown.RenderOptions]. Stateless; no caching — used
      * directly for staged previews, revisions, and the editor live-preview, and as the fill for the cache.
+     *
+     * @param sourceLines stamp blocks with `data-line` for the editor's split-view scroll sync. Lines refer
+     *   to the *expanded* source, so a multi-line `{{fragment:key}}` shifts everything after it; the sync
+     *   interpolates between anchors, so that degrades the mapping below a fragment rather than breaking it.
      */
-    suspend fun renderBody(siteId: UInt, content: String, format: ContentFormat, locale: String, pagePath: String): String {
+    suspend fun renderBody(
+        siteId: UInt,
+        content: String,
+        format: ContentFormat,
+        locale: String,
+        pagePath: String,
+        sourceLines: Boolean = false,
+    ): String {
         val source = if (format == ContentFormat.MARKDOWN) fragments.expand(siteId, content, locale, defaultLocale) else content
-        val html = markdown.render(source, format, settings.renderOptions(siteId))
+        val html = markdown.render(source, format, settings.renderOptions(siteId), sourceLines)
         return markRedlinks(siteId, resolveRelativeLinks(html, locale, pagePath))
     }
 

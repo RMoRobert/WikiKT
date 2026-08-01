@@ -14,8 +14,8 @@
     <form method="post" action="{{#isNew}}/a/groups{{/isNew}}{{^isNew}}/a/groups/{{group.id}}{{/isNew}}" class="edit-form">
         {{{csrfField}}}
         <div class="mb-3">
-            <label class="form-label">Name</label>
-            <input class="form-control" type="text" name="name" value="{{group.name}}" required {{#group.isSystem}}readonly{{/group.isSystem}}>
+            <label for="name" class="form-label">Name</label>
+            <input class="form-control" type="text" name="name" value="{{group.name}}" required {{#group.isSystem}}readonly{{/group.isSystem}} id="name">
         </div>
         <p class="text-secondary">After creating the group, set its admin capabilities on the <strong>Permissions</strong> tab and its content access on the <strong>Page Rules</strong> tab.</p>
         <button type="submit" class="btn btn-primary">Save</button>

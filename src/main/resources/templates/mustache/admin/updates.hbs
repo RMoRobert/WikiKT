@@ -68,7 +68,7 @@
             <div>
                 {{! The separator leads the optional part in each line, so a missing stamp (dev build)
                     or sha (source build without git) can't leave a dangling middot. }}
-                <div class="fw-bold">WikiKT {{appVersion}}{{#appBuiltAt}} &middot; <span title="Build time (UTC)">{{appBuiltAt}}</span>{{/appBuiltAt}}</div>
+                <div><span title="App version" class="fw-bold">WikiKT {{appVersion}}</span>{{#appBuiltAt}} &middot; <span title="Build time (UTC)">{{appBuiltAt}}</span>{{/appBuiltAt}}</div>
                 <div class="small text-secondary">{{#appGitSha}}<span title="Git commit">{{appGitSha}}</span> &middot; {{/appGitSha}}<a href="{{releasesUrl}}" target="_blank" rel="noopener">Release history</a></div>
             </div>
         </div>

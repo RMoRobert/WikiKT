@@ -52,7 +52,12 @@ class PreviewTest {
         }
         assertEquals(HttpStatusCode.OK, preview.status)
         val html = preview.bodyAsText()
-        assertTrue(html.contains("<h2>Hello</h2>"), "markdown renders with headings demoted one level: $html")
+        assertTrue(html.contains(">Hello</h2>"), "markdown renders with headings demoted one level: $html")
         assertTrue(html.contains("class=\"is-info\""), "should apply callouts: $html")
+        // Preview blocks carry the source line they came from -- the anchors the editor's split view
+        // scrolls by (see the scroll sync in static/page-edit.js). 0-based, so "# Hello" is line 0 and
+        // the blockquote starting on the third line is line 2.
+        assertTrue(html.contains("<h2 data-line=\"0\">"), "heading is anchored to its source line: $html")
+        assertTrue(html.contains("data-line=\"2\""), "the blockquote is anchored to its source line: $html")
     }
 }

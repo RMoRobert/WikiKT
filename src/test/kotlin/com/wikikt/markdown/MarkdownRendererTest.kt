@@ -416,4 +416,26 @@ class MarkdownRendererTest {
         val html = renderer.render("[![logo](/logo.png)](https://example.com)", ContentFormat.MARKDOWN, siteMode)
         assertFalse(html.contains("mdi-open-in-new"), "an image link should not get a trailing icon: $html")
     }
+
+    // `data-line` anchors the editor's split-view scroll sync (static/page-edit.js) to the source. It is
+    // opt-in per render: page bodies are cached and stored, so they must not carry editor-only markup.
+    @Test
+    fun `source line anchors are off by default`() {
+        val html = renderer.render("# Title\n\nBody text.\n", ContentFormat.MARKDOWN)
+        assertFalse(html.contains("data-line"), "stored/cached page HTML carries no line anchors: $html")
+    }
+
+    @Test
+    fun `source line anchors label blocks with their 0-based source line`() {
+        val md = "# Title\n\nBody text.\n\n- one\n- two\n\n```\ncode\n```\n"
+        val html = renderer.render(md, ContentFormat.MARKDOWN, sourceLines = true)
+        assertTrue(html.contains("<h2 data-line=\"0\">"), "heading anchored: $html")
+        assertTrue(html.contains("<p data-line=\"2\">"), "paragraph anchored: $html")
+        assertTrue(html.contains("<ul data-line=\"4\">"), "list anchored: $html")
+        assertTrue(html.contains("<li data-line=\"4\">"), "list items anchored individually: $html")
+        assertTrue(html.contains("<li data-line=\"5\">"), "list items anchored individually: $html")
+        assertTrue(html.contains("<pre data-line=\"7\">"), "fenced block anchored: $html")
+        // Only the outer element of a multi-tag block is stamped, so the anchor list stays one per block.
+        assertFalse(html.contains("<code data-line"), "the inner <code> is not stamped too: $html")
+    }
 }

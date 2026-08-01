@@ -7,6 +7,7 @@ import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.ext.task.list.items.TaskListItemsExtension
 import org.commonmark.node.Node
+import org.commonmark.parser.IncludeSourceSpans
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.AttributeProvider
 import org.commonmark.renderer.html.HtmlRenderer
@@ -29,6 +30,10 @@ class MarkdownRenderer {
     private fun buildParser(withAutolink: Boolean): Parser =
         Parser.builder()
             .extensions(if (withAutolink) extensions + AutolinkExtension.create() else extensions)
+            // Record which source line each block came from. Only the editor's live preview renders them
+            // out (as data-line, see [SourceLineAttributeProvider]); tracking them always costs one small
+            // object per block and keeps a single parser per autolink setting.
+            .includeSourceSpans(IncludeSourceSpans.BLOCKS)
             // First: recover nested emphasis inside link text while the link's children are still
             // the raw parsed Text (before icon/emoji rewrite them).
             .postProcessor(LinkEmphasisPostProcessor(extensions))
@@ -38,26 +43,41 @@ class MarkdownRenderer {
             .postProcessor(SubSupPostProcessor())
             .build()
 
-    // Renderers differ only in soft-break handling (single newline -> space vs <br>). Escaping raw HTML
-    // is deliberately NOT toggled here: our post-processors emit HtmlInline (<sub>, <i class=mdi>) that
-    // escapeHtml would break -- the sanitizer is the security boundary for author HTML instead.
-    private val renderer = buildRenderer(hardBreaks = false)
-    private val hardBreakRenderer = buildRenderer(hardBreaks = true)
+    // Renderers differ only in soft-break handling (single newline -> space vs <br>) and whether blocks
+    // carry a `data-line` source reference. Escaping raw HTML is deliberately NOT toggled here: our
+    // post-processors emit HtmlInline (<sub>, <i class=mdi>) that escapeHtml would break -- the sanitizer
+    // is the security boundary for author HTML instead.
+    private val renderers = listOf(false, true).flatMap { hb ->
+        listOf(false, true).map { sl -> (hb to sl) to buildRenderer(hardBreaks = hb, sourceLines = sl) }
+    }.toMap()
 
-    private fun buildRenderer(hardBreaks: Boolean): HtmlRenderer =
+    private fun buildRenderer(hardBreaks: Boolean, sourceLines: Boolean): HtmlRenderer =
         HtmlRenderer.builder()
             .extensions(extensions)
             .sanitizeUrls(true)
             // Turns the `wk-img-size:` title left by [liftImageSizes] into <img> width/height attributes.
             .attributeProviderFactory { ImageSizeAttributeProvider }
-            .apply { if (hardBreaks) softbreak("<br />\n") }
+            .apply {
+                if (sourceLines) attributeProviderFactory { SourceLineAttributeProvider }
+                if (hardBreaks) softbreak("<br />\n")
+            }
             .build()
 
-    fun render(content: String, format: ContentFormat, options: RenderOptions = RenderOptions.DEFAULT): String {
+    /**
+     * @param sourceLines stamp each block element with `data-line="<0-based source line>"`. Off for stored
+     *   and cached page HTML; the editor's live preview turns it on so the split view can scroll the
+     *   preview to the block the caret is in (see the scroll sync in `static/page-edit.js`).
+     */
+    fun render(
+        content: String,
+        format: ContentFormat,
+        options: RenderOptions = RenderOptions.DEFAULT,
+        sourceLines: Boolean = false,
+    ): String {
         val rendered = when (format) {
             ContentFormat.MARKDOWN -> {
                 val p = if (options.autoLink) autolinkParser else parser
-                val r = if (options.lineBreaks) hardBreakRenderer else renderer
+                val r = renderers.getValue(options.lineBreaks to sourceLines)
                 r.render(p.parse(liftImageSizes(normalizeHeadings(content))))
             }
             ContentFormat.HTML -> content
@@ -176,6 +196,27 @@ class MarkdownRenderer {
                 }
             }
             return -1
+        }
+    }
+
+    /**
+     * Stamps `data-line="<0-based source line>"` on each rendered block, from the source spans the parser
+     * records. Only enabled for the editor's live preview: the split view reads these back as scroll
+     * anchors so the preview follows the line being edited instead of scrolling proportionally.
+     *
+     * Restricted to block-level tags so the pairs the renderer emits for one node (`<pre><code>` for a
+     * fenced block) are stamped once, on the outer element. Stateless, so a single instance is reused.
+     */
+    private object SourceLineAttributeProvider : AttributeProvider {
+        private val BLOCK_TAGS = setOf(
+            "p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "li",
+            "pre", "table", "thead", "tbody", "tr", "hr", "div", "section", "dl",
+        )
+
+        override fun setAttributes(node: Node, tagName: String, attributes: MutableMap<String, String>) {
+            if (tagName !in BLOCK_TAGS) return
+            val line = node.sourceSpans.firstOrNull()?.lineIndex ?: return
+            attributes["data-line"] = line.toString()
         }
     }
 

@@ -613,7 +613,7 @@ class PageService(private val database: R2dbcDatabase) {
 
     /**
      * Moves a page to a new (locale, path). Returns false if the target is already taken (the page is
-     * left unchanged). No redirect/alias is created — inbound links to the old path will break.
+     * left unchanged). No redirect/alias is created; inbound links to the old path will break.
      * TODO: a future "what links here" sweep should offer to rewrite inbound page refs + aliases.
      */
     suspend fun move(pageId: UInt, newLocale: String, newPath: String, by: UInt?): Boolean {
