@@ -220,6 +220,24 @@ class UpdateHandshakeTest {
     }
 
     @Test
+    fun `starting a new install retires the previous run's outcome`() = runBlocking<Unit> {
+        val env = Env("retire")
+        env.writeHeartbeat()
+        env.writeStatus("success", terminal = true, requestId = "r1")
+        assertFalse(env.service.isOutcomeDismissed(env.service.status()), "shown until read or superseded")
+
+        // Requesting the next update makes the old result stale news, even though the updater hasn't
+        // overwritten status.json yet (its poll is ~10 s) — it must not read as this run's result.
+        assertEquals(InstallRequestOutcome.REQUESTED, env.service.requestInstall("rob", "1.3.0", "1.4.0"))
+        assertTrue(env.service.isOutcomeDismissed(env.service.status()))
+        assertEquals("success", env.service.status()?.phase, "status.json is the updater's; only the UI hides it")
+
+        // ...and the new run's own outcome still shows unread.
+        env.writeStatus("failed", terminal = true, requestId = env.writtenRequestId())
+        assertFalse(env.service.isOutcomeDismissed(env.service.status()))
+    }
+
+    @Test
     fun `unconfigured service is inert`() = runBlocking<Unit> {
         val database = DatabaseFactory.connect(
             DatabaseConfig(

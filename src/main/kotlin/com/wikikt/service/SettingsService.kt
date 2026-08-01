@@ -26,6 +26,15 @@ class SettingsService(private val database: R2dbcDatabase) {
         /** When true, the Markdown editor uses a monospace font and renders no inline styling. */
         const val EDITOR_PLAIN_VIEW = "editor.plainView"
 
+        /**
+         * Light/dark surface for the Markdown editor: [EDITOR_THEME_AUTO] (follow the reader's site
+         * theme), `light`, or `dark`. A dark editing surface under a light preview is a deliberate
+         * option, not just a theme detail — it separates the source you are typing from the rendered
+         * page beside it. Site-wide default only; the editor toolbar overrides it per browser.
+         */
+        const val EDITOR_THEME = "editor.theme"
+        const val EDITOR_THEME_AUTO = "auto"
+
         /** Site branding (all customizable from Administration > Settings). */
         const val SITE_NAME = "site.name"
         // A site asset URL (validated against uploaded image assets), shown beside the site name.

@@ -196,6 +196,10 @@ class SelfUpdateService(
             Files.writeString(tmp, json.encodeToString(request))
             Files.move(tmp, d.requestDir.resolve(REQUEST_FILE), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         }
+        // The previous run's result card is now stale news -- a new update is under way, and until the
+        // updater overwrites status.json (its poll is ~10 s) the old outcome would sit next to the
+        // "requested" card as if it described this run. Retire it as if it had been dismissed.
+        markOutcomeDismissed(current)
         return InstallRequestOutcome.REQUESTED
     }
 
@@ -206,8 +210,11 @@ class SelfUpdateService(
      * is read-only) and the container logs keep the full record — this just remembers which outcome
      * was acknowledged, so the *next* one still shows unread.
      */
-    suspend fun dismissOutcome() {
-        val terminal = status()?.takeIf { it.terminal } ?: return
+    suspend fun dismissOutcome() = markOutcomeDismissed(status())
+
+    /** Records [status] as acknowledged, if it is a terminal one. No-op for anything else. */
+    private suspend fun markOutcomeDismissed(status: UpdaterStatus?) {
+        val terminal = status?.takeIf { it.terminal } ?: return
         settings.set(settings.instanceAnchorSiteId(), SettingsService.UPDATE_LAST_OUTCOME_DISMISSED, outcomeToken(terminal))
     }
 

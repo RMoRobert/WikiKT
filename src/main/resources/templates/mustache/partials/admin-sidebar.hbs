@@ -69,19 +69,42 @@
     t.setAttribute('aria-expanded', String(open));
   });
 })();
-// Unsaved-changes guard: if an admin edit form has been touched, warn before navigating away —
-// including switching sites, which discards the edits and re-renders for the newly-managed site.
+// Unsaved-changes guard: warn before navigating away from an admin edit form with changes that were
+// never saved — including switching sites, which discards them and re-renders for the newly-managed
+// site. Each form is compared against how it loaded rather than latching a "touched" flag on the
+// first keystroke: putting a value back the way it was has to call the warning off (a prompt over
+// edits you already undid is just noise), and the visual nav/infobox editors write their backing
+// textarea programmatically, which fires no event for a flag to latch onto anyway.
 (function () {
-  var dirty = false;
-  function inEditForm(el) { return el && el.closest && el.closest('.admin-main form.edit-form'); }
-  document.addEventListener('input', function (e) { if (inEditForm(e.target)) dirty = true; }, true);
-  document.addEventListener('change', function (e) { if (inEditForm(e.target)) dirty = true; }, true);
-  // Submitting the edit form is a save — those changes are no longer "unsaved".
+  var baselines = new Map(); // form -> state at load, or null once submitted (an intentional save)
+  function stateOf(form) {
+    var parts = [];
+    new FormData(form).forEach(function (value, key) {
+      // Every File stringifies to the same thing, so compare what actually identifies the pick.
+      parts.push([key, value && value.name !== undefined ? value.name + ':' + value.size : value]);
+    });
+    // JSON pairs rather than concatenation, so no field name or value can run into the next one and
+    // make two different sets of fields compare equal.
+    return JSON.stringify(parts);
+  }
+  // Saving one form doesn't save the others, so only the submitted form stops counting.
   document.addEventListener('submit', function (e) {
-    if (e.target && e.target.matches && e.target.matches('.admin-main form.edit-form')) dirty = false;
+    if (baselines.has(e.target)) baselines.set(e.target, null);
   }, true);
   window.addEventListener('beforeunload', function (e) {
+    var dirty = false;
+    baselines.forEach(function (baseline, form) {
+      if (baseline !== null && stateOf(form) !== baseline) dirty = true;
+    });
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });
+  // Deferred: this partial is emitted before <main>, so the forms don't exist yet — and the visual
+  // editors normalise their textarea as they start up, which the baseline has to be taken after.
+  function wire() {
+    document.querySelectorAll('.admin-main form.edit-form').forEach(function (form) {
+      baselines.set(form, stateOf(form));
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
 })();
 </script>

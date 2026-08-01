@@ -126,7 +126,7 @@ h2 { margin-top: 2rem; }
 .editor-bar {
     position: sticky;
     top: 0;
-    z-index: 5; /* below EasyMDE fullscreen (8), so user-initiated fullscreen cleanly covers it */
+    z-index: 5; /* above the formatting toolbar (4) and the preview pane (4) */
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -271,12 +271,36 @@ h2 { margin-top: 2rem; }
 /* Locale is normally a short code, so keep it narrow and let Path take the rest (asset/link-browser style). */
 .page-info-row > .pi-locale { flex: 0 1 9rem; min-width: 7rem; }
 .page-info-row > .pi-path { flex: 4 1 16rem; }
-.editor-content { padding: 1rem; }
+/* Full-bleed: the editor owns the whole window below the bar, so it gets no page gutter. Text still
+   has breathing room — EasyMDE pads .CodeMirror and the preview internally — and dropping the gutter
+   buys the split view real width. The card-like rounding and the side borders go with it, since both
+   would otherwise sit hard against the viewport edge; the border between the panes (the preview's left
+   edge) is the one that stays. */
+.editor-content { padding: 0; }
+.editor-content .editor-toolbar,
+.editor-content .EasyMDEContainer .CodeMirror { border-left: 0; border-right: 0; border-radius: 0; }
+.editor-content .editor-preview-side { border-top: 0; border-right: 0; border-bottom: 0; border-radius: 0; }
+/* …and drop the padding on the two sides the gutter touches, or its background stops short of them.
+   CodeMirror pins the gutter to the top-left of the *scroll box*, which sits inside .CodeMirror's
+   padding, so that padding shows as a strip of editor background beside and above the gutter. Right
+   and bottom keep theirs, to hold text off those edges. The 1px top border stays — it's the divider
+   under the toolbar, and reads as a line rather than a gap. Text gets its own top inset back via
+   .CodeMirror-lines below, which sits beside the gutter and so can't reintroduce the strip. Not
+   grouped with the border rule above: the toolbar shares that selector and needs its left padding. */
+.editor-content .EasyMDEContainer .CodeMirror { padding-top: 0; padding-left: 0; }
+.editor-content .EasyMDEContainer .CodeMirror-lines { padding-top: 8px; }
 
-/* Inline side-by-side preview (sideBySideFullscreen:false): keep it under the sticky editor bar
-   (z-index 5). Real fullscreen restores z-index 9. */
+/* Side-by-side preview: keep it under the sticky editor bar (z-index 5). */
 .editor-preview-side { z-index: 4; }
-.CodeMirror-fullscreen ~ .editor-preview-side { z-index: 9; }
+/* Preview surface override (the toolbar's light/dark preview toggle). page-edit.js puts data-bs-theme
+   on the pane, which re-scopes every Bootstrap theme variable inside it — that alone re-themes the
+   rendered content. Only the pane's own chrome needs painting, because EasyMDE hardcodes it. With no
+   attribute set these rules don't match at all and the pane keeps following the site theme. */
+.editor-preview[data-bs-theme] {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+}
 
 /* Split view fills the viewport and each pane scrolls on its own. EasyMDE's inline side-by-side
    otherwise lays both panes out at full content height as flex siblings, so the *page* scrollbar drags
@@ -288,7 +312,7 @@ h2 { margin-top: 2rem; }
    Both bar heights are measured in page-edit.js; each wraps to a second row when narrow. */
 @media (min-width: 769px) {
     .editor-content .EasyMDEContainer.sided--no-fullscreen {
-        height: calc(100dvh - var(--wk-editor-bar-h, 3.25rem) - 2rem);
+        height: calc(100dvh - var(--wk-editor-bar-h, 3.25rem));
         /* Leave the toolbar row its natural height instead of splitting the slack between both rows. */
         align-content: flex-start;
     }
@@ -315,6 +339,33 @@ h2 { margin-top: 2rem; }
 .CodeMirror .cm-quote { color: var(--bs-primary, #0d47a1); }
 .CodeMirror .cm-link { color: #1b5e20; }  /* dark green */
 .CodeMirror .cm-url { color: var(--bs-secondary-color); }  /* gray, for the destination URL */
+/* Markdown punctuation — the `#`, `**`, `>`, `[`, `]`, backtick markers CodeMirror tags as
+   .cm-formatting — plus image targets and the two WikiKT brace forms picked out by the overlay in
+   page-edit.js. Muted on purpose: these are structural cues, not content, and they're the coloring
+   that plain view keeps, so they have to stay quiet across a long document. */
+/* The site's standard "muted but still body text" tone (~6.8:1 on white), the same one .cm-url uses —
+   markers should recede, not fade out. An earlier lighter grey measured 2.5:1, which is below the
+   threshold for legible text and made `#`, `!` and `[` genuinely hard to read. */
+.CodeMirror { --wk-cm-marker: var(--bs-secondary-color); }
+.CodeMirror .cm-formatting { color: var(--wk-cm-marker); }
+.CodeMirror .cm-image, .CodeMirror .cm-image-alt-text { color: #1b5e20; }
+.CodeMirror .cm-image-marker { color: var(--wk-cm-marker); }
+/* Line-number gutter. Same marker tone as the Markdown punctuation — supporting detail, but legible:
+   CodeMirror's stock #999 on the #f7f7f7 gutter is ~2.8:1, the contrast problem the markers had.
+   Monospace and a notch smaller so the digits form an even column and stay clearly chrome rather than
+   content. CodeMirror has no typography options at all (its own `theme` option is just a CSS class
+   hook), so this is CSS by necessity, not preference. `em` keeps it in step with the editor's size. */
+.CodeMirror-linenumber {
+    color: var(--wk-cm-marker);
+    font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: 0.85em;
+}
+/* `span` only to raise specificity: an overlay token is layered *on top of* whatever Markdown token it
+   lands in, so `{.is-warning}` under a `>` quote also carries .cm-quote — which plain view resets to
+   inherit. Without the extra weight the brace form would lose its tint in exactly the spot callouts
+   are written. */
+.CodeMirror span.cm-wk-decoration { color: #8a5a00; }  /* {.is-info} and friends */
+.CodeMirror span.cm-wk-fragment { color: #6a3ab2; }    /* {{fragment:key}} */
 
 /* Inline "open in editor" affordance placed after each editor source reference that resolves to a
    known target: an image link → its asset (setupAssetLinkAffordance), or a {{fragment:key}} → its
@@ -424,7 +475,11 @@ th.wkab-th-sort { cursor: pointer; user-select: none; }
 th.wkab-th-sort:hover { color: var(--bs-body-color, #212529); }
 .wkab-th-caret { margin-left: .25rem; font-size: .65rem; }
 
-/* Plain editor view: monospace font, no rendered inline styling (raw Markdown source look). */
+/* Plain editor view: monospace font, and none of the *typographic* rendering — no big headings, no
+   real bold/italic. Markdown syntax keeps a light tint though (see the "kept" list below): the point
+   of this mode is to see the source as source, and losing every cue makes a long document harder to
+   scan, not easier. Anything that changes how text is *shaped* goes; color stays where it marks
+   structure. */
 .editor--plain .CodeMirror { font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
 .editor--plain .cm-strong { font-weight: normal; }
 .editor--plain .cm-em { font-style: normal; }
@@ -432,9 +487,11 @@ th.wkab-th-sort:hover { color: var(--bs-body-color, #212529); }
 .editor--plain .cm-header { font-size: inherit; line-height: inherit; font-weight: normal; }
 .editor--plain .cm-quote { font-style: normal; color: inherit; }
 .editor--plain .cm-link, .editor--plain .cm-url { text-decoration: none; }
-/* In plain-text mode, disable all syntax token colors for a flat source look. */
+/* Dropped: the tints that stand in for rendered formatting. Deliberately NOT in this list (so they
+   keep their color from the rules above): .cm-link / .cm-url / .cm-image* (link and image targets),
+   .cm-formatting (the `#`, `**`, `>`, `[`, `]` markers themselves) and the wk-* overlay tokens for
+   `{.is-x}` / `{{fragment:key}}`. Also absent: the HTML tokens, re-tinted as markers below. */
 .editor--plain .cm-atom,
-.editor--plain .cm-bracket,
 .editor--plain .cm-builtin,
 .editor--plain .cm-comment,
 .editor--plain .cm-def,
@@ -442,9 +499,7 @@ th.wkab-th-sort:hover { color: var(--bs-body-color, #212529); }
 .editor--plain .cm-error,
 .editor--plain .cm-header,
 .editor--plain .cm-hr,
-.editor--plain .cm-image,
 .editor--plain .cm-keyword,
-.editor--plain .cm-link,
 .editor--plain .cm-meta,
 .editor--plain .cm-number,
 .editor--plain .cm-operator,
@@ -452,12 +507,24 @@ th.wkab-th-sort:hover { color: var(--bs-body-color, #212529); }
 .editor--plain .cm-quote,
 .editor--plain .cm-string,
 .editor--plain .cm-strong,
-.editor--plain .cm-tag,
 .editor--plain .cm-type,
-.editor--plain .cm-url,
 .editor--plain .cm-variable { color: inherit; }
+/* A header's `#` markers carry .cm-header too, which the reset above just flattened — put the marker
+   tint back so the line is still identifiable as a heading without being sized like one. */
+.editor--plain .cm-formatting { color: var(--wk-cm-marker); }
+/* Raw HTML is structure, not rendered formatting, so it follows the same rule as .cm-formatting above:
+   the tag name and its `<` `>` (both carry .cm-tag; the brackets add .cm-bracket) and the attribute
+   NAMES get the marker tone, marking the block as HTML without the syntax-highlighter look plain view
+   is meant to drop. Attribute *values* stay flat — .cm-string is content, and it's left in the reset
+   above. This also replaces the vendor purple .cm-attribute used to keep here: it was the one token
+   the reset missed, and in dark plain view EasyMDE's light-mode #795da3 was the only color left on the
+   line (the dark overrides are scoped :not(.editor--plain)). --wk-cm-marker is redefined per theme, so
+   both surfaces are covered. */
+.editor--plain .cm-tag,
+.editor--plain .cm-bracket,
+.editor--plain .cm-attribute { color: var(--wk-cm-marker); }
 
-/* Link-path autocomplete dropdown (anchored at the cursor; above EasyMDE fullscreen's z-index 8). */
+/* Link-path autocomplete dropdown, anchored at the cursor and above the rest of the editor chrome. */
 .cm-path-hints {
     position: absolute;
     z-index: 50;
@@ -849,7 +916,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     top: calc(100% + 0.35rem);
     left: 0;
     right: 0;
-    z-index: 6; /* above the editor bar's 5, below EasyMDE fullscreen's 8 (editor has no header anyway) */
+    z-index: 6; /* above the editor bar's 5 (the editor has no header of its own anyway) */
     margin: 0;
     padding: 0.25rem 0;
     list-style: none;
@@ -929,6 +996,11 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 
 /* --- EasyMDE toolbar uses MDI icons (we don't load Font Awesome); inherit the toolbar text color. --- */
 .editor-toolbar button { color: inherit; }
+/* Pressed state for our own toggles (plain view / dark editor / dark preview / spell check). EasyMDE's
+   `.active` can't be used: it rewrites that class on every cursorActivity from its own state map and
+   strips it from buttons it doesn't know, so the highlight would disappear as soon as you typed. Same
+   look as its `.active`, applied by markToggle in page-edit.js. */
+.editor-toolbar button.wk-toggle-on { background: #fcfcfc; border-color: #95a5a6; }
 .editor-toolbar button .mdi { font-size: 1.05rem; }
 .editor-toolbar button .mdi::before { vertical-align: middle; }
 /* Callout insert buttons: tint each icon like the callout box it creates (same values as the
@@ -1003,17 +1075,97 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .editor-toolbar .easymde-dropdown-content button .mdi { flex: 0 0 auto; width: 1.25rem; }
 
 /* Pin the formatting toolbar (bold / italic / link / …) just under the sticky editor bar so it stays
-   visible however far the content is scrolled. --wk-editor-bar-h is measured in edit.hbs (the bar
+   visible however far the content is scrolled. --wk-editor-bar-h is measured in page-edit.js (the bar
    wraps taller on narrow screens); it falls back to the desktop bar height. Needs an opaque background
-   and full opacity (EasyMDE dims the bar to 0.6 at rest) so scrolling text can't show through. The
-   `:not(.fullscreen)` guard leaves EasyMDE's own fixed-position fullscreen toolbar untouched. */
-.editor-content .editor-toolbar:not(.fullscreen) {
+   and full opacity (EasyMDE dims the bar to 0.6 at rest) so scrolling text can't show through. */
+.editor-content .editor-toolbar {
     position: sticky;
     top: var(--wk-editor-bar-h, 3.25rem);
     z-index: 4; /* under the editor bar (5), above the CodeMirror surface */
     opacity: 1;
     background: var(--bs-body-bg);
 }
+
+/* --- Dark editor surface -------------------------------------------------------------------------
+   Set from the editor toolbar (per browser) or Administration > Settings > General (site default);
+   page-edit.js resolves the two and puts `editor--dark` on the EasyMDE container. It covers the
+   source pane and the formatting toolbar — the editor chrome — and deliberately stops at
+   `.editor-preview-side`, which stays in the site theme because its job is to show what a reader
+   sees. That split is the point of the option: dark source beside a light preview.
+
+   Long because EasyMDE hardcodes light values throughout (white .CodeMirror, #ced4da borders, light
+   selection bands) rather than theming through variables. Placed after the sticky-toolbar rule above
+   so it can override that background. Palette matches the dark callout tints further up. */
+.editor--dark {
+    --wk-ed-bg: #1b1f24;
+    --wk-ed-fg: #d7dce3;
+    --wk-ed-chrome: #22272e;
+    --wk-ed-line: #333a42;
+    --wk-ed-muted: #8b949e;
+    --wk-ed-hover: #2d333b;
+    --wk-ed-select: #2d4f6b;
+}
+.editor--dark .CodeMirror {
+    background: var(--wk-ed-bg);
+    color: var(--wk-ed-fg);
+    border-color: var(--wk-ed-line);
+}
+.editor--dark .CodeMirror-cursor { border-left-color: var(--wk-ed-fg); }
+/* Line numbers take their color from --wk-cm-marker, which the dark block redefines further down —
+   no separate rule needed here. */
+.editor--dark .CodeMirror-gutters { background: var(--wk-ed-chrome); border-right-color: var(--wk-ed-line); }
+/* Selection is set for the focused and unfocused states separately, and again via ::selection for the
+   text layer CodeMirror paints over the highlight — all three need the dark band or it flashes light. */
+.editor--dark .CodeMirror-selected,
+.editor--dark .CodeMirror-focused .CodeMirror-selected { background: var(--wk-ed-select); }
+.editor--dark .CodeMirror-line::selection,
+.editor--dark .CodeMirror-line > span::selection,
+.editor--dark .CodeMirror-line > span > span::selection { background: var(--wk-ed-select); }
+/* Toolbar: `.editor-content` prefix to outweigh the sticky rule's background above. */
+.editor-content .editor--dark .editor-toolbar {
+    background: var(--wk-ed-chrome);
+    border-color: var(--wk-ed-line);
+    color: var(--wk-ed-fg);
+}
+.editor--dark .editor-toolbar button.active,
+.editor--dark .editor-toolbar button.wk-toggle-on,
+.editor--dark .editor-toolbar button:hover,
+.editor--dark .editor-toolbar .easymde-dropdown:hover { background: var(--wk-ed-hover); border-color: #444c56; }
+.editor--dark .editor-toolbar i.separator { border-left-color: var(--wk-ed-line); border-right-color: transparent; }
+.editor--dark .editor-toolbar .easymde-dropdown-content {
+    background: var(--wk-ed-chrome);
+    border-color: var(--wk-ed-line);
+    color: var(--wk-ed-fg);
+}
+.editor--dark .editor-toolbar .easymde-dropdown-content button:hover,
+.editor--dark .editor-toolbar .easymde-dropdown-content button:focus { background: var(--wk-ed-hover); }
+/* Callout icons are tinted for a light toolbar; take the dark tints whenever the editor is dark, not
+   only when the whole site is (equal specificity to the [data-bs-theme] pair above, so order wins). */
+.editor--dark .editor-toolbar button.mde-callout-info .mdi { color: #6cb6ff; }
+.editor--dark .editor-toolbar button.mde-callout-success .mdi { color: #56d364; }
+.editor--dark .editor-toolbar button.mde-callout-warning .mdi { color: #e3b341; }
+.editor--dark .editor-toolbar button.mde-callout-error .mdi { color: #ff7b72; }
+/* Tints that stand in for rendered formatting — dropped in plain view, which resolves them to the
+   surface's own foreground instead. */
+.editor--dark:not(.editor--plain) .cm-header { color: #6cb6ff; }
+.editor--dark:not(.editor--plain) .cm-quote { color: #6cb6ff; }
+.editor--dark:not(.editor--plain) .cm-string { color: #a5d6ff; }
+.editor--dark:not(.editor--plain) .cm-tag { color: #7ee787; }
+.editor--dark:not(.editor--plain) .cm-attribute { color: #d2a8ff; }
+.editor--dark:not(.editor--plain) .cm-error { color: #ff7b72; }
+/* Structural markers, kept in plain view too (see the "kept" list up in the .editor--plain block), so
+   these are unguarded — they need a dark-surface value in both modes. */
+/* An explicit value, not --bs-secondary-color: that variable tracks the *site* theme, so on a light
+   site it would resolve to near-black against this dark surface. --wk-ed-muted is ~5.4:1 here. */
+.editor--dark .CodeMirror { --wk-cm-marker: var(--wk-ed-muted); }
+.editor--dark .cm-link,
+.editor--dark .cm-image,
+.editor--dark .cm-image-alt-text { color: #56d364; }
+.editor--dark .cm-url { color: var(--wk-ed-muted); }
+.editor--dark span.cm-wk-decoration { color: #e3b341; }
+.editor--dark span.cm-wk-fragment { color: #d2a8ff; }
+/* Fenced blocks carry a dark wash on the light theme; invert it to read on this surface. */
+.editor--dark .cm-comment { background: rgba(255, 255, 255, 0.07); }
 
 /* --- Rendered Markdown content (Bootstrap leaves bare <table>/<pre>/<blockquote> unstyled) --- */
 .wiki-content table {

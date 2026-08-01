@@ -197,13 +197,22 @@
     autoDownloadFontAwesome: false,
     spellChecker: false,
     nativeSpellcheck: true,
+    // Line numbers count *source* lines, so a wrapped paragraph keeps one number — which is what makes
+    // them useful here: they're the same lines the preview's scroll sync anchors on, and the same ones
+    // a diff or a "line 42" in a review comment refers to.
+    lineNumbers: true,
     inputStyle: "contenteditable",
     status: false,
     // EasyMDE turns each button's `name` into a CSS class on the <button>; prefix them all so e.g.
     // the "table" button doesn't pick up Bootstrap's .table styling (and to avoid future collisions).
     toolbarButtonClassPrefix: "mde",
-    // Side-by-side preview should NOT force fullscreen, so our sticky top bar stays visible.
+    // No fullscreen mode at all: the editor bar it would hide is short and holds Save / Page Info /
+    // Close, so covering it costs more than the pixels it buys. Two separate switches are needed —
+    // toggleSideBySide calls toggleFullScreen internally unless sideBySideFullscreen is false, and the
+    // shortcut is bound independently of the (removed) toolbar button. Unbinding it also hands F11
+    // back to the browser's own fullscreen, where people expect it.
     sideBySideFullscreen: false,
+    shortcuts: { toggleFullScreen: null },
     // EasyMDE's own split-view sync scrolls both panes to the same *proportion* of their heights, so
     // the preview drifts away from what you're editing as soon as the two differ in density (a fenced
     // block is tall in the source and short rendered, an image is the reverse). Replaced by the
@@ -276,22 +285,27 @@
       }, "image", "Image"),
       mde("table", EasyMDE.drawTable, "table", "Table"),
       "|",
-      // Full-pane preview (swaps in place of the editor) — shown only on compact screens, where
-      // the side-by-side split is impractical; CSS hides one or the other per breakpoint.
+      // Source-pane controls, then preview controls: each group sits next to the pane it governs, so
+      // the preview toggles are the ones nearest the preview itself.
+      mde("plain-view", function () { applyPlainView(!editorContainer.classList.contains('editor--plain')); },
+        "file-code-outline", "Plain text view", true),
+      // Light/dark for the source surface only — the preview keeps its own, which is the point:
+      // a dark editor beside a light preview separates what you're typing from what a reader sees.
+      mde("editor-theme", function () { setEditorDark(!editorIsDark()); }, "weather-night", "Dark editor", true),
+      mde("spellcheck", function () { setSpellcheck(!spellcheckOn()); }, "spellcheck", "Spell check", true),
+      "|",
+      // Show/hide the preview, then its light/dark — adjacent so the two preview controls read as a
+      // pair. The full-pane and split buttons are the same control at different widths: CSS shows
+      // whichever suits the breakpoint (the split is impractical on a phone).
       mde("preview", EasyMDE.togglePreview, "eye-outline", "Preview", true),
       mde("side-by-side", function (editor) {
         EasyMDE.toggleSideBySide(editor);
         afterLayoutChange();
       }, "view-split-vertical", "Side-by-side", true),
-      mde("fullscreen", function (editor) {
-        EasyMDE.toggleFullScreen(editor);
-        afterLayoutChange();
-      }, "fullscreen", "Fullscreen", true),
-      "|",
-      mde("plain-view", function (editor) {
-        var c = editor.codemirror.getWrapperElement().parentNode;
-        if (c) c.classList.toggle("editor--plain");
-      }, "file-code-outline", "Plain text view", true),
+      // Preview surface, independent of the editor's: normally it shows the page in the site theme
+      // (what a reader gets), but checking a page against the other theme shouldn't mean re-theming
+      // the whole admin session.
+      mde("preview-theme", function () { setPreviewDark(!previewIsDark()); }, "invert-colors", "Dark preview", true),
     ],
     // Rendering goes through the server (/preview), so the preview is async — but EasyMDE calls this on
     // every CodeMirror "update" (every keystroke AND every scroll, since scrolling redraws the viewport)
@@ -363,11 +377,143 @@
   var form = textarea.closest('form');
   var editorContainer = cm.getWrapperElement().parentNode;
 
-  // Apply the global "plain view" default (monospace, no inline styling). The toolbar's
-  // plain-view button toggles it for the current session.
-  if (form && editorContainer && form.dataset.plainEditor === 'true') {
-    editorContainer.classList.add('editor--plain');
+  // Apply the global "plain view" default (monospace, no inline styling). The toolbar's plain-view
+  // button toggles it for the current session — not remembered per browser, unlike the toggles below,
+  // because it is the one whose default an admin sets site-wide.
+  function applyPlainView(on) {
+    editorContainer.classList.toggle('editor--plain', on);
+    markToggle('plain-view', on, 'Formatted view', 'Plain text view');
   }
+  applyPlainView(!!form && form.dataset.plainEditor === 'true');
+
+  // Shared state indicator for our own toolbar toggles. Deliberately NOT EasyMDE's `.active`: it
+  // reasserts that class on every cursorActivity from its internal state map and removes it from any
+  // button it doesn't recognise (only `fullscreen` and `side-by-side` are exempted), so an `.active`
+  // we set would vanish the moment you typed. aria-pressed and the title survive that loop, but the
+  // visual cue would not.
+  function markToggle(name, on, titleOn, titleOff) {
+    var btn = document.querySelector('.editor-toolbar button.mde-' + name);
+    if (!btn) return;
+    btn.classList.toggle('wk-toggle-on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.title = on ? titleOn : titleOff; // icon-only, so the title is also the accessible name
+  }
+
+  // ---- Editor surface (light / dark) -----------------------------------------------------------
+  // Precedence: this browser's toolbar choice, else the site default from Administration > Settings >
+  // General ("auto" = follow the site theme, which is also what keeps a white slab from sitting under
+  // a dark toolbar). Only the source pane changes; the preview stays in the site theme so it keeps
+  // showing what a reader would actually see.
+  var EDITOR_DARK_KEY = 'wk-editor-dark';
+
+  function storedEditorDark() {
+    try { return localStorage.getItem(EDITOR_DARK_KEY); } catch (e) { return null; } // private mode
+  }
+  function siteIsDark() {
+    return document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  }
+  function editorIsDark() { return editorContainer.classList.contains('editor--dark'); }
+
+  function resolveEditorDark() {
+    var stored = storedEditorDark();
+    if (stored === 'true' || stored === 'false') return stored === 'true';
+    var setting = (form && form.dataset.editorTheme) || 'auto';
+    return setting === 'dark' || (setting !== 'light' && siteIsDark());
+  }
+
+  function applyEditorDark(dark) {
+    editorContainer.classList.toggle('editor--dark', dark);
+    markToggle('editor-theme', dark, 'Light editor', 'Dark editor');
+  }
+
+  function setEditorDark(dark) {
+    try { localStorage.setItem(EDITOR_DARK_KEY, dark ? 'true' : 'false'); } catch (e) {}
+    applyEditorDark(dark);
+  }
+
+  applyEditorDark(resolveEditorDark());
+  // With no explicit choice stored, "auto" has to keep tracking the site theme — which can change
+  // from another tab, or from the OS when the site theme is itself set to follow the system.
+  if (window.MutationObserver) {
+    new MutationObserver(function () {
+      if (storedEditorDark() === null) applyEditorDark(resolveEditorDark());
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+  }
+
+  // ---- Spell check -----------------------------------------------------------------------------
+  // The *browser's* checker, through CodeMirror's `spellcheck` option — which is exactly what EasyMDE's
+  // nativeSpellcheck sets at construction, so the button just flips the same switch afterwards. It is
+  // not EasyMDE's `spellChecker`, a bundled Typo.js implementation that downloads its own English-only
+  // dictionary; that stays off. Only takes effect because inputStyle is "contenteditable" — with the
+  // default textarea input the browser has nothing visible to check. Remembered per browser.
+  var SPELLCHECK_KEY = 'wk-spellcheck';
+
+  function spellcheckOn() { return cm.getOption('spellcheck') === true; }
+
+  function applySpellcheck(on) {
+    cm.setOption('spellcheck', on);
+    markToggle('spellcheck', on, 'Turn spell check off', 'Turn spell check on');
+  }
+
+  function setSpellcheck(on) {
+    try { localStorage.setItem(SPELLCHECK_KEY, on ? 'true' : 'false'); } catch (e) {}
+    applySpellcheck(on);
+  }
+
+  (function () {
+    var stored = null;
+    try { stored = localStorage.getItem(SPELLCHECK_KEY); } catch (e) {}
+    applySpellcheck(stored !== 'false'); // on unless this browser turned it off
+  })();
+
+  // ---- Preview surface (light / dark) ----------------------------------------------------------
+  // The preview shows the page as a reader would see it, so by default it simply inherits the site
+  // theme. Overriding it sets data-bs-theme on the pane itself: Bootstrap scopes its theme variables
+  // to any subtree carrying that attribute, so the whole rendered page — text, tables, code blocks,
+  // callouts — re-themes without a parallel set of preview-only rules. Remembered per browser, like
+  // the editor surface. Both preview panes (split and full) are kept in step.
+  var PREVIEW_DARK_KEY = 'wk-preview-dark';
+
+  function previewPanes() { return editorContainer.querySelectorAll('.editor-preview'); }
+  function previewIsDark() {
+    var pane = previewPanes()[0];
+    return !!pane && pane.getAttribute('data-bs-theme') === 'dark';
+  }
+
+  function applyPreviewDark(dark) {
+    previewPanes().forEach(function (pane) {
+      if (dark === null) pane.removeAttribute('data-bs-theme');   // back to inheriting the site theme
+      else pane.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+    });
+    markToggle('preview-theme', dark === true, 'Light preview', 'Dark preview');
+  }
+
+  function setPreviewDark(dark) {
+    try { localStorage.setItem(PREVIEW_DARK_KEY, dark ? 'true' : 'false'); } catch (e) {}
+    applyPreviewDark(dark);
+  }
+
+  (function () {
+    var stored = null;
+    try { stored = localStorage.getItem(PREVIEW_DARK_KEY); } catch (e) {}
+    // null (never chosen) leaves the attribute off entirely, so the pane keeps following the site.
+    applyPreviewDark(stored === 'true' ? true : (stored === 'false' ? false : null));
+  })();
+
+  // WikiKT's two brace forms aren't Markdown, so CodeMirror's mode has no idea they're special. A
+  // CodeMirror overlay tags them anyway: `{.is-info}` (callout/decoration markers) and
+  // `{{fragment:key}}` references get their own token class, coloured in site.css. Non-opaque, so it
+  // layers on top of the Markdown highlighting rather than replacing it, and it survives plain view —
+  // picking these out of a wall of monospace source is exactly when it helps most.
+  cm.addOverlay({
+    token: function (stream) {
+      if (stream.match(/^\{\{fragment:[a-zA-Z0-9._/-]+}}/)) return 'wk-fragment';
+      if (stream.match(/^\{\.[a-zA-Z][\w-]*}/)) return 'wk-decoration';
+      // No match here: consume up to the next `{` so the next call gets a fresh candidate.
+      while (stream.next() != null && !stream.match(/^\{/, false)) { /* skip */ }
+      return null;
+    }
+  });
 
   setupLinkAutocomplete(cm, form);
   setupAssetLinkAffordance(cm, form);
@@ -394,15 +540,45 @@
     });
   }
 
-  // Editor starts inline (NOT side-by-side/fullscreen) so the top bar stays visible.
-  // Guarantee the latest editor content is written back to the textarea before submit.
-  if (form) form.addEventListener('submit', function () { cm.save(); });
+  // Unsaved-changes guard: warn before leaving the editor while edits are pending. Snapshot-based
+  // rather than a sticky "touched" flag, because half the fields here are written programmatically and
+  // never fire an input event — tag chips, the path "Browse…" picker, the link/image/fragment inserts —
+  // and because undoing an edit should stop the warning rather than leave it armed for the session.
+  // cm.save() writes CodeMirror back into the textarea first, so content is part of the snapshot and
+  // CodeMirror's line-ending normalisation can't read as a change on a page that was never touched.
+  // Covers links (Close, brand, Administration), Logout (a separate form), Back, reload and tab close;
+  // the wording of the prompt itself is the browser's and can't be customised.
+  var savedState = null;
+  function editorState() {
+    cm.save();
+    // Serialised as JSON pairs rather than concatenated, so no field name or value can run into the
+    // next one and make two different sets of fields compare equal.
+    var parts = [];
+    new FormData(form).forEach(function (value, key) { parts.push([key, value]); });
+    return JSON.stringify(parts);
+  }
+  if (form) {
+    savedState = editorState();
+    window.addEventListener('beforeunload', function (e) {
+      if (savedState === null || editorState() === savedState) return;
+      e.preventDefault();
+      e.returnValue = ''; // still required by Chrome/Safari to raise the prompt
+    });
+  }
 
-  // EasyMDE flips the split/fullscreen classes inside its own setTimeout(…, 1), so the panes are still
-  // the old size when the toolbar action returns. Re-measure once they've settled: CodeMirror caches its
-  // viewport height and won't notice the change on its own, and the preview's scroll anchors move with it.
+  // Guarantee the latest editor content is written back to the textarea before submit. Submitting is
+  // an intentional save (or "Discard staged update"), so it also stands the guard above down.
+  if (form) form.addEventListener('submit', function () { cm.save(); savedState = null; });
+
+  // EasyMDE flips the split class inside its own setTimeout(…, 1), so the panes are still the old size
+  // when the toolbar action returns. Re-measure once they've settled: CodeMirror caches its viewport
+  // height and won't notice the change on its own, and the preview's scroll anchors move with it.
+  // Debounced, because the observer below can fire several times for one toggle.
+  var layoutTimer = null;
   function afterLayoutChange() {
-    setTimeout(function () {
+    if (layoutTimer) clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(function () {
+      layoutTimer = null;
       cm.refresh();
       invalidateAnchors();
     }, 20);
@@ -582,6 +758,38 @@
     if (Math.abs(info.top - top) <= SCROLL_EPSILON) { expectEditorTop = null; return; }
     expectEditorTop = top;
     cm.scrollTo(null, top);
+  }
+
+  // Watch the classes EasyMDE toggles rather than wiring each button: the split view also has a
+  // keyboard shortcut (F9), and plain view and the dark surface change the font and colors, all of
+  // which need CodeMirror to re-measure and the preview anchors to be rebuilt.
+  if (window.MutationObserver) {
+    var layoutObserver = new MutationObserver(function () {
+      afterLayoutChange();
+      rememberSplit();
+    });
+    layoutObserver.observe(editorContainer, { attributes: true, attributeFilter: ['class'] });
+    if (sidePreview) layoutObserver.observe(sidePreview, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // The split opens by default and is then remembered per browser — editing next to the rendered page
+  // is the common case, and it's the whole point of the line-following sync above. Closing it sticks.
+  var SPLIT_KEY = 'wk-split-open';
+
+  // Below this width site.css hides the split button and the layout falls back to page scrolling, so
+  // the split is never opened *or* recorded there — otherwise a session on a narrow window would save
+  // "closed" and the preview would stay shut next time the same browser is back at desktop width.
+  function splitFits() { return window.matchMedia('(min-width: 769px)').matches; }
+
+  function rememberSplit() {
+    if (!sidePreview || !splitFits()) return;
+    try { localStorage.setItem(SPLIT_KEY, previewActive() ? 'true' : 'false'); } catch (e) {}
+  }
+
+  if (sidePreview && splitFits()) {
+    var splitPref = null;
+    try { splitPref = localStorage.getItem(SPLIT_KEY); } catch (e) {} // private mode: fall through to the default
+    if (splitPref !== 'false') EasyMDE.toggleSideBySide(easymde);
   }
 
   if (sidePreview) {

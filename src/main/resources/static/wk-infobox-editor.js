@@ -27,7 +27,7 @@
     { value: 'boolean', label: 'Boolean (yes/no)' },
   ];
   var CHOICE_TYPES = { enum: 1, multi: 1 };
-  // Section headings aren't a type an admin picks from the dropdown — they're their own row kind,
+  // Section headings aren't a type an admin picks from the dropdown; they're their own row kind,
   // written `# Label` in the source format (InfoboxFieldDef.TYPE_HEADING).
   var HEADING = 'heading';
   function esc(s) {
@@ -54,7 +54,7 @@
     (text || '').split('\n').forEach(function (raw) {
       var line = raw.trim();
       if (!line) return;
-      // `# Label` is a section heading — no columns, no value, just a divider with a title.
+      // `# Label` is a section heading: no columns, no value, just a divider with a title.
       if (line.charAt(0) === '#') {
         var hl = line.replace(/^#\s*/, '').trim();
         if (hl) out.push({ type: HEADING, label: hl, name: '', required: false, options: '', help: '' });
@@ -124,7 +124,7 @@
   function renderPreview() {
     if (previewTitle) previewTitle.textContent = (nameInput && nameInput.value.trim()) || 'Infobox';
     var shown = fields.filter(function (f) { return f.name || f.label; });
-    if (!shown.length) { previewEl.innerHTML = '<div class="ib-ed-empty">No fields yet</div>'; return; }
+    if (!shown.length) { previewEl.innerHTML = '<div class="ib-ed-empty">No fields added</div>'; return; }
     var html = '';
     var open = false;
     shown.forEach(function (f) {
@@ -215,7 +215,7 @@
       row.innerHTML = f.type === HEADING ? headingRowHtml(f, i) : rowHtml(f, i);
       rowsEl.appendChild(row);
     });
-    if (!fields.length) rowsEl.innerHTML = '<div class="ib-ed-empty">No fields yet — add one to start.</div>';
+    if (!fields.length) rowsEl.innerHTML = '<div class="ib-ed-empty">No fields added</div>';
     renderPreview();
     sync();
   }

@@ -994,6 +994,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.editModel(
         "canAdmin" to ctx.permissions.canAccessAdmin(userId),
         // Global default for the plain (monospace, no inline styling) editor view.
         "plainEditor" to ctx.settings.getBool(siteId, com.wikikt.service.SettingsService.EDITOR_PLAIN_VIEW),
+        // Site default for the editor surface (auto/light/dark); page-edit.js resolves "auto" against
+        // the site theme and lets a per-browser toolbar toggle override the lot.
+        "editorTheme" to (ctx.settings.get(siteId, com.wikikt.service.SettingsService.EDITOR_THEME)
+            ?: com.wikikt.service.SettingsService.EDITOR_THEME_AUTO),
         // Used by the editor's link-path autocomplete to build canonical view URLs.
         "defaultLocale" to ctx.config.defaultLocale,
         // Max files the Insert Image picker's "Upload" may send at once (admin setting; caps the client too).

@@ -75,8 +75,9 @@
     </div>
 
     {{! Result of the last finished update. Colour and icon come from the model (phase-derived), and
-        Dismiss hides it for good: only the next update would otherwise replace it, so a one-time
-        "updated successfully" note would live on this page forever. Dismissing records just this
+        Dismiss hides it for good: nothing else would otherwise clear it (bar requesting the next
+        update), so a one-time "updated successfully" note would live on this page forever.
+        Dismissing records just this
         run's identity -- the updater's status.json (which the app mounts read-only) and
         `docker compose logs wikikt-updater` keep the full record, and the next result shows unread. }}
     {{#lastOutcome}}

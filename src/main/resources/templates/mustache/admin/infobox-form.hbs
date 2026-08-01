@@ -58,11 +58,11 @@
                 <p class="mb-1 mt-1">One field per line, columns divided by <code>|</code>. Only trailing columns may be left off.</p>
                 <p class="mb-2 font-monospace">name | label | type | options | help</p>
                 <ul class="mb-2">
-                    <li><strong>name</strong> — required. The key the value is stored under; readers never see it.</li>
-                    <li><strong>label</strong> — the caption on the card (defaults to the name).</li>
-                    <li><strong>type</strong> — one of the four below. Append <code>*</code> (e.g. <code>enum*</code>) to mark the field required.</li>
-                    <li><strong>options</strong> — the choices, comma-separated. <em>Required</em> for <code>enum</code> and <code>multi</code>, which have nothing to offer without it; ignored by the other two.</li>
-                    <li><strong>help</strong> — what the field means, in a sentence. Shown to editors under the input <em>and</em> to readers: on the page the label picks up a dotted underline that reveals this on hover or tap. Worth filling in wherever a label alone could be read two ways.</li>
+                    <li><strong>name</strong>: required. The key the value is stored under; readers never see it.</li>
+                    <li><strong>label</strong>: the caption on the card (defaults to the name).</li>
+                    <li><strong>type</strong>: one of the four below. Append <code>*</code> (e.g. <code>enum*</code>) to mark the field required.</li>
+                    <li><strong>options</strong>: the choices, comma-separated. <em>Required</em> for <code>enum</code> and <code>multi</code>, which have nothing to offer without it; ignored by the other two.</li>
+                    <li><strong>help</strong>: what the field means, in a sentence. Shown to editors under the input <em>and</em> to readers: on the page the label picks up a dotted underline that reveals this on hover or tap. Worth filling in wherever a label alone could be read two ways.</li>
                 </ul>
                 <table class="table table-sm align-middle mb-2">
                     <thead><tr><th>Type</th><th>Allowed values</th><th>Shown on page as...</th></tr></thead>
@@ -89,8 +89,8 @@
                         </tr>
                     </tbody>
                 </table>
-                <p class="mb-2">A line beginning with <code>#</code> is a <strong>section heading</strong>, e.g. <code># Geography</code>, grouping every field below it, until the next heading. Headings with no content under them are dropped automatically.</p>
-                <p class="mb-0"><code>enum</code> and <code>multi</code> take their choices from the same options column and differ only in how many of them an editor may pick.</p>
+                <p class="mb-2">Start a line with <code>#</code> to make a section heading, e.g. <code># Geography</code> (logically group items under it).</p>
+                <p class="mb-0"><code>enum</code> and <code>multi</code> offer the choices specified in the "options" column and differ only in how many of them an editor may pick.</p>
             </details>
         </div>
         <button type="submit" class="btn btn-primary">Save</button>

@@ -115,6 +115,10 @@ fun Route.configureAdminRouting() {
             val s = com.wikikt.service.SettingsService
             // Checkbox: present (any value) = on, absent = off.
             ctx.settings.setBool(siteId, s.EDITOR_PLAIN_VIEW, params["editorPlainView"] != null)
+            // Editor surface: only the three known values are stored; anything else falls back to auto.
+            val editorTheme = params["editorTheme"]?.takeIf { it in setOf("light", "dark") }
+                ?: s.EDITOR_THEME_AUTO
+            ctx.settings.set(siteId, s.EDITOR_THEME, editorTheme)
             // Branding: stored trimmed; empty clears (falls back to the default site name).
             ctx.settings.set(siteId, s.SITE_NAME, params["siteName"].orEmpty().trim())
             // Footer: org + license build the default footer; the override (Markdown) replaces it.
@@ -2231,8 +2235,8 @@ private suspend fun io.ktor.server.application.ApplicationCall.selfUpdateModel(c
         manifest != null && manifest.selfUpdatable && !minUpgradeBlocked && !composeRevBlocked
 
     // Terminal outcome of the last run, with the DB breadcrumb ("requested by X at Y") when it
-    // corroborates. Visible until the next run replaces it or an admin dismisses it (a finished
-    // update's result is read once; nothing else would ever clear it).
+    // corroborates. Visible until an admin dismisses it, or the next install is requested (which
+    // retires it — see SelfUpdateService.requestInstall); nothing else would ever clear it.
     val anchor = ctx.settings.instanceAnchorSiteId()
     val lastRequestId = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUEST_ID)
     val requestedBy = ctx.settings.get(anchor, com.wikikt.service.SettingsService.UPDATE_LAST_REQUESTED_BY)
@@ -2378,6 +2382,15 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         "rerendered" to (rerendered != null),
         "rerenderedCount" to rerendered,
         "editorPlainView" to settings.getBool(siteId, s.EDITOR_PLAIN_VIEW),
+        "editorThemeOptions" to (settings.get(siteId, s.EDITOR_THEME) ?: s.EDITOR_THEME_AUTO).let { current ->
+            listOf(
+                s.EDITOR_THEME_AUTO to "Follow the reader's site theme",
+                "light" to "Always light",
+                "dark" to "Always dark",
+            ).map { (value, label) ->
+                mapOf("value" to value, "label" to label, "selected" to (value == current))
+            }
+        },
         // Raw stored values for the form fields (empty string when unset).
         "siteNameValue" to settings.get(siteId, s.SITE_NAME).orEmpty(),
         "siteNameDefault" to s.DEFAULT_SITE_NAME,

@@ -56,6 +56,13 @@
             <label for="editorPlainView" class="form-check-label">Use plain-text Markdown editor as default</label>
         </div>
         <p class="form-text">When enabled, the Markdown editor defaults to a monospace font and does not show inline styling (e.g. <code>**bold**</code> is not rendered bold while editing). Users can still toggle the view for their current session from the editor toolbar.</p>
+        <div class="mb-3" style="max-width:24rem">
+            <label for="editorTheme" class="form-label">Editor surface</label>
+            <select class="form-select" name="editorTheme" id="editorTheme">
+                {{#editorThemeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/editorThemeOptions}}
+            </select>
+            <p class="form-text">Light or dark background for the Markdown source you type. A dark editor keeps the source clearly distinct from the rendered preview beside it, which stays in the site theme either way. Editors can flip this for their own browser from the editor toolbar.</p>
+        </div>
 
         <button type="submit" class="btn btn-primary">Save</button>
     </form>
