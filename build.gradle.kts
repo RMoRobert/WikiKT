@@ -12,13 +12,15 @@ buildscript {
         // Build-only (never in the app's runtime classpath): real JS parser used to minify first-party
         // static/*.js for the production jar. A parser, not regex, is required for JS — `/` is ambiguous
         // (division vs regex literal) and newlines are semantic (automatic semicolon insertion).
-        classpath("com.google.javascript:closure-compiler:v20260720")
+        classpath("com.google.javascript:closure-compiler:v20260726")
     }
 }
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(ktorLibs.plugins.ktor)
+    // Pinned one patch behind the ktorLibs catalog (3.5.2): the Gradle plugin's 3.5.2 publication is
+    // lagging the library release. Restore `alias(ktorLibs.plugins.ktor)` once it reaches the portal.
+    id("io.ktor.plugin") version "3.5.1"
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -83,6 +85,9 @@ dependencies {
     implementation(libs.h2database.h2)
     implementation(libs.h2database.r2dbc)
     implementation(libs.jsoup)
+    // Annotations-only jar (an optional dep of jsoup 1.19+): makes jsoup's @Nullable types resolvable
+    // to the Kotlin compiler, which otherwise warns (and errors under language version 2.4).
+    compileOnly(libs.jspecify)
     implementation(libs.logback.classic)
     implementation(libs.postgres.r2dbc)
     implementation(libs.qrcode.kotlin)
