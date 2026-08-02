@@ -132,6 +132,14 @@ class PermissionService(
         userId != null && hasContentAllow(userId, AccessResolver.Perm.WRITE_ASSETS)
 
     /**
+     * Coarse "can edit an asset's metadata/bytes somewhere" gate; per-asset manage:assets is enforced
+     * against that asset's own path. Used to decide whether a surface offers asset editing at all — a
+     * picker showing an "Edit" that lands on 403 is worse than one that doesn't offer it.
+     */
+    suspend fun canManageAssets(userId: UInt?): Boolean =
+        userId != null && hasContentAllow(userId, AccessResolver.Perm.MANAGE_ASSETS)
+
+    /**
      * Filters [assets] to those the user may read (read:assets against each asset's own site/locale/path).
      * The caller's principal is built once, so this doesn't re-query per asset the way calling [check] in a
      * loop would. Used so an asset list (picker / manager) never leaks the paths of assets behind a DENY.

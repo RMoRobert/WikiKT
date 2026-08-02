@@ -1015,6 +1015,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.editModel(
         "defaultLocale" to ctx.config.defaultLocale,
         // Max files the Insert Image picker's "Upload" may send at once (admin setting; caps the client too).
         "maxUploadFiles" to ctx.settings.uploadFileLimit(siteId, ctx.config.assets.maxFilesPerUpload),
+        // What the Insert Image picker may offer. Asset verbs are granted separately from page verbs, so a
+        // perfectly ordinary page editor can have write:pages and no asset rights at all: they can browse
+        // and insert existing images (read:assets) while Upload and Edit would 403. The picker hides those
+        // controls rather than showing buttons that fail — the server still enforces both per path.
+        "canUploadAssets" to ctx.permissions.canUploadAssets(userId),
+        "canManageAssets" to ctx.permissions.canManageAssets(userId),
         // Locale <select> for the Page Info (move) panel — enabled set plus this page's current locale.
         "localeOptions" to localeSelectOptions(ctx.settings.enabledLocales(siteId, ctx.config.defaultLocale), wikiPath.locale),
         // "Linked from" list (shown in Page Info, beside the move/path field).

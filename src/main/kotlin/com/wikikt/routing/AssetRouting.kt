@@ -1,6 +1,8 @@
 package com.wikikt.routing
 
+import com.wikikt.adminSiteId
 import com.wikikt.appContext
+import com.wikikt.currentSite
 import com.wikikt.siteId
 import com.wikikt.auth.CSRF_FIELD
 import com.wikikt.auth.isCsrfValid
@@ -42,6 +44,27 @@ import java.nio.file.Path
 /** Whether the caller has any write:assets grant (coarse gate for the manager; per-file paths are re-checked). */
 private suspend fun ApplicationCall.canUploadAssetsHere(): Boolean =
     appContext.permissions.canUploadAssets(currentUserId())
+
+/**
+ * Shell adjustments for the /f pages, which render inside the admin console shell so the manager is
+ * reachable from the console's Content section rather than only by URL.
+ *
+ * The shell is unconditional: opening /f takes a write:assets ALLOW rule, and `canAccessAdmin` counts
+ * exactly that as admin-area access — so anyone who gets this far can reach the console regardless. The
+ * sidebar gates each item on its own, so an asset-only editor still sees just Content > Assets.
+ */
+private suspend fun ApplicationCall.assetShellModel(): Map<String, Any?> {
+    val site = currentSite()
+    return mapOf(
+        // No site switcher here. Unlike the /a pages, /f works on the site serving the request (the
+        // editor's picker uploads through this same route while editing a page on that host), so the
+        // switcher would claim to govern a list it has no say over. When the two disagree, the list
+        // says which site's assets it is actually showing instead.
+        "showSiteSwitcher" to false,
+        "otherSiteManaged" to (adminSiteId() != site.id),
+        "assetSiteName" to site.name,
+    )
+}
 
 /**
  * Loads the asset named by the `{id}` route param and enforces manage:assets against its OWN
@@ -395,12 +418,7 @@ private suspend fun ApplicationCall.assetListModel(message: String?): Map<String
     }
     // Embedded for the client-side folder browser. Escape "</" so the JSON can't close the <script>.
     val assetsJson = kotlinx.serialization.json.Json.encodeToString(assets).replace("</", "<\\/")
-    return adminBaseModel() + mapOf(
-        // The asset manager is a standalone tool, reachable with only write:assets — a user may not have
-        // admin access. Drop the admin-shell "Exit" affordance and instead let the header show the
-        // Administration gear (→ /a) exactly when this user can actually reach it, like account pages.
-        "adminArea" to false,
-        "canAdmin" to ctx.permissions.canAccessAdmin(currentUserId()),
+    return adminBaseModel() + assetShellModel() + mapOf(
         "assetCount" to assets.size,
         "assetsJson" to assetsJson,
         "message" to message,
@@ -429,11 +447,7 @@ private suspend fun ApplicationCall.assetDetailModel(asset: AssetRecord, message
             "createdAt" to DateDisplay.format(it.createdAt, formats),
         )
     }
-    return adminBaseModel() + mapOf(
-        // Standalone tool, like the asset list: reachable with only manage:assets, so show the
-        // Administration gear (→ /a) only when this user can reach it rather than the admin-shell "Exit".
-        "adminArea" to false,
-        "canAdmin" to ctx.permissions.canAccessAdmin(currentUserId()),
+    return adminBaseModel() + assetShellModel() + mapOf(
         "id" to asset.id.toString(),
         "locale" to asset.locale,
         "path" to asset.path,
@@ -760,11 +774,7 @@ private suspend fun ApplicationCall.unusedAssetsModel(): Map<String, Any?> {
                 "updatedAtMillis" to it.updatedAt,
             )
         }
-    return adminBaseModel() + mapOf(
-        // Standalone tool like the rest of /f: reachable with only write:assets, so offer the
-        // Administration gear only when this user can actually reach it.
-        "adminArea" to false,
-        "canAdmin" to ctx.permissions.canAccessAdmin(currentUserId()),
+    return adminBaseModel() + assetShellModel() + mapOf(
         "unused" to unused,
         "hasUnused" to unused.isNotEmpty(),
         "unusedCount" to unused.size,
@@ -926,11 +936,7 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
             },
         )
     }
-    return adminBaseModel() + mapOf(
-        // Standalone tool like the rest of /f: reachable with only write:assets, so offer the
-        // Administration gear only when this user can actually reach it.
-        "adminArea" to false,
-        "canAdmin" to ctx.permissions.canAccessAdmin(currentUserId()),
+    return adminBaseModel() + assetShellModel() + mapOf(
         "broken" to rows,
         "hasBroken" to rows.isNotEmpty(),
         "brokenCount" to rows.size,

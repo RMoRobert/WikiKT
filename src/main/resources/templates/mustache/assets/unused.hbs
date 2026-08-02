@@ -8,8 +8,8 @@
     {{>partials/head-styles.hbs}}
 </head>
 <body>
-{{>partials/header.hbs}}
-<main id="main" tabindex="-1" class="container">
+{{! Admin console shell, like the rest of the asset manager — see list.hbs. }}
+{{>partials/admin-shell.hbs}}
     <div class="page-meta">
         <h1><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Unused assets</h1>
         <div class="d-flex gap-2">
@@ -78,7 +78,7 @@
     {{^hasUnused}}
         <p class="text-secondary">No unused assets — every asset is linked from a page or fragment, or used as the site logo or favicon.</p>
     {{/hasUnused}}
-</main>
+</main></div>
 {{! wk-browser.js supplies WikiKtAssetDetail — the same detail/edit modal the /f manager opens, which
     fetches this asset's /f/{id} body and AJAX-submits its forms (each carries its own CSRF field). }}
 <script src="/static/wk-browser.js?v={{assetVersion}}"></script>

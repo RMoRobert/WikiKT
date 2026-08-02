@@ -36,6 +36,7 @@ import com.wikikt.model.SiteRecord
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.plugins.origin
+import io.ktor.server.request.uri
 import io.ktor.server.sessions.get
 import io.ktor.server.sessions.sessions
 import io.ktor.util.AttributeKey
@@ -107,6 +108,65 @@ suspend fun ApplicationCall.adminSiteId(): UInt {
     val selected = sessions.get<com.wikikt.auth.AdminSiteSession>()?.siteId
     if (selected != null && appContext.sites.byId(selected) != null) return selected
     return siteId()
+}
+
+/**
+ * The site whose branding dresses THIS response — name, logo, colours, custom CSS, footer. The admin
+ * console is host-agnostic (it edits whichever site the switcher points at, from whatever host the admin
+ * is logged in to), so its chrome follows that selection rather than the request's host; otherwise an
+ * admin managing site B would sit inside site A's header and read it as still being on A. Everything
+ * else is dressed by [currentSite] — including the /f asset manager, which deliberately works on the
+ * site serving the request and says so when the two disagree.
+ */
+suspend fun ApplicationCall.chromeSiteId(): UInt =
+    if (isAdminConsolePath(request.uri.substringBefore('?'))) adminSiteId() else siteId()
+
+/** The console's own pages (`/a`, `/a/...`) — not `/f`, which is host-scoped by design. */
+private fun isAdminConsolePath(path: String): Boolean = path == "/a" || path.startsWith("/a/")
+
+/**
+ * The origin (`scheme://host[:port]`) at which [site] can be addressed from this request, or null when
+ * it can't be named from here: it already serves this request (relative URLs are the right answer), or
+ * it has no hostname of its own and so is reachable only as the catch-all, on some host this request
+ * gives us no way to know. The scheme and port come from the current request, since every site on an
+ * instance is served by the same listener (or the same proxy in front of it).
+ */
+suspend fun ApplicationCall.siteOrigin(site: SiteRecord): String? {
+    val host = site.hostname?.substringBefore(':')?.trim()?.lowercase()?.ifBlank { null } ?: return null
+    if (!SiteService.isValidHostname(host)) return null
+    if (site.id == currentSite().id) return null
+    val origin = request.origin
+    val bare = (origin.scheme == "https" && origin.serverPort == 443) ||
+        (origin.scheme == "http" && origin.serverPort == 80)
+    return if (bare) "${origin.scheme}://$host" else "${origin.scheme}://$host:${origin.serverPort}"
+}
+
+/**
+ * Whether this deployment serves over HTTPS. Two signals, either of which is enough: the request itself
+ * arrived over TLS, or the operator set the Secure session-cookie flag — which SessionConfig already
+ * treats as the reliable "this is a public HTTPS deployment" declaration, and which `production`
+ * refuses to start without. The second matters because a TLS-terminating proxy without
+ * `WIKIKT_TRUST_PROXY=true` makes every request *look* like plain HTTP to the app.
+ */
+fun ApplicationCall.isHttpsDeployment(): Boolean =
+    request.origin.scheme == "https" || appContext.config.session.secureCookie
+
+/**
+ * Where the site switcher should send an admin who picks [target], or null to stay on this host and just
+ * flip the switcher's selection.
+ *
+ * Two things have to hold before the browser is moved. First, HTTPS: the jump hands a credential to
+ * another host through a redirect URL, which has no business crossing a plaintext hop, so on an
+ * HTTP-only deployment the switcher simply stays put. Second, host-based routing has to demonstrably
+ * work here, and the one piece of evidence a request carries is how it arrived: if THIS request matched
+ * a site by hostname, then hostnames resolve for this browser and the jump will land. Arriving on the
+ * catch-all fallback proves nothing — `localhost:8080` in dev, an IP, a name nobody claimed — so again
+ * the switcher stays put rather than strand the admin on a host their machine can't reach.
+ */
+suspend fun ApplicationCall.siteSwitchOrigin(target: SiteRecord): String? {
+    if (!isHttpsDeployment()) return null
+    if (appContext.sites.byHostname(request.origin.serverHost) == null) return null
+    return siteOrigin(target)
 }
 
 suspend fun Application.createAppContext(): AppContext {

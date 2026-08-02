@@ -289,6 +289,13 @@ and one site is the catch-all that serves any host no other site claims.
    site -- it handles bare IPs, health checks, and any domain you haven't mapped. Use **Manage** (or the
    switcher at the top of the admin sidebar) to choose which site the admin pages act on.
 
+   **Give the first site a hostname too.** A new install starts with one site ("Main site") that is the
+   catch-all with its hostname left blank -- it serves every request, so nothing forces you to fill that
+   field in. Set it to the domain that site actually answers to. Naming it changes nothing about routing
+   (every unclaimed host still falls through to the catch-all), but the admin console only follows you to
+   another site's address when the address you're on belongs to a site: with the field blank the site
+   switcher silently stays on the current domain instead of moving to the one you picked.
+
 2. **Point DNS at the instance.** Add an `A`/`AAAA` (or `CNAME`) record for every hostname → the same
    server. All of them terminate at one WikiKT process.
 

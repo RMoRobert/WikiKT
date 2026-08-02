@@ -3,7 +3,12 @@ package com.wikikt.routing
 import com.wikikt.appContext
 import com.wikikt.siteId
 import com.wikikt.adminSiteId
+import com.wikikt.isHttpsDeployment
+import com.wikikt.siteOrigin
+import com.wikikt.siteSwitchOrigin
 import com.wikikt.auth.PasswordPolicy
+import com.wikikt.auth.SiteHandoff
+import com.wikikt.auth.UserSession
 import com.wikikt.auth.csrfField
 import com.wikikt.model.CreateGroupRequest
 import com.wikikt.model.CreateUserRequest
@@ -20,6 +25,7 @@ import com.wikikt.service.UpdateService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.mustache.MustacheContent
+import io.ktor.server.plugins.origin
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
@@ -28,8 +34,11 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import io.ktor.server.sessions.clear
+import io.ktor.server.sessions.get
 import io.ktor.server.sessions.sessions
 import io.ktor.server.sessions.set
+import io.ktor.http.encodeURLParameter
 import com.wikikt.auth.AdminSiteSession
 import com.wikikt.service.SiteDeleteResult
 import com.wikikt.model.parseId
@@ -82,15 +91,66 @@ fun Route.configureAdminRouting() {
             call.respond(MustacheContent("admin/sites.hbs", call.sitesModel(deleteResult = result)))
         }
 
-        // Site switcher: store which site the admin console is managing (redirect back to the referrer).
+        // Site switcher: pick which site the admin console is managing (returning to the page they were
+        // on). When the target site has a host of its own, the switch MOVES there — see below — so the
+        // URL, the chrome and every link out of the console agree about which site you're working on.
         post("/sites/select") {
             if (!call.requireManageGroups()) { call.respondForbidden(); return@post }
             val params = call.receiveParameters()
             if (!call.validateFormCsrf(params)) return@post
-            params["siteId"]?.let(::parseId)?.let { id ->
-                if (call.appContext.sites.byId(id) != null) call.sessions.set(AdminSiteSession(id))
+            val returnPath = params["return"]?.takeIf { it.startsWith("/a") } ?: "/a"
+            val target = params["siteId"]?.let(::parseId)?.let { call.appContext.sites.byId(it) }
+            if (target == null) {
+                call.respondRedirect(returnPath)
+                return@post
             }
-            call.respondRedirect(params["return"]?.takeIf { it.startsWith("/a") } ?: "/a")
+            // The target's own host, when jumping there is both possible and safe (siteSwitchOrigin).
+            val origin = call.siteSwitchOrigin(target)
+            val session = call.sessions.get<UserSession>()
+            if (origin == null || session == null) {
+                // Staying put: the selection is what tells the console which site to manage.
+                call.sessions.set(AdminSiteSession(target.id))
+                call.respondRedirect(returnPath)
+                return@post
+            }
+            // Jumping: on the far host the request's own site IS the managed site, so no selection is
+            // needed there — and this host's stale one must go, or coming back later would silently
+            // manage the site we're leaving for. The ticket re-establishes this same login over there.
+            call.sessions.clear<AdminSiteSession>()
+            val ticket = SiteHandoff.issue(session, target.id, returnPath)
+            call.respondRedirect("$origin/a/handoff?t=${ticket.encodeURLParameter()}")
+        }
+
+        // Landing point for a cross-host site switch: redeem the one-time ticket minted by
+        // /a/sites/select, set this host's copy of the same session cookie, and continue to the page the
+        // admin was on. Deliberately unauthenticated — the caller has no cookie for this host yet, which
+        // is the whole point — with the ticket itself as the credential: single-use, seconds-long, and
+        // pinned to this site, so it is not a way in for anyone who didn't just leave another host of
+        // this instance holding a valid session. An unusable ticket (expired, already spent, meant for
+        // another host) grants nothing and is treated as "not signed in here".
+        get("/handoff") {
+            // Redemption is HTTPS-only too. The issuing side already refuses over plain HTTP and builds
+            // the URL with the request's own scheme, so a ticket can't legitimately arrive here in the
+            // clear; this makes a hand-made request fail the same way rather than relying on that.
+            val ticket = if (call.isHttpsDeployment()) {
+                SiteHandoff.consume(call.request.queryParameters["t"], call.siteId())
+            } else {
+                null
+            }
+            if (ticket == null) {
+                // The ticket is spent the moment it lands, so this URL is dead as soon as it has worked
+                // once — and it sits in history, one Back press away. Someone who already has a session
+                // here is doing exactly that (or reloading it), so return them to the console instead of
+                // a login form they don't need. Without a session there's nothing to go back to: log in.
+                call.respondRedirect(if (call.currentUserId() != null) "/a" else "/login")
+                return@get
+            }
+            call.sessions.set(ticket.session)
+            // Arriving by handoff means "manage the site this host serves" — but a selection cookie
+            // from an earlier stay-put switch made ON this host may still point at some third site,
+            // which would win over the site the admin just picked. The jump is the newer intent.
+            call.sessions.clear<AdminSiteSession>()
+            call.respondRedirect(ticket.returnPath)
         }
 
         // --- Site settings, split across sidebar pages: General / Appearance / Locale. Each page
@@ -1255,6 +1315,7 @@ fun Route.configureAdminRouting() {
             val siteId = call.adminSiteId()
             val ctx = call.appContext
             val formats = call.displayFormats()
+            val origin = call.managedSiteOrigin()
             val pages = ctx.pages.list(siteId).map { page ->
                 val dto = ctx.pages.toDto(page)
                 mapOf(
@@ -1265,8 +1326,8 @@ fun Route.configureAdminRouting() {
                     "path" to dto.path,
                     "tags" to dto.tags.joinToString(", "),
                     "updatedAt" to DateDisplay.format(page.updatedAt, formats),
-                    "viewUrl" to wikiViewUrl(dto.locale, dto.path),
-                    "editUrl" to wikiEditUrl(dto.locale, dto.path),
+                    "viewUrl" to origin + wikiViewUrl(dto.locale, dto.path),
+                    "editUrl" to origin + wikiEditUrl(dto.locale, dto.path),
                 )
             }
             call.respond(
@@ -2093,6 +2154,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.fragmentUsages(
 ): List<Map<String, Any?>> {
     val ctx = appContext
     val siteId = adminSiteId()
+    val origin = managedSiteOrigin()
     val byKey = ctx.fragments.list(siteId).associateBy { "${it.locale} ${it.key}" }
     return ctx.pages.list(siteId)
         .filter { it.contentFormat == com.wikikt.db.ContentFormat.MARKDOWN }
@@ -2104,8 +2166,8 @@ private suspend fun io.ktor.server.application.ApplicationCall.fragmentUsages(
                 "title" to it.title,
                 "path" to it.path,
                 "locale" to it.locale,
-                "viewUrl" to wikiViewUrl(it.locale, it.path),
-                "editUrl" to wikiEditUrl(it.locale, it.path),
+                "viewUrl" to origin + wikiViewUrl(it.locale, it.path),
+                "editUrl" to origin + wikiEditUrl(it.locale, it.path),
             )
         }
 }
@@ -2142,6 +2204,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.fragmentUsageCoun
 private suspend fun io.ktor.server.application.ApplicationCall.missingFragmentRefs(): List<Map<String, Any?>> {
     val ctx = appContext
     val siteId = adminSiteId()
+    val origin = managedSiteOrigin()
     val default = ctx.config.defaultLocale
     val all = ctx.fragments.list(siteId)
     val byKey = all.associateBy { "${it.locale} ${it.key}" }
@@ -2167,7 +2230,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.missingFragmentRe
             page.content, page.locale, anyLocaleOnly = false,
             source = mapOf(
                 "type" to "page", "label" to page.path, "locale" to page.locale,
-                "url" to wikiEditUrl(page.locale, page.path),
+                "url" to origin + wikiEditUrl(page.locale, page.path),
             ),
         )
     }
@@ -2179,7 +2242,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.missingFragmentRe
             staged.content, page.locale, anyLocaleOnly = false,
             source = mapOf(
                 "type" to "scheduled draft", "label" to page.path, "locale" to page.locale,
-                "url" to wikiEditUrl(page.locale, page.path),
+                "url" to origin + wikiEditUrl(page.locale, page.path),
             ),
         )
     }
@@ -2215,12 +2278,13 @@ internal suspend fun io.ktor.server.application.ApplicationCall.dashboardModel()
     val ctx = appContext
     val formats = displayFormats()
     val pages = ctx.pages.list(adminSiteId())
+    val origin = managedSiteOrigin()
     val recentPages = pages.sortedByDescending { it.updatedAt }.take(6).map {
         mapOf(
             "title" to it.title,
             "path" to it.path,
             "locale" to it.locale,
-            "url" to wikiViewUrl(it.locale, it.path),
+            "url" to origin + wikiViewUrl(it.locale, it.path),
             "updatedAt" to DateDisplay.format(it.updatedAt, formats),
         )
     }
@@ -2868,7 +2932,7 @@ internal suspend fun io.ktor.server.application.ApplicationCall.mailTemplateMode
 /** Sidebar sections; each maps to a `nav_<id>` boolean the sidebar partial uses to highlight the active one. */
 private val ADMIN_NAV_SECTIONS = listOf(
     "dashboard", "sites", "general", "appearance", "locale", "rendering", "navigation",
-    "pages", "fragments", "infoboxes", "users", "groups", "apikeys", "registration", "storage", "security", "mail",
+    "pages", "fragments", "infoboxes", "assets", "users", "groups", "apikeys", "registration", "storage", "security", "mail",
     "updates",
 )
 
@@ -3049,14 +3113,15 @@ private suspend fun io.ktor.server.application.ApplicationCall.infoboxUsageModel
     val siteId = adminSiteId()
     val report = appContext.infobox.usageReport(siteId, appContext.pages.list(siteId))
     val defaultLocale = appContext.config.defaultLocale
+    val origin = managedSiteOrigin()
 
     fun row(u: InfoboxService.PageUsage): Map<String, Any?> = mapOf(
         "title" to u.title,
         "path" to u.path,
         "locale" to u.locale,
         // The page as a reader reaches it, and the editor URL the "Fill in" action needs.
-        "url" to "/${u.locale}/${u.path}",
-        "editUrl" to "/e/${u.locale}/${u.path}",
+        "url" to "$origin/${u.locale}/${u.path}",
+        "editUrl" to "$origin/e/${u.locale}/${u.path}",
         "otherLocale" to (u.locale != defaultLocale),
         "templateName" to u.templateName,
         "filledFields" to u.filledFields,
@@ -3071,7 +3136,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.infoboxUsageModel
     val orphans = report.orphans.map {
         mapOf(
             "title" to it.title, "path" to it.path, "locale" to it.locale,
-            "editUrl" to "/e/${it.locale}/${it.path}",
+            "editUrl" to "$origin/e/${it.locale}/${it.path}",
             "keys" to it.keys.joinToString(", "),
         )
     }
@@ -3117,6 +3182,10 @@ private fun safeSwitcherReturn(path: String): String = when {
 
 /** Which sidebar section the given admin request path belongs to (drives the active highlight). */
 private fun adminActiveSection(path: String): String = when {
+    // The asset manager lives at /f rather than under /a (it's reachable with only write:assets, by
+    // users who may have no admin access at all) but is listed in the console's Content section, so it
+    // highlights that item for whoever does see the sidebar.
+    path == "/f" || path.startsWith("/f/") -> "assets"
     path.startsWith("/a/sites") -> "sites"
     path.startsWith("/a/settings/appearance") -> "appearance"
     path.startsWith("/a/settings/locale") -> "locale"
@@ -3137,6 +3206,19 @@ private fun adminActiveSection(path: String): String = when {
     else -> "dashboard"
 }
 
+/**
+ * Prefix for links that leave the console for the site it is managing — "View", "Edit", the dashboard's
+ * recent pages. Empty when that site is also the one serving this request (ordinary relative links),
+ * otherwise the managed site's own origin: a bare `/en/foo` would resolve against the CURRENT host and
+ * quietly open a different site's page at the same path.
+ *
+ * Not gated the way the switcher's cross-host jump is ([siteSwitchOrigin]). A link to a hostname this
+ * browser may not resolve fails visibly and costs a click; a relative link to the wrong site's page
+ * looks like it worked.
+ */
+private suspend fun io.ktor.server.application.ApplicationCall.managedSiteOrigin(): String =
+    appContext.sites.byId(adminSiteId())?.let { siteOrigin(it) }.orEmpty()
+
 internal suspend fun io.ktor.server.application.ApplicationCall.adminBaseModel(): Map<String, Any?> {
     val ctx = appContext
     val userId = currentUserId()
@@ -3145,12 +3227,25 @@ internal suspend fun io.ktor.server.application.ApplicationCall.adminBaseModel()
     val canGroups = requireManageGroups()
     val canPages = requireManagePages()
     val canNav = requireManageNavigation()
+    val canAssets = ctx.permissions.canUploadAssets(userId)
     // Highlight the sidebar item for the current URL — derived here so no route/model has to pass it.
     val active = adminActiveSection(request.uri.substringBefore('?'))
     // Site switcher: which site the admin console is managing, plus the list to switch to.
     val allSites = ctx.sites.all()
     val managedId = adminSiteId()
     val returnPath = safeSwitcherReturn(request.uri.substringBefore('?'))
+    // Picking a site looks the same whether or not the console followed you to that site's own address,
+    // so when it can't, the switcher says so instead of appearing to do nothing. Only the reasons that
+    // apply to every option belong here; a single site with no host of its own is marked on its own row.
+    // Nothing to explain when there is nowhere to switch to.
+    val switcherStaysReason = when {
+        allSites.size < 2 -> null
+        !isHttpsDeployment() -> "Staying on this address — the console moves between sites only over HTTPS."
+        ctx.sites.byHostname(request.origin.serverHost) == null ->
+            "Staying on this address — ${request.origin.serverHost} isn't assigned to a site. " +
+                "Set it as that site's hostname under Sites to have the console follow you."
+        else -> null
+    }
     return mapOf(
         "username" to username,
         "loggedIn" to (userId != null),
@@ -3169,9 +3264,12 @@ internal suspend fun io.ktor.server.application.ApplicationCall.adminBaseModel()
         // Content section: Pages needs a content-write grant (manage:pages), but Fragments and Infoboxes
         // render site-wide, so they're admin-gated (manage:groups) like the rest of the site-wide console.
         // The section header shows if either applies; each link is gated individually below.
-        "navSecContent" to (canPages || canGroups),
+        "navSecContent" to (canPages || canGroups || canAssets),
         "navContentPages" to canPages,
         "navContentFragments" to canGroups,
+        // Assets (/f) gates on the same write:assets grant the manager itself checks, so the link never
+        // appears for someone it would 403 on.
+        "navContentAssets" to canAssets,
         "navSecUsers" to canUsers,
         "navSecGroups" to canGroups,
         // The Authentication group shows if the user can reach any item under it.
@@ -3188,11 +3286,19 @@ internal suspend fun io.ktor.server.application.ApplicationCall.adminBaseModel()
         // Marks the admin/tools area so the header swaps the Administration gear for an "Exit" button.
         "adminArea" to true,
         // Site switcher (shown to group admins): the managed site's name + the options to switch to.
+        // Each option carries its hostname, so it's clear both which site is which and which picks will
+        // move the browser to another address (the ones with a host of their own — see /a/sites/select).
         "showSiteSwitcher" to canGroups,
         "managedSiteName" to (allSites.firstOrNull { it.id == managedId }?.name ?: "—"),
         "switcherReturn" to returnPath,
+        "switcherStaysReason" to switcherStaysReason,
         "switcherSites" to allSites.map {
-            mapOf("id" to it.id.toString(), "name" to it.name, "current" to (it.id == managedId))
+            mapOf(
+                "id" to it.id.toString(),
+                "name" to it.name,
+                "hostname" to it.hostname?.ifBlank { null },
+                "current" to (it.id == managedId),
+            )
         },
     ) + ADMIN_NAV_SECTIONS.associate { "nav_$it" to (it == active) }
 }
@@ -3254,8 +3360,9 @@ internal suspend fun io.ktor.server.application.ApplicationCall.siteEditModel(
 }
 
 /**
- * Handles a create (editId null) or update site POST: validates the hostname is unique, then persists
- * and PRG-redirects to the list; on a hostname clash re-renders the form with the entered values.
+ * Handles a create (editId null) or update site POST: validates the hostname is well-formed and unique,
+ * then persists and PRG-redirects to the list; on either hostname problem it re-renders the form with
+ * the entered values.
  */
 private suspend fun io.ktor.server.application.ApplicationCall.handleSiteSave(editId: UInt?) {
     val params = receiveParameters()
@@ -3265,6 +3372,22 @@ private suspend fun io.ktor.server.application.ApplicationCall.handleSiteSave(ed
     val isCatchAll = params["isCatchAll"] != null
     if (editId != null && appContext.sites.byId(editId) == null) {
         respond(HttpStatusCode.NotFound)
+        return
+    }
+    // A host and nothing else: it's matched against the request's Host header and built into absolute
+    // URLs (the site switcher's jump, the console's links into this site), so a stray scheme, port, path
+    // or space here would either never match or point somewhere unintended.
+    if (hostname != null && !com.wikikt.service.SiteService.isValidHostname(hostname)) {
+        respond(
+            MustacheContent(
+                "admin/site-edit.hbs",
+                siteEditModel(
+                    editId,
+                    error = "“$hostname” isn't a valid hostname. Use just the host — e.g. docs.example.com — with no scheme, port or path.",
+                    name = name, hostname = hostname, isCatchAll = isCatchAll,
+                ),
+            ),
+        )
         return
     }
     // Hostnames are unique across sites (a request maps to at most one site).

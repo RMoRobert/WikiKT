@@ -8,8 +8,8 @@
     {{>partials/head-styles.hbs}}
 </head>
 <body>
-{{>partials/header.hbs}}
-<main id="main" tabindex="-1" class="container">
+{{! Admin console shell, like the rest of the asset manager — see list.hbs. }}
+{{>partials/admin-shell.hbs}}
     <div class="page-meta">
         <h1><i class="mdi mdi-image-broken-variant" aria-hidden="true"></i> Broken asset references</h1>
         <a class="btn btn-secondary" href="/f">Back to All Assets</a>
@@ -17,8 +17,8 @@
 
     <p class="text-secondary">
         Files referred to from a page, fragment, infobox, scheduled draft, footer override, or
-        navigation entry that no asset provides — deleted, renamed, moved to another folder or locale,
-        or never uploaded. Each one renders as a broken image or a dead link for readers.
+        navigation entry that no asset provides (could be deleted, renamed, moved to another folder
+        or locale, or never uploaded). Will render as broken image or dead link on page.
     </p>
     {{! The counterpart of /f/unused, scanning the same content through the same index. Two rules keep
         this list honest, and both matter if you change it:
@@ -30,10 +30,10 @@
     <div class="alert alert-warning py-2">
         <i class="mdi mdi-alert-outline" aria-hidden="true"></i>
         Not everything is scanned: reference-style Markdown links, custom CSS, and injected head/body
-        HTML are invisible here. Links to <em>pages</em> that don't exist aren't listed either — only
-        references that must be a file. Relative references (<code>![](image.png)</code>) are checked in
-        page bodies, where they resolve against the page's own path; anywhere else they're listed under
-        <a href="#cant-be-checked">Should be absolute</a> below.
+        HTML are not checked. Links to <em>pages</em> that don't exist aren't listed here, either,
+        only files. Relative references (<code>![](image.png)</code>) are checked in
+        page bodies, where they resolve against the page's own path; others are listed under the
+        <a href="#cant-be-checked">Should be absolute</a> section below.
     </div>
 
     {{#hasBroken}}
@@ -69,13 +69,9 @@
                 </tbody>
             </table>
         </div>
-        <p class="text-secondary">
-            To fix one, either upload a file at that exact path and locale, or edit each place listed
-            and point it somewhere real.
-        </p>
     {{/hasBroken}}
     {{^hasBroken}}
-        <p class="text-secondary">No broken references — every file referred to from this site's content exists.</p>
+        <p class="text-secondary">No broken references found.</p>
     {{/hasBroken}}
 
     {{! Relative references written where nothing can resolve them. Not listed as "broken" because we
@@ -86,12 +82,11 @@
     {{#hasUnresolvable}}
         <h2 class="mt-5" id="cant-be-checked">Should be absolute <span class="text-secondary fs-6">({{unresolvableCount}})</span></h2>
         <p class="text-secondary">
-            These are written relative to the page, but sit in content that is rendered inside many pages
-            — or none in particular. Each points at a different file depending on where it appears, and
-            some resolve nowhere at all, so they can't be checked above. Rewrite each as an absolute path
-            starting with <code>/</code>: that binds to the page's locale and falls back to the default
-            locale, so it stays correct everywhere. New infobox values are already required to be
-            absolute; the rest are listed here so existing content can be brought over.
+            These are written relative to the page but could appear in any (or no) pages
+            at any path, which could lead to the reference pointing to a different file or none at all,
+            depending on what page it is used in. These are not checked for validity above.
+            Rewrite to use absolute path, i.e., a path starting with <code>/</code> (will assume page's own locale or
+            fall back to default if not found in page locale).
         </p>
         <div class="table-responsive">
             <table class="table table-hover align-middle" id="unresolvableTable">
@@ -123,7 +118,7 @@
             </table>
         </div>
     {{/hasUnresolvable}}
-</main>
+</main></div>
 <script src="/static/wk-browser.js?v={{assetVersion}}"></script>
 <script>
   // Click-to-sort, and drag-to-resize on desktop (enableColumnResize no-ops on touch/narrow screens,

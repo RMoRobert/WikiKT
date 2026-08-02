@@ -2477,6 +2477,31 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .admin-site-btn .mdi { font-size: 1.15rem; color: var(--wk-admin-fg-muted); }
 .admin-site-switcher .dropdown-menu { font-size: 0.9rem; }
 .admin-site-switcher .dropdown-menu form { display: block; margin: 0; }
+/* Each option is name over hostname — the host is where picking it takes you, so it reads as a
+   secondary line rather than a second column that would push long site names into an ellipsis. */
+.admin-site-option { line-height: 1.25; }
+.admin-site-option .admin-site-option-name { display: block; }
+.admin-site-option .admin-site-option-host {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--wk-admin-fg-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.admin-site-option.active .admin-site-option-host,
+.admin-site-option:hover .admin-site-option-host,
+.admin-site-option:focus .admin-site-option-host { color: inherit; opacity: 0.75; }
+/* Why the address bar won't move when you pick a site. Dropdown items are nowrap, so this has to opt
+   back into wrapping and cap its own width or one sentence would stretch the whole menu. */
+.admin-site-note {
+    margin: 0.15rem 0 0.1rem;
+    padding: 0 1rem;
+    max-width: 17rem;
+    white-space: normal;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--wk-admin-fg-muted);
+}
 
 /* --- Wider content on large screens. Bootstrap's .container caps at 1320px (xxl); bump it so the
    header, content, and footer (all .container) use more of a wide viewport while staying responsive.

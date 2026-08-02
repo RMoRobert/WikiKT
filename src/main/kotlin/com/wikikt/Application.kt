@@ -88,7 +88,9 @@ fun Application.module() {
     // Inject site branding (name, logo, brand color) + the rendered footer into every Mustache page
     // model, so every <title>/header/footer reflects the admin-configured site without each route
     // knowing about it. Runs before the Mustache plugin renders, so it sees the raw MustacheContent.
-    // Page-supplied keys win over branding defaults (none currently collide).
+    // Page-supplied keys win over branding defaults (none currently collide). Which site's branding
+    // that is comes from chromeSiteId(): the request's site everywhere except the admin console, which
+    // wears the branding of the site it is managing.
     sendPipeline.intercept(ApplicationSendPipeline.Before) { message ->
         if (message is MustacheContent && message.model is Map<*, *>) {
             @Suppress("UNCHECKED_CAST")
@@ -118,7 +120,7 @@ fun Application.module() {
                 // long-lived Cache-Control on the /static route below.
                 "assetVersion" to BuildInfo.assetVersion,
             ) +
-                ctx.settings.brandingModel(call.siteId(), ctx.markdown, year) +
+                ctx.settings.brandingModel(call.chromeSiteId(), ctx.markdown, year) +
                 (userTheme?.let { mapOf("themeMode" to it) } ?: emptyMap()) +
                 (message.model as Map<String, Any?>)
             proceedWith(MustacheContent(message.template, merged, message.etag, message.contentType))

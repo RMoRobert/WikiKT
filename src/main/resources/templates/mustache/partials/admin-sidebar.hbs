@@ -10,9 +10,15 @@
         </button>
         <ul class="dropdown-menu">
             <li><h6 class="dropdown-header">Managing site</h6></li>
+            {{! Each site's own hostname sits under its name: it tells two same-named sites apart, and it
+                is where picking that site will take you — a site with a host of its own is managed AT
+                that host, so the switch moves the browser there (see /a/sites/select). }}
             {{#switcherSites}}
-            <li><form method="post" action="/a/sites/select" class="m-0">{{{csrfField}}}<input type="hidden" name="siteId" value="{{id}}"><input type="hidden" name="return" value="{{switcherReturn}}"><button type="submit" class="dropdown-item{{#current}} active{{/current}}">{{name}}{{#current}} <i class="mdi mdi-check" aria-hidden="true"></i>{{/current}}</button></form></li>
+            <li><form method="post" action="/a/sites/select" class="m-0">{{{csrfField}}}<input type="hidden" name="siteId" value="{{id}}"><input type="hidden" name="return" value="{{switcherReturn}}"><button type="submit" class="dropdown-item admin-site-option{{#current}} active{{/current}}"><span class="admin-site-option-name">{{name}}{{#current}} <i class="mdi mdi-check" aria-hidden="true"></i>{{/current}}</span>{{#hostname}}<span class="admin-site-option-host">{{.}}</span>{{/hostname}}{{^hostname}}<span class="admin-site-option-host">no hostname of its own</span>{{/hostname}}</button></form></li>
             {{/switcherSites}}
+            {{! Shown only when picking any of these would leave the address bar where it is — otherwise
+                a switch that didn't move you is indistinguishable from one that did. }}
+            {{#switcherStaysReason}}<li><p class="admin-site-note">{{.}}</p></li>{{/switcherStaysReason}}
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="/a/sites"><i class="mdi mdi-cog-outline" aria-hidden="true"></i> Manage sites…</a></li>
         </ul>
@@ -39,6 +45,8 @@
         <a class="admin-nav-link{{#nav_fragments}} active{{/nav_fragments}}" href="/a/fragments"><i class="mdi mdi-puzzle-outline" aria-hidden="true"></i> Fragments</a>
         <a class="admin-nav-link{{#nav_infoboxes}} active{{/nav_infoboxes}}" href="/a/infoboxes"><i class="mdi mdi-card-text-outline" aria-hidden="true"></i> Infoboxes</a>
         {{/navContentFragments}}
+        {{! The asset manager is at /f, not under /a — it's a standalone tool for anyone with write:assets. }}
+        {{#navContentAssets}}<a class="admin-nav-link{{#nav_assets}} active{{/nav_assets}}" href="/f"><i class="mdi mdi-image-multiple-outline" aria-hidden="true"></i> Assets</a>{{/navContentAssets}}
         {{/navSecContent}}
 
         {{#navSecAuth}}

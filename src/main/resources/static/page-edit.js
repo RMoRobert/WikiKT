@@ -267,7 +267,16 @@
         var edForm = document.querySelector("form.editor");
         var maxUp = edForm && parseInt(edForm.dataset.maxUploadFiles, 10);
         if (maxUp > 0) window.__WK_UPLOAD_MAX__ = maxUp;
-        WikiKtAssetBrowser.open({ imagesOnly: true, title: "Insert Image", confirmLabel: "Insert" })
+        // Asset rights are granted separately from page rights, so someone editing this page may have no
+        // write:assets/manage:assets at all — they can still browse and insert what's already there. Pass
+        // what they hold so the picker omits Upload/Edit rather than offering controls that 403.
+        WikiKtAssetBrowser.open({
+          imagesOnly: true,
+          title: "Insert Image",
+          confirmLabel: "Insert",
+          canUpload: !edForm || edForm.dataset.canUploadAssets === "true",
+          canManage: !edForm || edForm.dataset.canManageAssets === "true",
+        })
           .then(function (asset) {
             if (!asset) return;
             var cm = editor.codemirror;

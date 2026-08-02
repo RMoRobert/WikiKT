@@ -8,8 +8,9 @@
     {{>partials/head-styles.hbs}}
 </head>
 <body>
-{{>partials/header.hbs}}
-<main id="main" tabindex="-1" class="container narrow">
+{{! Admin console shell, like the rest of the asset manager — see list.hbs. The detail/edit modal only
+    lifts .asset-detail out of this page, so the shell around it doesn't matter to that path. }}
+{{>partials/admin-shell.hbs}}
     <div class="page-meta"><h1>{{path}}</h1><a class="btn btn-secondary" href="/f">All assets</a></div>
 
     {{! The asset detail/edit surface. Bootstrap tabs (General / File / Info / History) + a persistent
@@ -158,7 +159,7 @@
             </div>
         </div>
     </div>
-</main>
+</main></div>
 {{>partials/footer.hbs}}
 {{{bodyHtml}}}</body>
 </html>

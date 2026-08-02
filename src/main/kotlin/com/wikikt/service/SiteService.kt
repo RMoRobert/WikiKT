@@ -142,6 +142,18 @@ class SiteService(private val database: R2dbcDatabase) {
     fun invalidateCache() {
         cache = null
     }
+
+    companion object {
+        /**
+         * A syntactically valid value for the `hostname` column: dot-separated alphanumeric/hyphen labels
+         * and nothing else (`docs.example.com`, `localhost`, an optional trailing dot). Strict because the
+         * value is interpolated into absolute URLs — the switcher's cross-host jump and the console's links
+         * into the managed site — where a stray `/`, `:`, `@` or space would change where the URL points.
+         */
+        private val HOSTNAME = Regex("^(?!-)[a-z0-9-]{1,63}(?<!-)(\\.(?!-)[a-z0-9-]{1,63}(?<!-))*\\.?$")
+
+        fun isValidHostname(host: String): Boolean = host.length <= 253 && HOSTNAME.matches(host)
+    }
 }
 
 enum class SiteDeleteResult { DELETED, NOT_FOUND, IS_CATCHALL }

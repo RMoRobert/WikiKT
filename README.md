@@ -95,7 +95,7 @@ itself runs via Gradle.
 
 * [Installation & deployment](docs/install.md): DigitalOcean, EC2, Google Cloud, etc. walkthroughs; self-hosting, environment variable reference
 * [Docker stack details](docker/README.md): Information on recommended production Compose file configuration, upgrades, and backups
-* [Exporting to Wiki.js](docs/wikijs-export.md): Moving content back to Wiki.js 2.x — how to import it, what gets rewritten, and what doesn't travel
+* [Exporting to Wiki.js](docs/wikijs-export.md): For users looking to export content *out* of WikiKT *to* Wiki.js (to import from, use Git sync to import Git repo or local file storage export)
 
 For developers:
 * [Database migrations](docs/migrations.md): How the R2DBC-native migration runner works and how to add a migration

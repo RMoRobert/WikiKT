@@ -8,10 +8,14 @@
     {{>partials/head-styles.hbs}}
 </head>
 <body>
-{{>partials/header.hbs}}
-<main id="main" tabindex="-1" class="container">
+{{! Renders in the admin console shell — the manager is listed in its Content section. Every user who
+    can open /f can reach the console (see assetShellModel), and the sidebar gates its own items. }}
+{{>partials/admin-shell.hbs}}
     <div class="page-meta"><h1><i class="mdi mdi-image-multiple-outline" aria-hidden="true"></i> Assets</h1></div>
     {{#message}}<div class="alert alert-info py-2">{{message}}</div>{{/message}}
+    {{! Assets belong to the site serving this request, not to the console's site-switcher selection —
+        say so when the two differ, so a switched admin isn't left thinking this is the other site's library. }}
+    {{#otherSiteManaged}}<div class="alert alert-warning py-2 mb-3"><i class="mdi mdi-information-outline" aria-hidden="true"></i> Showing assets for <strong>{{assetSiteName}}</strong> — the site on this address. The asset library follows the hostname you visit, not the site selected in the admin console.</div>{{/otherSiteManaged}}
 
     <h2>Library <span class="text-secondary fs-6">({{assetCount}})</span></h2>
     <div id="assetManager">
@@ -58,7 +62,7 @@
         <a href="/f/broken"><i class="mdi mdi-image-broken-variant" aria-hidden="true"></i> Find broken references</a>
         <span class="text-secondary">- the reverse: will list files referred to from a page, fragment, or setting that no asset provides</span>
     </p>
-</main>
+</main></div>
 <script>window.__WK_ASSETS__ = {{{assetsJson}}}; window.__WK_UPLOAD_MAX__ = {{maxFiles}};</script>
 <script src="/static/wk-browser.js?v={{assetVersion}}"></script>
 <script src="/static/asset-manager.js?v={{assetVersion}}"></script>

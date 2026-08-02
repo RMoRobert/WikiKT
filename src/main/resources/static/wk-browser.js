@@ -719,6 +719,12 @@
     open(options) {
       options = options || {};
       const imagesOnly = !!options.imagesOnly;
+      // Asset verbs are granted independently of page verbs, so a caller may only be allowed to LOOK:
+      // browse and insert what exists (read:assets) with no write:assets or manage:assets. Both default
+      // to true so callers that don't pass them (the asset manager itself, which is already gated) are
+      // unaffected; the server enforces both per path regardless of what the UI shows.
+      const canUpload = options.canUpload !== false;
+      const canManage = options.canManage !== false;
       let countEl;
       return openBrowser({
         title: options.title || 'Select an asset',
@@ -727,11 +733,13 @@
         rootLabel: '/',
         treeRootLabel: '(root)',
         confirmOnDblClick: true,
-        dropUpload: true,
+        dropUpload: canUpload,
         resizeKey: 'assetPicker',
         headers: [{ label: 'Name' }, { label: 'Type' }, { label: 'Size', cls: 'wkab-num' }, { label: 'Modified', cls: 'wkab-when' }, { label: '', cls: 'wkab-actions' }],
-        // Upload (to the current folder) + New folder controls, added to the browser toolbar.
-        toolbarExtra: (toolbar, api) => {
+        // Upload (to the current folder) + New folder controls, added to the browser toolbar. Both are
+        // upload affordances — a new folder only exists once something is uploaded into it — so they come
+        // and go together with write:assets.
+        toolbarExtra: canUpload ? (toolbar, api) => {
           const fileInput = el('input');
           fileInput.type = 'file'; fileInput.multiple = true;
           fileInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
@@ -756,7 +764,7 @@
           toolbar.appendChild(uploadBtn);
           toolbar.appendChild(newFolderBtn);
           toolbar.appendChild(fileInput);
-        },
+        } : null,
         sortOptions: [
           { value: 'name', label: 'Name', cmp: (a, b) => a.leaf.localeCompare(b.leaf) },
           { value: 'size', label: 'Size', cmp: (a, b) => b.sizeBytes - a.sizeBytes },
@@ -770,9 +778,12 @@
           .then((assets) => (imagesOnly ? assets.filter(isImage) : assets)),
         onEmptyLoad: (main, el) => {
           main.textContent = '';
-          main.appendChild(el('div', 'wkab-empty', imagesOnly
-            ? 'No images uploaded yet. Upload some in the file manager (/f).'
-            : 'No assets uploaded yet.'));
+          // Without write:assets there is no file manager to send them to, so don't.
+          main.appendChild(el('div', 'wkab-empty', !imagesOnly
+            ? 'No assets uploaded yet.'
+            : canUpload
+              ? 'No images uploaded yet. Upload some here, or in the file manager (/f).'
+              : 'No images uploaded yet. Ask a site editor to add some.'));
         },
         renderCells: (a, api) => {
           const nameTd = document.createElement('td');
@@ -794,13 +805,17 @@
           const whenTd = document.createElement('td'); whenTd.className = 'wkab-when';
           whenTd.textContent = relTime(a.updatedAt); whenTd.title = absTime(a.updatedAt);
           // "Edit" opens the detail modal over the picker (both Bootstrap → stacks); reload on change.
+          // Omitted without manage:assets — the detail body it loads is gated on exactly that, so the
+          // link would only ever report that it couldn't load the asset.
           const actTd = document.createElement('td'); actTd.className = 'wkab-actions';
-          const edit = document.createElement('a'); edit.href = '#'; edit.textContent = 'Edit';
-          edit.addEventListener('click', (e) => {
-            e.preventDefault(); e.stopPropagation();
-            if (window.WikiKtAssetDetail) window.WikiKtAssetDetail.open(a.id, { onChange: () => api.reload() });
-          });
-          actTd.appendChild(edit);
+          if (canManage) {
+            const edit = document.createElement('a'); edit.href = '#'; edit.textContent = 'Edit';
+            edit.addEventListener('click', (e) => {
+              e.preventDefault(); e.stopPropagation();
+              if (window.WikiKtAssetDetail) window.WikiKtAssetDetail.open(a.id, { onChange: () => api.reload() });
+            });
+            actTd.appendChild(edit);
+          }
           return [nameTd, typeTd, sizeTd, whenTd, actTd];
         },
         buildFooter: (slot, api) => {

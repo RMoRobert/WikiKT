@@ -13,7 +13,7 @@
 {{! Skip link: the editor has its own bar (not partials/header.hbs), so it needs its own jump to the
     content textarea (#main below). Off-screen until focused — see .skip-link in site.css. }}
 <a class="skip-link" href="#main">Skip to main content</a>
-<form method="post" action="{{saveUrl}}" class="editor" data-editor-view="{{editorView}}" data-editor-theme="{{editorTheme}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}" data-max-upload-files="{{maxUploadFiles}}">
+<form method="post" action="{{saveUrl}}" class="editor" data-editor-view="{{editorView}}" data-editor-theme="{{editorTheme}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}" data-max-upload-files="{{maxUploadFiles}}" data-can-upload-assets="{{canUploadAssets}}" data-can-manage-assets="{{canManageAssets}}">
     {{{csrfField}}}
     <header class="editor-bar">
         <a class="brand" href="/">{{#siteLogoUrl}}<img class="brand-logo" src="{{siteLogoUrl}}" alt="">{{/siteLogoUrl}}<span class="brand-name">{{siteName}}</span></a>
