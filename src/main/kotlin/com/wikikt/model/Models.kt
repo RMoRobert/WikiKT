@@ -145,21 +145,6 @@ data class UpdatePageRequest(
 )
 
 @Serializable
-data class PageAliasDto(
-    val id: String,
-    val aliasPath: String,
-    val locale: String?,
-    val pageId: String,
-)
-
-@Serializable
-data class CreatePageAliasRequest(
-    val aliasPath: String,
-    val locale: String? = null,
-    val pageId: String,
-)
-
-@Serializable
 data class LoginRequest(
     val username: String,
     val password: String,

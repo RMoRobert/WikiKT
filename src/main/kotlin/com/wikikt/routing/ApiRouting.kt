@@ -11,7 +11,6 @@ import com.wikikt.auth.isApiCsrfValid
 import com.wikikt.model.parseId
 import com.wikikt.model.AssetPickerDto
 import com.wikikt.model.CreateGroupRequest
-import com.wikikt.model.CreatePageAliasRequest
 import com.wikikt.model.CreatePageRequest
 import com.wikikt.model.CreateUserRequest
 import com.wikikt.model.LoginRequest
@@ -517,16 +516,5 @@ fun Route.configureApiRouting() {
             }
         }
 
-        post("/page-aliases") {
-            if (!call.requireApiCsrf()) return@post
-            val ctx = call.appContext
-            val userId = call.currentUserId()
-            if (!ctx.permissions.canCreatePagesOnSite(userId, call.siteId())) {
-                call.respond(HttpStatusCode.Forbidden)
-                return@post
-            }
-            val request = call.receive<CreatePageAliasRequest>()
-            call.respond(HttpStatusCode.Created, ctx.pages.createAlias(request))
-        }
     }
 }

@@ -20,7 +20,6 @@ import com.wikikt.db.InfoboxTemplatesTable
 import com.wikikt.db.PageStagedTable
 import com.wikikt.db.NavItemsTable
 import com.wikikt.db.NavMenusTable
-import com.wikikt.db.PageAliasesTable
 import com.wikikt.db.PageEditAclTable
 import com.wikikt.db.PageRenderCacheTable
 import com.wikikt.db.PageRevisionsTable
@@ -85,7 +84,6 @@ val MIGRATIONS: List<Migration> = listOf(
             PagesTable,
             PageViewAclTable,
             PageEditAclTable,
-            PageAliasesTable,
             PageRevisionsTable,
             PageTagsTable,
             SessionsTable,

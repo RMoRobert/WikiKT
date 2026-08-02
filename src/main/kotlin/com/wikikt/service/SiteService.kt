@@ -111,7 +111,7 @@ class SiteService(private val database: R2dbcDatabase) {
     }
 
     /**
-     * Deletes [id] and cascades away everything it owns — pages (with their revisions, ACLs, aliases,
+     * Deletes [id] and cascades away everything it owns — pages (with their revisions, ACLs,
      * tags, search/render rows), assets (including on-disk bytes and revisions), fragments, nav menus,
      * and settings. Refuses only to delete the catch-all (the instance must always keep a fallback).
      *

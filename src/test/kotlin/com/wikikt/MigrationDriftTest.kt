@@ -14,7 +14,6 @@ import com.wikikt.db.GroupPageRulesTable
 import com.wikikt.db.PageStagedTable
 import com.wikikt.db.NavItemsTable
 import com.wikikt.db.NavMenusTable
-import com.wikikt.db.PageAliasesTable
 import com.wikikt.db.PageEditAclTable
 import com.wikikt.db.PageRevisionsTable
 import com.wikikt.db.PageTagsTable
@@ -54,7 +53,6 @@ class MigrationDriftTest {
                 PagesTable,
                 PageViewAclTable,
                 PageEditAclTable,
-                PageAliasesTable,
                 PageRevisionsTable,
                 PageTagsTable,
                 SessionsTable,

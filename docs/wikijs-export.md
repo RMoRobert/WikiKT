@@ -93,7 +93,7 @@ expect to come back.
 
 Revision history, users/groups, navigation menus, per-page custom CSS/JS,
 scheduled publishing, robots override, and site admin settings are not
-exporetd; the focus is on page content. Do not use this feature as a WikiKT-only
+exported; the focus is on page content. Do not use this feature as a WikiKT-only
 export or backup option; use the built-in WikiKT content or full backup instead.
 
 Similalry, when doing a round-trip export and re-import from Wiki.js, you may find

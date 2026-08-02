@@ -16,7 +16,6 @@ import com.wikikt.db.GroupPermissionsTable
 import com.wikikt.db.GroupsTable
 import com.wikikt.db.NavItemsTable
 import com.wikikt.db.NavMenusTable
-import com.wikikt.db.PageAliasesTable
 import com.wikikt.db.PageEditAclTable
 import com.wikikt.db.PageRevisionsTable
 import com.wikikt.db.PageSearchIndexTable
@@ -576,7 +575,7 @@ class BackupService(
         SitesTable, // parent of all site-scoped content; site_id FKs remap through its id map
         UsersTable, GroupsTable, GroupPermissionsTable, UserGroupsTable,
         GroupPageRulesTable, GroupPageRuleRolesTable, GroupPageRuleSitesTable, GroupPageRuleLocalesTable,
-        PagesTable, PageTagsTable, PageViewAclTable, PageEditAclTable, PageAliasesTable,
+        PagesTable, PageTagsTable, PageViewAclTable, PageEditAclTable,
         PageRevisionsTable, PageStagedTable,
         AssetsTable, AssetRevisionsTable, AssetScheduledTable,
         FragmentsTable, NavMenusTable, NavItemsTable, ApiKeysTable, AppSettingsTable,

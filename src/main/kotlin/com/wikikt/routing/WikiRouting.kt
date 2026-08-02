@@ -121,7 +121,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiRequest(
         return
     }
 
-    val page = ctx.pages.resolveByPath(siteId, wikiPath.locale, wikiPath.pagePath)
+    val page = ctx.pages.findByLocaleAndPath(siteId, wikiPath.locale, wikiPath.pagePath)
     val userId = call.currentUserId()
 
     if (page == null) {

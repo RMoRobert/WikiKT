@@ -1,7 +1,6 @@
 package com.wikikt.service
 
 import com.wikikt.db.ContentFormat
-import com.wikikt.db.PageAliasesTable
 import com.wikikt.db.PageEditAclTable
 import com.wikikt.db.PageRenderCacheTable
 import com.wikikt.db.PageRevisionsTable
@@ -10,10 +9,8 @@ import com.wikikt.db.PageStagedTable
 import com.wikikt.db.PageTagsTable
 import com.wikikt.db.PageViewAclTable
 import com.wikikt.db.PagesTable
-import com.wikikt.model.CreatePageAliasRequest
 import com.wikikt.model.CreatePageRequest
 import com.wikikt.model.PageAcl
-import com.wikikt.model.PageAliasDto
 import com.wikikt.model.PageRecord
 import com.wikikt.model.PageRevisionRecord
 import com.wikikt.model.PageStagedRecord
@@ -37,7 +34,6 @@ import org.jetbrains.exposed.v1.core.LikePattern
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNotNull
-import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
@@ -346,28 +342,9 @@ class PageService(private val database: R2dbcDatabase) {
             ?.let { it.copy(tags = loadTags(it.id)) }
     }
 
-    suspend fun resolveByPath(siteId: UInt, locale: String, path: String): PageRecord? {
-        findByLocaleAndPath(siteId, locale, path)?.let { return it }
-        return findByAlias(siteId, path, locale)
-    }
-
-    suspend fun findByAlias(siteId: UInt, aliasPath: String, locale: String): PageRecord? {
-        val normalizedAlias = normalizePagePath(aliasPath)
-        findAliasPageId(siteId, normalizedAlias, locale)?.let { return findById(it) }
-        return findAliasPageId(siteId, normalizedAlias, null)?.let { findById(it) }
-    }
-
-    // Aliases are joined to pages so resolution stays within the site (the aliases table itself is not
-    // site-scoped; a shared alias path across sites is a known v1 limitation).
-    private suspend fun findAliasPageId(siteId: UInt, aliasPath: String, locale: String?): UInt? = suspendTransaction(database) {
-        val join = (PageAliasesTable innerJoin PagesTable).selectAll()
-        val query = if (locale == null) {
-            join.where { (PageAliasesTable.aliasPath eq aliasPath) and PageAliasesTable.locale.isNull() and (PagesTable.siteId eq siteId) }
-        } else {
-            join.where { (PageAliasesTable.aliasPath eq aliasPath) and (PageAliasesTable.locale eq locale) and (PagesTable.siteId eq siteId) }
-        }
-        query.map { it[PageAliasesTable.pageId].value }.singleOrNull()
-    }
+    /** Resolves the page at [path], or null. */
+    suspend fun resolveByPath(siteId: UInt, locale: String, path: String): PageRecord? =
+        findByLocaleAndPath(siteId, locale, path)
 
     suspend fun viewAcl(pageId: UInt): PageAcl = loadAcl(pageId, view = true)
 
@@ -613,8 +590,8 @@ class PageService(private val database: R2dbcDatabase) {
 
     /**
      * Moves a page to a new (locale, path). Returns false if the target is already taken (the page is
-     * left unchanged). No redirect/alias is created; inbound links to the old path will break.
-     * TODO: a future "what links here" sweep should offer to rewrite inbound page refs + aliases.
+     * left unchanged). No redirect is created; inbound links to the old path will break (handle at the
+     * reverse proxy if needed).
      */
     suspend fun move(pageId: UInt, newLocale: String, newPath: String, by: UInt?): Boolean {
         var movedFrom: Pair<String, String>? = null
@@ -667,7 +644,6 @@ class PageService(private val database: R2dbcDatabase) {
         val ok = suspendTransaction(database) {
             PageViewAclTable.deleteWhere { PageViewAclTable.pageId eq id }
             PageEditAclTable.deleteWhere { PageEditAclTable.pageId eq id }
-            PageAliasesTable.deleteWhere { PageAliasesTable.pageId eq id }
             PageRevisionsTable.deleteWhere { PageRevisionsTable.pageId eq id }
             PageStagedTable.deleteWhere { PageStagedTable.pageId eq id }
             PageTagsTable.deleteWhere { PageTagsTable.pageId eq id }
@@ -677,21 +653,6 @@ class PageService(private val database: R2dbcDatabase) {
         }
         if (ok && gone != null) notifyPageExistenceChanged(gone.siteId, gone.locale, gone.path)
         return ok
-    }
-
-    suspend fun createAlias(request: CreatePageAliasRequest): PageAliasDto = suspendTransaction(database) {
-        val id = PageAliasesTable.insert {
-            it[aliasPath] = normalizePagePath(request.aliasPath)
-            it[locale] = request.locale
-            it[pageId] = parseId(request.pageId)
-        }[PageAliasesTable.id].value
-
-        PageAliasDto(
-            id = id.toString(),
-            aliasPath = normalizePagePath(request.aliasPath),
-            locale = request.locale,
-            pageId = request.pageId,
-        )
     }
 
     suspend fun revisions(pageId: UInt): List<PageRevisionRecord> = suspendTransaction(database) {

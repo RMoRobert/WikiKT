@@ -177,16 +177,6 @@ object PageEditAclTable : UIntIdTable("page_edit_acl") {
     val userId = reference("user_id", UsersTable).nullable()
 }
 
-object PageAliasesTable : UIntIdTable("page_aliases") {
-    val aliasPath = varchar("alias_path", 500)
-    val locale = varchar("locale", 10).nullable()
-    val pageId = reference("page_id", PagesTable)
-
-    init {
-        uniqueIndex(aliasPath, locale)
-    }
-}
-
 // Reusable shared content transcluded into pages via {{fragment:key}}. Not a standalone page.
 object FragmentsTable : UIntIdTable("fragments") {
     val siteId = reference("site_id", SitesTable)

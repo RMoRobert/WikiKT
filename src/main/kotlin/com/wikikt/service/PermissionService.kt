@@ -90,7 +90,7 @@ class PermissionService(
     }
 
     /**
-     * Coarse "is this user an editor somewhere" gate for the New-page affordance and alias creation.
+     * Coarse "is this user an editor somewhere" gate for the New-page affordance.
      * The concrete create/save path enforces write:pages against the actual target resource.
      */
     suspend fun canCreatePages(userId: UInt?): Boolean =
