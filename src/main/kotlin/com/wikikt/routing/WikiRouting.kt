@@ -339,6 +339,18 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
         reRender("Please enter a path.")
         return
     }
+    // Infobox values must use absolute file paths. Unlike the page body, an infobox card is rendered
+    // without the directory-relative pass, so a relative reference there is resolved by the browser
+    // one path segment higher than the identical markup in the body — a silent, page-specific break.
+    // There is always a correct absolute rewrite, so this rejects rather than warns. reRender keeps
+    // everything the editor submitted, so nothing is lost. Editor-only: imports, backup restores and
+    // the JSON API deliberately stay permissive (see AssetService.relativeRefError).
+    infoboxJson?.let { json ->
+        ctx.assets.relativeRefError(json, "Infobox values")?.let {
+            reRender(it)
+            return
+        }
+    }
 
     // Validates the target (locale + path), then moves the page; returns an error message or null.
     suspend fun moveOrError(pageId: UInt): String? {
@@ -993,7 +1005,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.editModel(
         "loggedIn" to (userId != null),
         "canAdmin" to ctx.permissions.canAccessAdmin(userId),
         // Global default for the plain (monospace, no inline styling) editor view.
-        "plainEditor" to ctx.settings.getBool(siteId, com.wikikt.service.SettingsService.EDITOR_PLAIN_VIEW),
+        "editorView" to (ctx.settings.get(siteId, com.wikikt.service.SettingsService.EDITOR_VIEW_MODE)
+            ?: com.wikikt.service.SettingsService.EDITOR_VIEW_FORMATTED),
         // Site default for the editor surface (auto/light/dark); page-edit.js resolves "auto" against
         // the site theme and lets a per-browser toolbar toggle override the lot.
         "editorTheme" to (ctx.settings.get(siteId, com.wikikt.service.SettingsService.EDITOR_THEME)

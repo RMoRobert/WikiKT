@@ -33,11 +33,11 @@ class GitSyncServiceTest {
 
     private fun page(
         contentFormat: ContentFormat = ContentFormat.MARKDOWN,
-        title: String = "Getting Started",
+        title: String = "File One",
         description: String? = "Introduction Guide",
         tags: List<String> = listOf("documentation", "guide"),
     ) = PageRecord(
-        id = 1u, siteId = 1u, locale = "en", path = "docs/user-guide/getting-started", title = title,
+        id = 1u, siteId = 1u, locale = "en", path = "dir1/dir2/file1", title = title,
         description = description, content = "# Body\n\nText.", contentFormat = contentFormat,
         published = true, publishAt = null, createdAt = 1_700_000_000_000, updatedAt = 1_700_000_100_000,
         updatedBy = null, tags = tags,
@@ -61,11 +61,11 @@ class GitSyncServiceTest {
 
     @Test
     fun `markdown pages map to locale-prefixed md files with WikiJS front-matter`() {
-        assertEquals("en/docs/user-guide/getting-started.md", PageFileFormat.pageFilePath(page()))
+        assertEquals("en/dir1/dir2/file1.md", PageFileFormat.pageFilePath(page()))
         val body = PageFileFormat.pageFileBody(page())
         val expected = """
             ---
-            title: Getting Started
+            title: File One
             description: Introduction Guide
             published: true
             date: 2023-11-14T22:15:00Z
@@ -84,9 +84,9 @@ class GitSyncServiceTest {
     @Test
     fun `html pages use html extension and comment-wrapped metadata`() {
         val p = page(contentFormat = ContentFormat.HTML)
-        assertEquals("en/docs/user-guide/getting-started.html", PageFileFormat.pageFilePath(p))
+        assertEquals("en/dir1/dir2/file1.html", PageFileFormat.pageFilePath(p))
         val body = PageFileFormat.pageFileBody(p)
-        assertTrue(body.startsWith("<!--\ntitle: Getting Started\n"))
+        assertTrue(body.startsWith("<!--\ntitle: File One\n"))
         assertTrue(body.contains("editor: code"))
         assertTrue(body.contains("\n-->\n\n# Body"))
     }
@@ -243,7 +243,7 @@ class GitSyncServiceTest {
         // A WikiJS git export: default-locale (English) content at the repo root with no locale prefix,
         // other locales under a lowercase `{locale}` folder, assets alongside the pages.
         env.workWrite("home.md", "---\ntitle: Home\n---\n\nEnglish home")
-        env.workWrite("developer/app.md", "---\ntitle: App\n---\n\nEnglish app guide")
+        env.workWrite("dir1/file1.md", "---\ntitle: File One\n---\n\nEnglish file1 guide")
         env.workWriteBytes("logo.png", pngBytes)
         env.workWrite("pt-br/home.md", "---\ntitle: Início\n---\n\nPágina inicial")
         env.workWriteBytes("pt-br/pics/one.png", pngBytes)
@@ -253,7 +253,7 @@ class GitSyncServiceTest {
 
         // Root files land in the default locale, keeping their full path.
         assertEquals("English home", env.pages.findByLocaleAndPath(env.siteId, "en", "home")?.content)
-        assertEquals("English app guide", env.pages.findByLocaleAndPath(env.siteId, "en", "developer/app")?.content)
+        assertEquals("English file1 guide", env.pages.findByLocaleAndPath(env.siteId, "en", "dir1/file1")?.content)
         assertNotNull(env.assets.findByLocaleAndPath(env.siteId, "en", "logo.png"), "root asset imported to default locale")
 
         // The lowercase `pt-br` folder is recognized as the `pt-BR` locale and stripped from the path.

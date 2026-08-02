@@ -50,26 +50,26 @@ class FragmentSearchTest {
     fun `text inside a transcluded fragment matches the page, and tracks fragment edits`() = runBlocking {
         val (siteId, pages, fragments, _) = wire("wikikt-fragsearch-test")
 
-        fragments.create(siteId, locale = "en", key = "warranty", title = "Warranty", content = "Devices are covered for 24 months.", updatedBy = null)
+        fragments.create(siteId, locale = "en", key = "warranty", title = "Warranty", content = "Coverage lasts 24 months.", updatedBy = null)
         // Page body references the fragment; its own text does NOT contain "24 months".
         pages.create(
             siteId,
-            CreatePageRequest(locale = "en", path = "guide/hub", title = "Hub Guide", content = "Specs below.\n\n{{fragment:warranty}}", published = true),
+            CreatePageRequest(locale = "en", path = "dir1/file1", title = "File One", content = "Specs below.\n\n{{fragment:warranty}}", published = true),
             null,
         )
 
         // The page is found by text that only exists inside the fragment.
         val byFragment = pages.search(siteId, "24 months", locale = "en", limit = 50)
-        assertTrue(byFragment.any { it.page.path == "guide/hub" }, "page found via fragment content")
+        assertTrue(byFragment.any { it.page.path == "dir1/file1" }, "page found via fragment content")
         // And the snippet is drawn from the expanded text, so it contains the match.
-        assertTrue(byFragment.first { it.page.path == "guide/hub" }.searchText.contains("24 months"))
+        assertTrue(byFragment.first { it.page.path == "dir1/file1" }.searchText.contains("24 months"))
 
         // Editing the fragment re-indexes dependent pages: new text matches, old text doesn't.
         val frag = fragments.list(siteId).first { it.key == "warranty" }
-        fragments.update(frag.id, "en", "warranty", "Warranty", "Devices are covered for 36 months.", null)
+        fragments.update(frag.id, "en", "warranty", "Warranty", "Coverage lasts 36 months.", null)
 
-        assertTrue(pages.search(siteId, "36 months", locale = "en").any { it.page.path == "guide/hub" }, "new fragment text matches")
-        assertFalse(pages.search(siteId, "24 months", locale = "en").any { it.page.path == "guide/hub" }, "stale fragment text no longer matches")
+        assertTrue(pages.search(siteId, "36 months", locale = "en").any { it.page.path == "dir1/file1" }, "new fragment text matches")
+        assertFalse(pages.search(siteId, "24 months", locale = "en").any { it.page.path == "dir1/file1" }, "stale fragment text no longer matches")
         Unit
     }
 

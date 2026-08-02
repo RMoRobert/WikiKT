@@ -6,6 +6,7 @@ import com.wikikt.adminSiteId
 import com.wikikt.auth.CSRF_FIELD
 import com.wikikt.auth.isCsrfValid
 import com.wikikt.service.BackupService
+import com.wikikt.service.WikiJsExportService
 import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -68,6 +69,28 @@ fun Route.configureBackupRouting() {
             call.attachZipHeader("full")
             call.respondOutputStream(ContentType.Application.Zip) {
                 call.appContext.backup.writeFullBackup(call.adminSiteId(), this, secretsPassword)
+            }
+        }
+
+        // WikiJS-importable content tree. Carries no credentials, so the same manage:groups gate as the
+        // content export; a POST only because it takes the export options as form fields.
+        post("/export/wikijs") {
+            if (!call.requireManageGroups()) {
+                call.respondForbidden()
+                return@post
+            }
+            val params = call.receiveParameters()
+            if (!call.isCsrfValid(params[CSRF_FIELD])) {
+                call.respond(HttpStatusCode.Forbidden, "Invalid CSRF token")
+                return@post
+            }
+            val options = WikiJsExportService.Options(
+                infoboxMode = WikiJsExportService.InfoboxMode.from(params["infoboxMode"]),
+                includeUnpublished = params["includeUnpublished"] == "1",
+            )
+            call.attachZipHeader("wikijs", kind = "export")
+            call.respondOutputStream(ContentType.Application.Zip) {
+                call.appContext.wikiJsExport.write(call.adminSiteId(), this, options)
             }
         }
 
@@ -143,9 +166,9 @@ fun Route.configureBackupRouting() {
     }
 }
 
-/** Sets the download filename header for a `<scope>` backup ZIP (dated for the operator's convenience). */
-private fun ApplicationCall.attachZipHeader(scope: String) {
-    val filename = "wikikt-$scope-backup-${LocalDate.now(ZoneId.systemDefault())}.zip"
+/** Sets the download filename header for a `<scope>` ZIP (dated for the operator's convenience). */
+private fun ApplicationCall.attachZipHeader(scope: String, kind: String = "backup") {
+    val filename = "wikikt-$scope-$kind-${LocalDate.now(ZoneId.systemDefault())}.zip"
     response.header(
         HttpHeaders.ContentDisposition,
         ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, filename).toString(),

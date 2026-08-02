@@ -89,17 +89,17 @@ class PageRenderCacheTest {
             siteId,
             CreatePageRequest(
                 locale = "en",
-                path = "docs/user-guide",
-                title = "User Guide",
+                path = "dir1/dir2",
+                title = "Dir Two",
                 // A bare relative link and a root-absolute one; only the relative one should be rewritten.
-                content = "[Getting Started](getting-started) and [Home](/en/home) and [Docs](https://ex.com)",
+                content = "[File One](file1) and [Home](/en/home) and [Ext](https://ex.com)",
                 published = true,
             ),
             null,
         )
 
         val html = f.renderCache.getOrRender(f.pages.findById(page.id)!!).body
-        assertTrue(html.contains("href=\"/en/docs/user-guide/getting-started\""), "relative link resolved to the page directory: $html")
+        assertTrue(html.contains("href=\"/en/dir1/dir2/file1\""), "relative link resolved to the page directory: $html")
         assertTrue(html.contains("href=\"/en/home\""), "root-absolute link left untouched: $html")
         assertTrue(html.contains("href=\"https://ex.com\""), "external link left untouched: $html")
     }
@@ -114,8 +114,8 @@ class PageRenderCacheTest {
             siteId,
             CreatePageRequest(
                 locale = "en",
-                path = "hub",
-                title = "Hub",
+                path = "linker",
+                title = "Linker",
                 content = "[here](/en/exists) and [there](/en/missing) and [ext](https://example.com)",
                 published = true,
             ),
@@ -135,21 +135,21 @@ class PageRenderCacheTest {
         // Wire the existence-changed hook exactly as AppContext does, so create/delete re-renders linkers.
         f.pages.onPageExistenceChanged = { changedSiteId, locale, path -> f.renderCache.invalidateBacklinks(changedSiteId, locale, path) }
 
-        val hub = f.pages.create(
+        val linker = f.pages.create(
             siteId,
-            CreatePageRequest(locale = "en", path = "hub", title = "Hub", content = "[go](/en/target)", published = true),
+            CreatePageRequest(locale = "en", path = "linker", title = "Linker", content = "[go](/en/target)", published = true),
             null,
         )
         // Initially the target doesn't exist → red, and it's cached.
-        assertTrue(linkHasClass(f.renderCache.getOrRender(f.pages.findById(hub.id)!!).body, "/en/target", "is-new-page"), "red before target exists")
+        assertTrue(linkHasClass(f.renderCache.getOrRender(f.pages.findById(linker.id)!!).body, "/en/target", "is-new-page"), "red before target exists")
 
-        // Create the target. The hook invalidates the hub's cached render.
+        // Create the target. The hook invalidates the linking page's cached render.
         f.pages.create(siteId, CreatePageRequest(locale = "en", path = "target", title = "Target", content = "hi", published = true), null)
-        assertFalse(linkHasClass(f.renderCache.getOrRender(f.pages.findById(hub.id)!!).body, "/en/target", "is-new-page"), "blue after target created")
+        assertFalse(linkHasClass(f.renderCache.getOrRender(f.pages.findById(linker.id)!!).body, "/en/target", "is-new-page"), "blue after target created")
 
-        // Delete the target again → the link goes back to red on the hub's next render.
+        // Delete the target again → the link goes back to red on the linking page's next render.
         f.pages.delete(f.pages.findByLocaleAndPath(siteId, "en", "target")!!.id)
-        assertTrue(linkHasClass(f.renderCache.getOrRender(f.pages.findById(hub.id)!!).body, "/en/target", "is-new-page"), "red again after target deleted")
+        assertTrue(linkHasClass(f.renderCache.getOrRender(f.pages.findById(linker.id)!!).body, "/en/target", "is-new-page"), "red again after target deleted")
     }
 
     /** Whether the (first) <a> whose href is [href] carries CSS class [cls] in the rendered [html]. */

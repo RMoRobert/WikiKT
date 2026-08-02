@@ -101,8 +101,8 @@ class PageRenderService(
      *
      * TODO(scale): link resolution here scans each page's own links, and the flip relies on
      * [PageService.backlinks] scanning ALL page content on create/delete/move. A dedicated `page_links`
-     * table (WikiJS-style: "which page links to which path", written on save) would turn both
-     * "does this link resolve?" and "what links here?" into indexed lookups instead of scans. Worth
+     * table (written on save) would turn both "does this link resolve?" and "what
+     * links here?" into indexed lookups instead of scans. Worth
      * adding only if these scans become a bottleneck at scale; the scan approach is fine for now.
      */
     private suspend fun markRedlinks(siteId: UInt, html: String): String {

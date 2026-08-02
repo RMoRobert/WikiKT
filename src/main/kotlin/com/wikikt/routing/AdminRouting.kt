@@ -113,8 +113,12 @@ fun Route.configureAdminRouting() {
             val siteId = call.adminSiteId()
             val ctx = call.appContext
             val s = com.wikikt.service.SettingsService
-            // Checkbox: present (any value) = on, absent = off.
-            ctx.settings.setBool(siteId, s.EDITOR_PLAIN_VIEW, params["editorPlainView"] != null)
+            // Editor view: only the two non-default modes are stored; anything else falls back to
+            // the fully formatted view.
+            val editorViewMode = params["editorViewMode"]
+                ?.takeIf { it in setOf(s.EDITOR_VIEW_PLAIN, s.EDITOR_VIEW_BASIC) }
+                ?: s.EDITOR_VIEW_FORMATTED
+            ctx.settings.set(siteId, s.EDITOR_VIEW_MODE, editorViewMode)
             // Editor surface: only the three known values are stored; anything else falls back to auto.
             val editorTheme = params["editorTheme"]?.takeIf { it in setOf("light", "dark") }
                 ?: s.EDITOR_THEME_AUTO
@@ -1477,12 +1481,16 @@ fun Route.configureAdminRouting() {
                     "usedBy" to (counts[it.id] ?: 0),
                 )
             }
+            val missing = call.missingFragmentRefs()
             call.respond(
                 MustacheContent(
                     "admin/fragments.hbs",
                     call.adminBaseModel() + mapOf(
                         "fragments" to fragments,
                         "otherSite" to (call.request.queryParameters["otherSite"] != null),
+                        "missing" to missing,
+                        "hasMissing" to missing.isNotEmpty(),
+                        "missingCount" to missing.size,
                     ),
                 ),
             )
@@ -1493,7 +1501,15 @@ fun Route.configureAdminRouting() {
                 call.respondForbidden()
                 return@get
             }
-            call.respond(MustacheContent("admin/fragment-form.hbs", call.fragmentFormModel(isNew = true)))
+            // ?key=… prefills the key so the "Create" action on a missing-fragment row lands on a
+            // ready form. Ignored unless it's a valid key, so a hand-edited URL can't seed junk.
+            val key = call.request.queryParameters["key"]?.trim().orEmpty()
+            val prefill = if (FRAGMENT_KEY.matches(key)) {
+                FragmentFields(call.appContext.config.defaultLocale, key, "", "")
+            } else {
+                null
+            }
+            call.respond(MustacheContent("admin/fragment-form.hbs", call.fragmentFormModel(isNew = true, fields = prefill)))
         }
 
         post("/fragments") {
@@ -2051,6 +2067,11 @@ private suspend fun io.ktor.server.application.ApplicationCall.fragmentFormModel
     usages: List<Map<String, Any?>> = emptyList(),
 ): Map<String, Any?> {
     val f = fields ?: FragmentFields(appContext.config.defaultLocale, "", "", "")
+    // Warned, not rejected. A fragment's relative reference does still resolve — against whichever page
+    // includes it (see assetScanSources) — so blocking would reject content that currently works, and
+    // fragments are the most likely thing to arrive from a WikiJS import. Infobox values are rejected
+    // outright instead, because there the reference resolves nowhere sensible at all.
+    val relativeWarning = appContext.assets.relativeRefError(f.content, "This fragment's references")
     return adminBaseModel() + mapOf(
         "isNew" to isNew,
         "id" to id,
@@ -2059,6 +2080,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.fragmentFormModel
         "title" to f.title,
         "content" to f.content,
         "error" to error,
+        "relativeWarning" to relativeWarning,
         "usages" to usages,
         "hasUsages" to usages.isNotEmpty(),
         "usageCount" to usages.size,
@@ -2102,6 +2124,82 @@ private suspend fun io.ktor.server.application.ApplicationCall.fragmentUsageCoun
         }
     }
     return counts
+}
+
+/**
+ * References to a fragment that doesn't exist — the `{{fragment:key}}` that renders as
+ * "[missing fragment: key]" for readers, after a fragment was deleted or renamed, or when a page was
+ * written against a key nobody created. Grouped by key, because the fix is one fragment per row.
+ *
+ * Scans page bodies, scheduled drafts (otherwise a missing key stays hidden until the publish goes
+ * out), and fragment bodies themselves, since fragments nest. Resolution mirrors
+ * [com.wikikt.service.FragmentService.expand]: the source's locale first, then the default.
+ *
+ * A fragment's own references are the exception — those expand at the locale of whichever page
+ * includes it, not at the fragment's own, so reporting them per-locale would mean guessing. They're
+ * listed only when the key exists in no locale at all, which is broken however it gets expanded.
+ */
+private suspend fun io.ktor.server.application.ApplicationCall.missingFragmentRefs(): List<Map<String, Any?>> {
+    val ctx = appContext
+    val siteId = adminSiteId()
+    val default = ctx.config.defaultLocale
+    val all = ctx.fragments.list(siteId)
+    val byKey = all.associateBy { "${it.locale} ${it.key}" }
+    val keysInAnyLocale = all.mapTo(mutableSetOf()) { it.key }
+
+    val missing = sortedMapOf<String, MutableList<Map<String, Any?>>>()
+    fun scan(content: String, locale: String, anyLocaleOnly: Boolean, source: Map<String, Any?>) {
+        for (key in ctx.fragments.referencedKeys(content)) {
+            val unresolved =
+                if (anyLocaleOnly) key !in keysInAnyLocale else resolvesTo(byKey, locale, key, default) == null
+            if (!unresolved) continue
+            val list = missing.getOrPut(key) { mutableListOf() }
+            // One source can name the same missing key more than once; it's still one place to fix.
+            if (list.none { it["type"] == source["type"] && it["label"] == source["label"] && it["locale"] == source["locale"] }) {
+                list.add(source)
+            }
+        }
+    }
+
+    val pages = ctx.pages.list(siteId).filter { it.contentFormat == com.wikikt.db.ContentFormat.MARKDOWN }
+    for (page in pages) {
+        scan(
+            page.content, page.locale, anyLocaleOnly = false,
+            source = mapOf(
+                "type" to "page", "label" to page.path, "locale" to page.locale,
+                "url" to wikiEditUrl(page.locale, page.path),
+            ),
+        )
+    }
+    val pagesById = pages.associateBy { it.id }
+    for (staged in ctx.pages.listStaged(pages.map { it.id })) {
+        val page = pagesById[staged.pageId] ?: continue
+        if (staged.contentFormat != com.wikikt.db.ContentFormat.MARKDOWN) continue
+        scan(
+            staged.content, page.locale, anyLocaleOnly = false,
+            source = mapOf(
+                "type" to "scheduled draft", "label" to page.path, "locale" to page.locale,
+                "url" to wikiEditUrl(page.locale, page.path),
+            ),
+        )
+    }
+    for (fragment in all) {
+        scan(
+            fragment.content, fragment.locale, anyLocaleOnly = true,
+            source = mapOf(
+                "type" to "fragment", "label" to fragment.key, "locale" to fragment.locale,
+                "url" to "/a/fragments/${fragment.id}/edit",
+            ),
+        )
+    }
+
+    return missing.map { (key, sources) ->
+        mapOf(
+            "key" to key,
+            "refCount" to sources.size,
+            "sources" to sources.sortedWith(compareBy({ it["type"] as String }, { it["label"] as String })),
+        )
+    }
 }
 
 /** Resolves which fragment id a `{{fragment:key}}` in [pageLocale] renders: page locale, then default. */
@@ -2381,7 +2479,15 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         // Rendering page: outcome of a just-run "Re-render all pages" (null = not run).
         "rerendered" to (rerendered != null),
         "rerenderedCount" to rerendered,
-        "editorPlainView" to settings.getBool(siteId, s.EDITOR_PLAIN_VIEW),
+        "editorViewModeOptions" to (settings.get(siteId, s.EDITOR_VIEW_MODE) ?: s.EDITOR_VIEW_FORMATTED).let { current ->
+            listOf(
+                s.EDITOR_VIEW_FORMATTED to "Formatted",
+                s.EDITOR_VIEW_BASIC to "Basic",
+                s.EDITOR_VIEW_PLAIN to "Plain text",
+            ).map { (value, label) ->
+                mapOf("value" to value, "label" to label, "selected" to (value == current))
+            }
+        },
         "editorThemeOptions" to (settings.get(siteId, s.EDITOR_THEME) ?: s.EDITOR_THEME_AUTO).let { current ->
             listOf(
                 s.EDITOR_THEME_AUTO to "Follow the reader's site theme",
@@ -2597,6 +2703,14 @@ internal suspend fun io.ktor.server.application.ApplicationCall.storageModel(
         "maxUploadFiles" to maxUploadFiles,
         "uploadFileOptions" to uploadFileOptions,
         "stripMetadata" to settings.getBool(siteId, s.ASSETS_STRIP_METADATA, s.DEFAULT_STRIP_METADATA),
+        // WikiJS export choices are per-download, not stored settings — these only seed the form.
+        "wikijsInfoboxOptions" to com.wikikt.service.WikiJsExportService.InfoboxMode.entries.map {
+            mapOf(
+                "value" to it.name.lowercase(),
+                "label" to it.label,
+                "selected" to (it == com.wikikt.service.WikiJsExportService.InfoboxMode.DEFAULT),
+            )
+        },
     )
 }
 

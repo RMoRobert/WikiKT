@@ -10,6 +10,14 @@
     --wk-heading-font: var(--bs-body-font-family);
     --bs-body-font-size: 1rem;
     --bs-body-line-height: 1.5;
+    /* The body font under a name Bootstrap doesn't own. Bootstrap's `:root, [data-bs-theme="light"]`
+       rule re-declares --bs-body-font-family (and the rest of the root variables) for ANY element
+       carrying data-bs-theme="light", not just the root — so inside such a subtree the site's font,
+       set on :root by head-styles.hbs, is replaced by Bootstrap's stock system stack. Its dark block
+       is colors-only and has no such effect, which is why only the light side changes. Resolved here
+       at :root, where the site's override has already won, then inherited untouched. Use this in
+       anything that may sit inside a themed subtree; --wk-heading-font is safe for the same reason. */
+    --wk-body-font: var(--bs-body-font-family);
 }
 
 /* Bootstrap's default form placeholder colour is --bs-secondary-color (0.75 alpha) — dark enough that a
@@ -292,14 +300,31 @@ h2 { margin-top: 2rem; }
 
 /* Side-by-side preview: keep it under the sticky editor bar (z-index 5). */
 .editor-preview-side { z-index: 4; }
-/* Preview surface override (the toolbar's light/dark preview toggle). page-edit.js puts data-bs-theme
-   on the pane, which re-scopes every Bootstrap theme variable inside it — that alone re-themes the
-   rendered content. Only the pane's own chrome needs painting, because EasyMDE hardcodes it. With no
-   attribute set these rules don't match at all and the pane keeps following the site theme. */
-.editor-preview[data-bs-theme] {
+/* Both preview panes paint themselves as an ordinary page surface. The variables do the work in both
+   states: with the toolbar's light/dark override on, page-edit.js sets data-bs-theme on the pane and
+   Bootstrap re-scopes every theme variable inside it, so these resolve to the override; with no
+   override they resolve to the site theme, which is what the pane is meant to follow.
+
+   Stating them unconditionally is what makes the no-override case correct, and it matters most for the
+   FULL-PANE preview (the only one on phones). EasyMDE appends that pane inside the .CodeMirror element
+   rather than beside it — unlike .editor-preview-side, which is a sibling — so it sits within the editor
+   surface and inherits from it. Two things went wrong there: plain/basic view sets a monospace family on
+   .CodeMirror, which the rendered page inherited (it should always read in the site font, like the split
+   pane does), and a dark editor surface passed its light text color down onto EasyMDE's hardcoded
+   near-white .editor-preview background — light grey on white. Setting family and color here stops both
+   inheritances at the pane. Prefixed with .editor-content only to outweigh EasyMDE's own
+   `.editor-preview` background whatever order the stylesheets load in. Code blocks keep their monospace:
+   Bootstrap styles pre/code by element, which this container rule doesn't touch.
+
+   The font is --wk-body-font, NOT --bs-body-font-family: the light override puts data-bs-theme="light"
+   on this pane, and Bootstrap re-declares its own font stack for that selector, so reading the Bootstrap
+   variable here would render a site with a custom body font in stock system-ui — but only in the light
+   preview, since Bootstrap's dark block is colors-only. See the alias at the top of this file. */
+.editor-content .editor-preview {
     background: var(--bs-body-bg);
     color: var(--bs-body-color);
     border-color: var(--bs-border-color);
+    font-family: var(--wk-body-font);
 }
 
 /* Split view fills the viewport and each pane scrolls on its own. EasyMDE's inline side-by-side
@@ -523,6 +548,26 @@ th.wkab-th-sort:hover { color: var(--bs-body-color, #212529); }
 .editor--plain .cm-tag,
 .editor--plain .cm-bracket,
 .editor--plain .cm-attribute { color: var(--wk-cm-marker); }
+
+/* Basic view — the middle of the three view modes. The container carries BOTH .editor--plain and
+   .editor--basic, so everything above still applies (monospace, flat token colors, visible `#` / `**`
+   markers) and only weight and slant come back: enough that you can pick out a heading or an
+   emphasised phrase at a glance without the source stopping looking like source. Colors are
+   deliberately NOT restored — that is what the formatted view is for.
+   These rules undo .editor--plain rules at equal specificity, so this block MUST stay after them. */
+.editor--basic .cm-strong { font-weight: 700; }
+.editor--basic .cm-em { font-style: italic; }
+.editor--basic .cm-strikethrough { text-decoration: line-through; }
+/* Headings go bold, and the top two are sized up enough to rank them without turning a heading-heavy
+   page into stairsteps. em (not rem) keeps the step proportional to the editor font, and the inherited
+   line-height keeps rows evenly spaced so the source still aligns with the gutter.
+   `######` is the deliberate exception, left looking like body text: headings render one level down
+   (see the .cm-s-easymde sizes above), so it and `#####` both come out as h6 — there is nothing below
+   it to rank, and no reason to reach for it. */
+.editor--basic .cm-header { font-weight: 700; }
+.editor--basic .cm-header-1 { font-size: 1.32em; }
+.editor--basic .cm-header-2 { font-size: 1.16em; }
+.editor--basic .cm-header-6 { font-weight: 400; }
 
 /* Link-path autocomplete dropdown, anchored at the cursor and above the rest of the editor chrome. */
 .cm-path-hints {
@@ -1073,17 +1118,51 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 }
 /* The icons are tinted per callout type; keep them from being squeezed by the label. */
 .editor-toolbar .easymde-dropdown-content button .mdi { flex: 0 0 auto; width: 1.25rem; }
+/* Chosen row in a radio-style menu (the Formatted / Basic / Plain text picker). The .wk-toggle-on highlight is
+   #fcfcfc, which all but vanishes against the dropdown's own grey — so the current mode gets a tint
+   and a bold label, and does not rely on color alone to say which one is active. */
+.editor-toolbar .easymde-dropdown-content button.wk-toggle-on {
+    background: var(--bs-primary-bg-subtle, #cfe2ff);
+    border-color: var(--bs-primary-border-subtle, #9ec5fe);
+    font-weight: 700;
+}
 
 /* Pin the formatting toolbar (bold / italic / link / …) just under the sticky editor bar so it stays
    visible however far the content is scrolled. --wk-editor-bar-h is measured in page-edit.js (the bar
    wraps taller on narrow screens); it falls back to the desktop bar height. Needs an opaque background
-   and full opacity (EasyMDE dims the bar to 0.6 at rest) so scrolling text can't show through. */
+   and full opacity (EasyMDE dims the bar to 0.6 at rest) so scrolling text can't show through.
+   Flex instead of EasyMDE's stock inline-block flow so the preview controls can float right (next
+   rule); wrap keeps the narrow-screen multi-row behavior, center keeps the shorter separators from
+   stretching to the 30px button height. */
 .editor-content .editor-toolbar {
     position: sticky;
     top: var(--wk-editor-bar-h, 3.25rem);
     z-index: 4; /* under the editor bar (5), above the CodeMirror surface */
     opacity: 1;
     background: var(--bs-body-bg);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+/* Preview controls sit flush right, Wiki.js-style, directly above the preview pane they govern:
+   light/dark first, then show/hide last in the toolbar and so pinned to the very end. Show/hide is
+   the anchor — always available, always in the same spot — and light/dark keeps its place beside it
+   even when it doesn't apply (it's disabled rather than hidden, below), so nothing shifts.
+
+   `margin-left: auto` lands on exactly ONE item: the first of the cluster, which is always the
+   light/dark button. Flex splits the free space between every auto margin it finds, so putting it on
+   two visible items would strand the group mid-toolbar instead of right-aligning it — which rules out
+   hanging it on the show/hide buttons, where the visible one varies by breakpoint. */
+.editor-toolbar button.mde-preview-theme { margin-left: auto; }
+/* Light/dark applies only to a preview you can actually see, so page-edit.js disables it while both
+   panes are closed. Greyed out and unclickable, but still occupying its slot. Hover styling has to be
+   neutralized explicitly: a disabled button still matches :hover, and both the base and dark-surface
+   rules further down would otherwise light it up. The `.editor-content` prefix outweighs them. */
+.editor-content .editor-toolbar button.mde-preview-theme:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: none;
+    border-color: transparent;
 }
 
 /* --- Dark editor surface -------------------------------------------------------------------------
@@ -1139,6 +1218,10 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 }
 .editor--dark .editor-toolbar .easymde-dropdown-content button:hover,
 .editor--dark .editor-toolbar .easymde-dropdown-content button:focus { background: var(--wk-ed-hover); }
+.editor--dark .editor-toolbar .easymde-dropdown-content button.wk-toggle-on {
+    background: var(--wk-ed-select);
+    border-color: #444c56;
+}
 /* Callout icons are tinted for a light toolbar; take the dark tints whenever the editor is dark, not
    only when the whole site is (equal specificity to the [data-bs-theme] pair above, so order wins). */
 .editor--dark .editor-toolbar button.mde-callout-info .mdi { color: #6cb6ff; }
@@ -2064,6 +2147,27 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     transition: transform 0.15s ease-in-out;
 }
 .card-collapse-toggle[aria-expanded="true"] .card-collapse-caret { transform: rotate(180deg); }
+
+/* The same idea for a bare section heading rather than a card header (Administration > Storage and
+   backup). The button inherits the <h2>'s font so the heading still reads as one, and the caret sits
+   right after the text instead of being pushed to the far edge — a heading is not a full-width bar. */
+.section-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+}
+.section-collapse-toggle .section-collapse-caret {
+    color: var(--bs-secondary-color);
+    font-size: 0.8em;
+    transition: transform 0.15s ease-in-out;
+}
+.section-collapse-toggle[aria-expanded="true"] .section-collapse-caret { transform: rotate(180deg); }
 
 /* Nav menu divider (a horizontal rule between items) in the wiki sidebar. */
 .wiki-sidebar .nav-divider {

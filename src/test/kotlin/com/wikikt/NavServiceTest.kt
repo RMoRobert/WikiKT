@@ -20,7 +20,7 @@ class NavServiceTest {
             """
             :home: Home | /
             # Documentation
-            User Guide | /docs/user-guide/getting-started
+            File One | /dir1/dir2/file1
             a line with no pipe and no hash
             """.trimIndent(),
         )
@@ -33,7 +33,7 @@ class NavServiceTest {
         assertEquals("Documentation", items[1].label)
         assertNull(items[1].icon)
         assertFalse(items[2].isHeader)
-        assertEquals("User Guide", items[2].label)
+        assertEquals("File One", items[2].label)
     }
 
     @Test
@@ -52,11 +52,11 @@ class NavServiceTest {
         val siteId = com.wikikt.service.SiteService(database).create("Test site", null, isCatchAll = true).id
         val nav = NavService(database)
         nav.createMenu(siteId, "", NavService.parseDefinition("Home | /"))
-        nav.createMenu(siteId, "docs", NavService.parseDefinition("Docs | /docs"))
-        nav.createMenu(siteId, "docs/user-guide", NavService.parseDefinition("Guide | /docs/user-guide/getting-started"))
+        nav.createMenu(siteId, "dir1", NavService.parseDefinition("Dir One | /dir1"))
+        nav.createMenu(siteId, "dir1/dir2", NavService.parseDefinition("Dir Two | /dir1/dir2/file1"))
 
-        assertEquals("Guide", nav.itemsForPath(siteId, "docs/user-guide/getting-started").first().label)
-        assertEquals("Docs", nav.itemsForPath(siteId, "docs/other").first().label)
+        assertEquals("Dir Two", nav.itemsForPath(siteId, "dir1/dir2/file1").first().label)
+        assertEquals("Dir One", nav.itemsForPath(siteId, "dir1/other").first().label)
         assertEquals("Home", nav.itemsForPath(siteId, "help/start").first().label)
     }
 }

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assets | Broken references | {{siteName}}</title>
+    {{>partials/head-deps.hbs}}
+    {{>partials/head-styles.hbs}}
+</head>
+<body>
+{{>partials/header.hbs}}
+<main id="main" tabindex="-1" class="container">
+    <div class="page-meta">
+        <h1><i class="mdi mdi-image-broken-variant" aria-hidden="true"></i> Broken asset references</h1>
+        <a class="btn btn-secondary" href="/f">Back to All Assets</a>
+    </div>
+
+    <p class="text-secondary">
+        Files referred to from a page, fragment, infobox, scheduled draft, footer override, or
+        navigation entry that no asset provides — deleted, renamed, moved to another folder or locale,
+        or never uploaded. Each one renders as a broken image or a dead link for readers.
+    </p>
+    {{! The counterpart of /f/unused, scanning the same content through the same index. Two rules keep
+        this list honest, and both matter if you change it:
+        1. A reference is only broken when nothing can serve it -- the locale it binds to at serve time
+           has no asset AND (with assets.localeFallback on) neither does the default locale.
+        2. Plain links with no file extension are page links, not assets: a page path can never contain
+           a period, so an extension-less target is a page that may simply not be written yet. Those are
+           left out deliberately -- see the note below. }}
+    <div class="alert alert-warning py-2">
+        <i class="mdi mdi-alert-outline" aria-hidden="true"></i>
+        Not everything is scanned: reference-style Markdown links, custom CSS, and injected head/body
+        HTML are invisible here. Links to <em>pages</em> that don't exist aren't listed either — only
+        references that must be a file. Relative references (<code>![](image.png)</code>) are checked in
+        page bodies, where they resolve against the page's own path; anywhere else they're listed under
+        <a href="#cant-be-checked">Should be absolute</a> below.
+    </div>
+
+    {{#hasBroken}}
+        <h2>Found <span class="text-secondary fs-6">({{brokenCount}})</span></h2>
+        <div class="table-responsive">
+            {{! data-sort-type marks a column click-to-sort (see WkBrowserCore.enableTableSort); the
+                "Referenced from" column carries none -- it holds a list, not one sortable value. }}
+            <table class="table table-hover align-middle" id="brokenTable">
+                <thead><tr>
+                    <th data-sort-type="text">Missing file</th>
+                    <th data-sort-type="text">Locale</th>
+                    <th data-sort-type="number">References</th>
+                    <th>Referenced from</th>
+                </tr></thead>
+                <tbody>
+                {{#broken}}
+                    <tr>
+                        <td><code>{{path}}</code></td>
+                        <td>{{locale}}</td>
+                        <td data-sort="{{refCount}}">{{refCount}}</td>
+                        <td>
+                            <ul class="list-unstyled mb-0">
+                            {{#sources}}
+                                <li>
+                                    <span class="badge text-bg-light">{{type}}</span>
+                                    <a href="{{url}}">{{label}}</a>{{#hasLocale}} <span class="text-secondary">({{locale}})</span>{{/hasLocale}}
+                                </li>
+                            {{/sources}}
+                            </ul>
+                        </td>
+                    </tr>
+                {{/broken}}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-secondary">
+            To fix one, either upload a file at that exact path and locale, or edit each place listed
+            and point it somewhere real.
+        </p>
+    {{/hasBroken}}
+    {{^hasBroken}}
+        <p class="text-secondary">No broken references — every file referred to from this site's content exists.</p>
+    {{/hasBroken}}
+
+    {{! Relative references written where nothing can resolve them. Not listed as "broken" because we
+        can't say whether they resolve -- that's exactly the problem with them. Infobox values and
+        fragments are the cases worth acting on: a fragment resolves against whichever page includes it,
+        and an infobox value is rendered without the page-relative pass at all, so the browser resolves
+        it one path segment higher than the same markup in the page body. }}
+    {{#hasUnresolvable}}
+        <h2 class="mt-5" id="cant-be-checked">Should be absolute <span class="text-secondary fs-6">({{unresolvableCount}})</span></h2>
+        <p class="text-secondary">
+            These are written relative to the page, but sit in content that is rendered inside many pages
+            — or none in particular. Each points at a different file depending on where it appears, and
+            some resolve nowhere at all, so they can't be checked above. Rewrite each as an absolute path
+            starting with <code>/</code>: that binds to the page's locale and falls back to the default
+            locale, so it stays correct everywhere. New infobox values are already required to be
+            absolute; the rest are listed here so existing content can be brought over.
+        </p>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle" id="unresolvableTable">
+                <thead><tr>
+                    <th data-sort-type="text">Written as</th>
+                    <th data-sort-type="text">Should be</th>
+                    <th data-sort-type="number">References</th>
+                    <th>Written in</th>
+                </tr></thead>
+                <tbody>
+                {{#unresolvable}}
+                    <tr>
+                        <td><code>{{url}}</code></td>
+                        <td>{{#suggestion}}<code>{{suggestion}}</code>{{/suggestion}}{{^suggestion}}<span class="text-secondary">—</span>{{/suggestion}}</td>
+                        <td data-sort="{{refCount}}">{{refCount}}</td>
+                        <td>
+                            <ul class="list-unstyled mb-0">
+                            {{#sources}}
+                                <li>
+                                    <span class="badge text-bg-light">{{type}}</span>
+                                    <a href="{{url}}">{{label}}</a>{{#hasLocale}} <span class="text-secondary">({{locale}})</span>{{/hasLocale}}
+                                </li>
+                            {{/sources}}
+                            </ul>
+                        </td>
+                    </tr>
+                {{/unresolvable}}
+                </tbody>
+            </table>
+        </div>
+    {{/hasUnresolvable}}
+</main>
+<script src="/static/wk-browser.js?v={{assetVersion}}"></script>
+<script>
+  // Click-to-sort, and drag-to-resize on desktop (enableColumnResize no-ops on touch/narrow screens,
+  // and both no-op entirely if the table isn't on the page).
+  (function () {
+    if (!window.WkBrowserCore) return;
+    window.WkBrowserCore.ensureStyle();
+    ['brokenTable', 'unresolvableTable'].forEach(function (id) {
+      var table = document.getElementById(id);
+      if (!table) return;
+      window.WkBrowserCore.enableTableSort(table, id);
+      window.WkBrowserCore.enableColumnResize(table, id);
+    });
+  })();
+</script>
+{{>partials/footer.hbs}}
+{{{bodyHtml}}}</body>
+</html>

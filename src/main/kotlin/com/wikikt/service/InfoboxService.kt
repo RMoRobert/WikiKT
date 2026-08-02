@@ -90,6 +90,18 @@ class InfoboxService(
     }
 
     /**
+     * [resolveAllFor] as a reusable function, with this site's rules and templates read **once**: the
+     * returned lambda answers `(path, tags) -> matched templates` with no further database work. For
+     * callers that ask the same question of every page on the site (the Wiki.js export) and would
+     * otherwise re-read both tables per page.
+     */
+    suspend fun matcherFor(siteId: UInt): (String, List<String>) -> List<InfoboxTemplate> {
+        val rules = rulesFor(siteId)
+        val byId = listTemplates(siteId).associateBy { it.id }
+        return { path, tags -> resolveFrom(rules, byId, path, tags) }
+    }
+
+    /**
      * [resolveAllFor]'s matching and ordering against rules and templates the caller already holds.
      * Split out for [usageReport], which asks the same question of every page on the site and would
      * otherwise re-read both tables per page.
@@ -470,6 +482,59 @@ class InfoboxService(
         val options = settings.renderOptions(siteId)
         val cards = matches.mapNotNull { renderOneCard(it, perTemplate[it.id], options) }
         return cards.takeIf { it.isNotEmpty() }?.joinToString("")
+    }
+
+    /** A page's filled-in data for one template, flattened for a plain two-column rendering.
+     *  [sections] mirrors the card's: the first has a null heading, each `# Heading` field starts
+     *  another, and a section with nothing filled in is left out. */
+    data class PlainInfobox(val templateName: String, val sections: List<PlainSection>)
+
+    data class PlainSection(val heading: String?, val rows: List<PlainRow>)
+
+    /** One label/value pair. [value] is the stored text — it may carry inline Markdown, which is what
+     *  an infobox field holds anyway; booleans arrive as `Yes`/`No` and multi-values comma-joined. */
+    data class PlainRow(val label: String, val value: String)
+
+    /**
+     * The same data [renderCard] draws, as plain label/value pairs instead of HTML — one entry per
+     * template in [templates] (resolve them once with [matcherFor]) that the page has data for.
+     * Empty when nothing is filled in.
+     *
+     * Written for the Wiki.js export, where infoboxes have no equivalent, so the caller can fold them
+     * into the page body as an ordinary table rather than drop them. Never throws: malformed data
+     * simply yields no entry for that template.
+     */
+    fun plainInfoboxes(templates: List<InfoboxTemplate>, infoboxJson: String?): List<PlainInfobox> {
+        if (infoboxJson.isNullOrBlank() || templates.isEmpty()) return emptyList()
+        val perTemplate = perTemplateData(infoboxJson, templates)
+        return templates.mapNotNull { template ->
+            val data = perTemplate[template.id] ?: return@mapNotNull null
+            val sections = mutableListOf<Pair<String?, MutableList<PlainRow>>>(null to mutableListOf())
+            for (field in template.fields) {
+                if (field.isHeading) {
+                    sections.add(field.label to mutableListOf())
+                    continue
+                }
+                val value = data[field.name] ?: continue
+                val plain = plainValue(field, value) ?: continue
+                sections.last().second.add(PlainRow(field.label, plain))
+            }
+            val filled = sections.filter { it.second.isNotEmpty() }.map { PlainSection(it.first, it.second) }
+            if (filled.isEmpty()) null else PlainInfobox(template.name, filled)
+        }
+    }
+
+    /** One infobox value as plain text, or null when it holds nothing. */
+    private fun plainValue(field: InfoboxFieldDef, value: JsonElement): String? = when (field.type.lowercase()) {
+        "boolean" -> when ((value as? JsonPrimitive)?.booleanOrNull) {
+            true -> "Yes"
+            false -> "No"
+            null -> null
+        }
+        "multi" -> (value as? JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.content?.takeIf { s -> s.isNotBlank() } }
+            ?.takeIf { it.isNotEmpty() }?.joinToString(", ")
+        else -> (value as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
     }
 
     /** A run of rendered rows under an optional heading — the unit [renderOneCard] emits. */

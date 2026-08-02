@@ -13,7 +13,7 @@
 {{! Skip link: the editor has its own bar (not partials/header.hbs), so it needs its own jump to the
     content textarea (#main below). Off-screen until focused — see .skip-link in site.css. }}
 <a class="skip-link" href="#main">Skip to main content</a>
-<form method="post" action="{{saveUrl}}" class="editor" data-plain-editor="{{plainEditor}}" data-editor-theme="{{editorTheme}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}" data-max-upload-files="{{maxUploadFiles}}">
+<form method="post" action="{{saveUrl}}" class="editor" data-editor-view="{{editorView}}" data-editor-theme="{{editorTheme}}" data-default-locale="{{defaultLocale}}" data-page-locale="{{locale}}" data-page-path="{{path}}" data-max-upload-files="{{maxUploadFiles}}">
     {{{csrfField}}}
     <header class="editor-bar">
         <a class="brand" href="/">{{#siteLogoUrl}}<img class="brand-logo" src="{{siteLogoUrl}}" alt="">{{/siteLogoUrl}}<span class="brand-name">{{siteName}}</span></a>
@@ -181,6 +181,9 @@
         <div class="tab-pane fade" id="pi-infobox-{{tabId}}" role="tabpanel" aria-labelledby="pi-tab-infobox-{{tabId}}">
         {{#unfilled}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-alert-outline" aria-hidden="true"></i> This page is specified to use this infobox template. Please fill it in below.</div>{{/unfilled}}
         <p class="text-secondary">Fields for the <strong>{{templateName}}</strong> infobox shown on this page. Leave a field blank to omit it; values support basic inline Markdown (bold, italic, links). A note marked <i class="mdi mdi-help-circle-outline" aria-hidden="true"></i> is the template's explanation of that field. Readers see this too: on the page its label carries a dotted underline they can hover or tap.</p>
+        {{! Enforced on save (see the infobox check in WikiRouting's editor POST), so state it up front
+            rather than letting the first save be the way it's discovered. }}
+        <p class="text-secondary">Image and file paths here must be absolute — <code>/images/logo.png</code>, not <code>images/logo.png</code>. An absolute path binds to this page's locale and falls back to the default locale.</p>
         {{#fields}}
         {{#isHeading}}<p class="ib-form-section">{{label}}</p>{{/isHeading}}
         {{^isHeading}}

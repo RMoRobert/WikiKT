@@ -114,10 +114,10 @@
             </div>
             <div class="mb-3"><label for="pattern" class="form-label">Pattern <span class="text-secondary">(blank path = whole site)</span></label><input class="form-control" type="text" name="pattern" placeholder="e.g. docs/  or  ^(.*/)?beta-" id="pattern"></div>
             <div class="mb-3">
-                <label for="sites" class="form-label">Sites <span class="text-secondary">(none selected = all sites)</span></label>
-                <select class="form-select" name="sites" multiple size="3" id="sites">
-                    {{#siteOptions}}<option value="{{id}}">{{name}}</option>{{/siteOptions}}
-                </select>
+                <label class="form-label">Sites <span class="text-secondary">(none selected = all sites)</span></label>
+                {{#siteOptions}}
+                <div class="form-check"><input class="form-check-input" type="checkbox" name="sites" value="{{id}}" id="rule-site-{{id}}"><label class="form-check-label" for="rule-site-{{id}}">{{name}}</label></div>
+                {{/siteOptions}}
             </div>
             <div class="mb-3"><label for="locale" class="form-label">Locale <span class="text-secondary">(optional; blank = all locales)</span></label><input class="form-control" type="text" name="locale" placeholder="all locales" id="locale"></div>
             <button type="submit" class="btn btn-primary">Add rule</button>

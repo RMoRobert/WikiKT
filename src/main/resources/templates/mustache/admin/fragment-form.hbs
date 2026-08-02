@@ -11,6 +11,10 @@
 {{>partials/admin-shell.hbs}}
     <h1>{{#isNew}}New Fragment{{/isNew}}{{^isNew}}Edit Fragment{{/isNew}}</h1>
     {{#error}}<div class="alert alert-danger" role="alert">{{error}}</div>{{/error}}
+    {{! Non-blocking: these still resolve, just against whichever page includes the fragment, so the
+        same reference means a different file on each one. Saving is never prevented -- imported content
+        would otherwise be uneditable until unrelated links were fixed. }}
+    {{#relativeWarning}}<div class="alert alert-warning" role="alert"><i class="mdi mdi-alert-outline" aria-hidden="true"></i> {{relativeWarning}} Until then, each one points at a different file on every page that includes this fragment.</div>{{/relativeWarning}}
     <form method="post" action="{{#isNew}}/a/fragments{{/isNew}}{{^isNew}}/a/fragments/{{id}}{{/isNew}}" class="edit-form">
         {{{csrfField}}}
         <div class="mb-3">
@@ -29,6 +33,12 @@
         <div class="mb-3">
             <label for="content" class="form-label">Content (Markdown)</label>
             <textarea class="form-control" name="content" rows="14" id="content">{{content}}</textarea>
+            <p class="form-text">
+                Write image and file paths absolute — <code>/images/logo.png</code>, not
+                <code>images/logo.png</code>. A fragment is rendered inside many pages, so a relative path
+                resolves differently on each; an absolute one binds to the page's locale and falls back to
+                the default locale.
+            </p>
         </div>
         <button type="submit" class="btn btn-primary">Save</button>
     </form>

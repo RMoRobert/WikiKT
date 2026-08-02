@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
 
 class EditorSettingsTest {
     @Test
-    fun `plain-view global setting drives the editor, and the paths endpoint is slim`() = testApplication {
+    fun `editor view-mode global setting drives the editor, and the paths endpoint is slim`() = testApplication {
         environment {
             config = MapApplicationConfig(
                 "wikikt.defaultLocale" to "en",
@@ -52,26 +52,32 @@ class EditorSettingsTest {
         assertTrue(paths.contains("Intro"), "paths list includes the title")
         assertFalse(paths.contains("secret body"), "paths list must not ship page content")
 
-        // Editor reflects the global default (off initially).
+        // Editor reflects the global default (fully formatted initially).
         val before = client.get("/e/en/guide/intro").bodyAsText()
-        assertTrue(before.contains("""data-plain-editor="false""""), "plain view off by default")
+        assertTrue(before.contains("""data-editor-view="formatted""""), "formatted view by default")
 
-        // Admin turns plain view on.
+        // Admin switches the default to plain text.
         val saved = client.post("/a/settings") {
-            setBody(FormDataContent(Parameters.build { append("_csrf", csrf); append("editorPlainView", "1") }))
+            setBody(FormDataContent(Parameters.build { append("_csrf", csrf); append("editorViewMode", "plain") }))
         }
         assertEquals(HttpStatusCode.OK, saved.status)
         assertTrue(saved.bodyAsText().contains("Settings saved"))
 
-        // Editor now opens in plain view.
         val after = client.get("/e/en/guide/intro").bodyAsText()
-        assertTrue(after.contains("""data-plain-editor="true""""), "plain view on after admin enables it")
+        assertTrue(after.contains("""data-editor-view="plain""""), "plain view after admin selects it")
 
-        // Unchecking the box turns it back off (checkbox absent = off).
+        // The middle mode round-trips too.
         client.post("/a/settings") {
-            setBody(FormDataContent(Parameters.build { append("_csrf", csrf) }))
+            setBody(FormDataContent(Parameters.build { append("_csrf", csrf); append("editorViewMode", "basic") }))
+        }
+        val basic = client.get("/e/en/guide/intro").bodyAsText()
+        assertTrue(basic.contains("""data-editor-view="basic""""), "basic view after admin selects it")
+
+        // An unknown (or absent) value falls back to the fully formatted view rather than sticking.
+        client.post("/a/settings") {
+            setBody(FormDataContent(Parameters.build { append("_csrf", csrf); append("editorViewMode", "bogus") }))
         }
         val reverted = client.get("/e/en/guide/intro").bodyAsText()
-        assertTrue(reverted.contains("""data-plain-editor="false""""), "plain view off after unchecking")
+        assertTrue(reverted.contains("""data-editor-view="formatted""""), "unknown value falls back to formatted")
     }
 }

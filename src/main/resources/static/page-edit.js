@@ -285,27 +285,48 @@
       }, "image", "Image"),
       mde("table", EasyMDE.drawTable, "table", "Table"),
       "|",
-      // Source-pane controls, then preview controls: each group sits next to the pane it governs, so
-      // the preview toggles are the ones nearest the preview itself.
-      mde("plain-view", function () { applyPlainView(!editorContainer.classList.contains('editor--plain')); },
-        "file-code-outline", "Plain text view", true),
+      // Source-pane controls. The preview controls that follow are pushed to the toolbar's far right
+      // by CSS (margin-left:auto on the show/hide toggle — see site.css), so each group sits above
+      // the pane it governs: source controls on the left, preview controls over the preview pane.
+      {
+        // Three-way view mode (see applyViewMode below). A dropdown rather than a cycling button:
+        // with three states a single button gives no clue which one comes next, and this way the
+        // current mode is visible in the open menu instead of having to be inferred from the icon.
+        // Ordered most-styled first, matching the admin setting's list.
+        name: "view-mode",
+        className: "mdi mdi-format-font",
+        title: "Editor view",
+        noDisable: true,
+        children: [
+          mdeItem("view-formatted", function () { setViewMode('formatted'); }, "format-text", "Formatted"),
+          mdeItem("view-basic", function () { setViewMode('basic'); }, "format-letter-case", "Basic"),
+          mdeItem("view-plain", function () { setViewMode('plain'); }, "file-code-outline", "Plain text"),
+        ],
+      },
       // Light/dark for the source surface only — the preview keeps its own, which is the point:
       // a dark editor beside a light preview separates what you're typing from what a reader sees.
       mde("editor-theme", function () { setEditorDark(!editorIsDark()); }, "weather-night", "Dark editor", true),
       mde("spellcheck", function () { setSpellcheck(!spellcheckOn()); }, "spellcheck", "Spell check", true),
-      "|",
-      // Show/hide the preview, then its light/dark — adjacent so the two preview controls read as a
-      // pair. The full-pane and split buttons are the same control at different widths: CSS shows
-      // whichever suits the breakpoint (the split is impractical on a phone).
+      // The preview cluster, right-aligned (Wiki.js-style). No "|" before it: the flex gap is the
+      // separation, and a separator would dangle at the end of the left cluster.
+      //
+      // Light/dark FIRST, show/hide LAST. The show/hide button is the anchor — it's the one that's
+      // always available, so it holds the same spot at the toolbar's end whatever the state. Its
+      // light/dark companion only applies to a visible preview, so CSS drops it while the preview is
+      // closed (see the .mde-preview-theme rules in site.css) and it appears to its left when the
+      // preview opens, rather than shifting the anchor button along.
+      //
+      // Preview surface, independent of the editor's: normally it shows the page in the site theme
+      // (what a reader gets), but checking a page against the other theme shouldn't mean re-theming
+      // the whole admin session.
+      mde("preview-theme", function () { setPreviewDark(!previewIsDark()); }, "invert-colors", "Dark preview", true),
+      // The full-pane and split buttons are the same control at different widths: CSS shows whichever
+      // suits the breakpoint (the split is impractical on a phone).
       mde("preview", EasyMDE.togglePreview, "eye-outline", "Preview", true),
       mde("side-by-side", function (editor) {
         EasyMDE.toggleSideBySide(editor);
         afterLayoutChange();
       }, "view-split-vertical", "Side-by-side", true),
-      // Preview surface, independent of the editor's: normally it shows the page in the site theme
-      // (what a reader gets), but checking a page against the other theme shouldn't mean re-theming
-      // the whole admin session.
-      mde("preview-theme", function () { setPreviewDark(!previewIsDark()); }, "invert-colors", "Dark preview", true),
     ],
     // Rendering goes through the server (/preview), so the preview is async — but EasyMDE calls this on
     // every CodeMirror "update" (every keystroke AND every scroll, since scrolling redraws the viewport)
@@ -377,14 +398,58 @@
   var form = textarea.closest('form');
   var editorContainer = cm.getWrapperElement().parentNode;
 
-  // Apply the global "plain view" default (monospace, no inline styling). The toolbar's plain-view
-  // button toggles it for the current session — not remembered per browser, unlike the toggles below,
-  // because it is the one whose default an admin sets site-wide.
-  function applyPlainView(on) {
-    editorContainer.classList.toggle('editor--plain', on);
-    markToggle('plain-view', on, 'Formatted view', 'Plain text view');
+  // ---- Editor view mode ------------------------------------------------------------------------
+  // Three ways to show the source, least to most styled:
+  //   plain      monospace, flat token colors, syntax markers only     (.editor--plain)
+  //   basic      the same plus real bold / italic / bold headings      (.editor--plain .editor--basic)
+  //   formatted  full typographic rendering                            (no class)
+  // `basic` layers ON TOP of `plain` rather than replacing it, so both share one set of CSS rules and
+  // only the emphasis differs — see the .editor--basic block in site.css. Precedence: this browser's
+  // dropdown choice, else the site default from Administration > Settings > General.
+  var VIEW_KEY = 'wk-editor-view';
+  var VIEW_MODES = ['formatted', 'basic', 'plain'];
+  var VIEW_LABELS = {
+    formatted: 'Formatted',
+    basic: 'Basic',
+    plain: 'Plain text',
+  };
+  // indexOf, not a lookup on VIEW_LABELS: a stored value like "constructor" would inherit a truthy
+  // hit from Object.prototype and sail through as a valid mode.
+  function isViewMode(m) { return VIEW_MODES.indexOf(m) > -1; }
+
+  function applyViewMode(mode) {
+    editorContainer.classList.toggle('editor--plain', mode !== 'formatted');
+    editorContainer.classList.toggle('editor--basic', mode === 'basic');
+    // Radio semantics: exactly one row checked. wk-toggle-on is the same visual cue the standalone
+    // toggles use, for the same reason (EasyMDE reclaims its own `.active` — see markToggle).
+    VIEW_MODES.forEach(function (m) {
+      var item = document.querySelector('.editor-toolbar button.mde-view-' + m);
+      if (!item) return;
+      item.setAttribute('role', 'menuitemradio');
+      item.classList.toggle('wk-toggle-on', m === mode);
+      item.setAttribute('aria-checked', m === mode ? 'true' : 'false');
+    });
+    // The dropdown button is icon-only, so its title is the accessible name — and the only place the
+    // current mode shows without opening the menu.
+    var dd = document.querySelector('.editor-toolbar .mde-view-mode');
+    if (dd) dd.title = 'Editor view: ' + VIEW_LABELS[mode];
   }
-  applyPlainView(!!form && form.dataset.plainEditor === 'true');
+
+  function setViewMode(mode) {
+    try { localStorage.setItem(VIEW_KEY, mode); } catch (e) {}
+    applyViewMode(mode);
+    // The class change itself is picked up by the layout observer further down, which re-measures
+    // CodeMirror — the font, weights and heading sizes all move the line heights it caches.
+  }
+
+  (function () {
+    var stored = null;
+    try { stored = localStorage.getItem(VIEW_KEY); } catch (e) {} // private mode
+    var fallback = form && form.dataset.editorView;
+    applyViewMode(isViewMode(stored) ? stored : (isViewMode(fallback) ? fallback : 'formatted'));
+    // That first apply predates the layout observer, so nothing else will re-measure it.
+    afterLayoutChange();
+  })();
 
   // Shared state indicator for our own toolbar toggles. Deliberately NOT EasyMDE's `.active`: it
   // reasserts that class on every cursorActivity from its internal state map and removes it from any
@@ -479,6 +544,14 @@
     var pane = previewPanes()[0];
     return !!pane && pane.getAttribute('data-bs-theme') === 'dark';
   }
+  // Three states, not two: null means "never chosen", which leaves the attribute off so the pane keeps
+  // following the site theme. Read in more than one place (init, and each time a pane opens), hence a
+  // helper rather than an inline localStorage read.
+  function storedPreviewDark() {
+    var v = null;
+    try { v = localStorage.getItem(PREVIEW_DARK_KEY); } catch (e) {} // private mode
+    return v === 'true' ? true : (v === 'false' ? false : null);
+  }
 
   function applyPreviewDark(dark) {
     previewPanes().forEach(function (pane) {
@@ -493,12 +566,7 @@
     applyPreviewDark(dark);
   }
 
-  (function () {
-    var stored = null;
-    try { stored = localStorage.getItem(PREVIEW_DARK_KEY); } catch (e) {}
-    // null (never chosen) leaves the attribute off entirely, so the pane keeps following the site.
-    applyPreviewDark(stored === 'true' ? true : (stored === 'false' ? false : null));
-  })();
+  applyPreviewDark(storedPreviewDark());
 
   // WikiKT's two brace forms aren't Markdown, so CodeMirror's mode has no idea they're special. A
   // CodeMirror overlay tags them anyway: `{.is-info}` (callout/decoration markers) and
@@ -760,17 +828,45 @@
     cm.scrollTo(null, top);
   }
 
+  // Is either preview pane on screen? The split pane announces itself through its own class, but the
+  // full-pane one is read off the *toolbar* instead: EasyMDE appends `editor-preview-active` to the
+  // pane a tick later (setTimeout 1) while `disabled-for-preview` — the class that dims the other
+  // buttons — goes on synchronously, so only the latter is settled when the observer below runs.
+  function previewOnScreen() {
+    return previewActive() ||
+      !!(editorToolbar && editorToolbar.classList.contains('disabled-for-preview'));
+  }
+
+  // Light/dark preview only means something while a preview is showing, so it's disabled the rest of
+  // the time (site.css greys it out) — it keeps its slot, so the show/hide button next to it never
+  // moves. Re-applying the stored preference on the way in is not just for the title markToggle sets:
+  // EasyMDE builds the full-pane preview lazily on its first open, so that pane misses the initial
+  // apply entirely and would show the site theme until the button was pressed again.
+  function syncPreviewThemeToggle() {
+    var btn = document.querySelector('.editor-toolbar button.mde-preview-theme');
+    if (!btn) return;
+    var on = previewOnScreen();
+    btn.disabled = !on;
+    if (on) applyPreviewDark(storedPreviewDark());
+    else btn.title = 'Preview theme — show the preview first';
+  }
+
   // Watch the classes EasyMDE toggles rather than wiring each button: the split view also has a
   // keyboard shortcut (F9), and plain view and the dark surface change the font and colors, all of
-  // which need CodeMirror to re-measure and the preview anchors to be rebuilt.
+  // which need CodeMirror to re-measure and the preview anchors to be rebuilt. The toolbar is watched
+  // for the same reason in miniature — `disabled-for-preview` is the only synchronous signal that the
+  // full-pane preview opened or closed.
   if (window.MutationObserver) {
     var layoutObserver = new MutationObserver(function () {
       afterLayoutChange();
       rememberSplit();
+      syncPreviewThemeToggle();
     });
     layoutObserver.observe(editorContainer, { attributes: true, attributeFilter: ['class'] });
     if (sidePreview) layoutObserver.observe(sidePreview, { attributes: true, attributeFilter: ['class'] });
+    if (editorToolbar) layoutObserver.observe(editorToolbar, { attributes: true, attributeFilter: ['class'] });
   }
+  syncPreviewThemeToggle(); // opening state; the observer keeps it in step from here
 
   // The split opens by default and is then remembered per browser — editing next to the rendered page
   // is the common case, and it's the whole point of the line-following sync above. Closing it sticks.

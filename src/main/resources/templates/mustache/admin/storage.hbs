@@ -244,6 +244,49 @@
         </div>
         <button type="submit" class="btn btn-secondary"><i class="mdi mdi-upload-outline" aria-hidden="true"></i> Restore backup</button>
     </form>
+
+    <hr class="my-4">
+
+    {{! Collapsed by default (Bootstrap collapse): a one-way migration aid, not something an operator
+        comes to this page to do, so it starts out of the way. The button is inside the <h2> — the ARIA
+        pattern for a collapsible section — and styled to look like the page's other headings. }}
+    <h2>
+        <button class="section-collapse-toggle collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#wikijsExport" aria-expanded="false" aria-controls="wikijsExport">
+            <i class="mdi mdi-export-variant" aria-hidden="true"></i> Export for Wiki.js
+            <i class="mdi mdi-chevron-down section-collapse-caret" aria-hidden="true"></i>
+        </button>
+    </h2>
+    <div class="collapse" id="wikijsExport">
+    <p class="text-secondary">A ZIP holding this site's pages and images in a Wiki.js 2.x-compatible
+        format, useful for exporting content from WikiKT to Wiki.js instance (to move between
+        WikiKT instances, use the content backup above or an alternative like Git sync), suitable
+        for Local File System or Git import in Wiki.js.</p>
+
+    <form method="post" action="/a/backup/export/wikijs" class="edit-form">
+        {{{csrfField}}}
+        <div class="mb-3" style="max-width:32rem">
+            <label class="form-label" for="infoboxMode">Infoboxes</label>
+            <select class="form-select" id="infoboxMode" name="infoboxMode">
+                {{#wikijsInfoboxOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/wikijsInfoboxOptions}}
+            </select>
+            <p class="form-text">Determines how to handle WikiKT infoboxes in exported content, as Wiki.js has no
+                such feature. Add as table to keep visible on page in export; will remain
+                machine-readable as front matter either way.</p>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="includeUnpublished" name="includeUnpublished" value="1" checked>
+            <label class="form-check-label" for="includeUnpublished">Include unpublished pages</label>
+            <p class="form-text mb-0">Importer will consider all content published, so unpublished WikiKT drafts will
+                become live; uncheck to omit these pages.</p>
+        </div>
+        <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-download-outline" aria-hidden="true"></i> Download Wiki.js export</button>
+    </form>
+    <p class="form-text">Other export features to note: fragments are expanded into each page, <code>:mdi-icon:</code> shortcodes become icon
+        markup, and image links are rewritten to the paths Wiki.js will serve them from. Page history,
+        aliases, per-page permissions, scheduled publishing, per-page CSS/JS, navigation menus, and accounts
+        are not supported for export (keep WikiKT backup if needed).</p>
+    </div>
 <script>
 // Progressive enhancement for the Git sync actions: they kick off a background run and redirect
 // back here. Show a spinner on the clicked button and hide the now-stale status for the brief

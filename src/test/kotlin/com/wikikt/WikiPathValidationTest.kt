@@ -7,7 +7,7 @@ import kotlin.test.assertFailsWith
 class WikiPathValidationTest {
     @Test
     fun `accepts well-formed page and asset paths`() {
-        validateWikiPath("docs/user-guide/getting-started", allowExtension = false)
+        validateWikiPath("dir1/dir2/file1", allowExtension = false)
         validateWikiPath("guide/intro", allowExtension = false)
         // `home` is the landing page path — a real editable page, NOT a reserved segment.
         validateWikiPath("home", allowExtension = false)

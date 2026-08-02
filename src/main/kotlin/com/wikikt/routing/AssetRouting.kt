@@ -10,6 +10,7 @@ import com.wikikt.model.normalizeAssetPath
 import com.wikikt.model.slugFilename
 import com.wikikt.model.toIsoString
 import com.wikikt.model.validateWikiPath
+import com.wikikt.service.AssetService
 import com.wikikt.service.ImageType
 import com.wikikt.service.MetadataStripper
 import com.wikikt.service.SettingsService
@@ -93,6 +94,16 @@ fun Route.configureAssetRouting() {
                 return@get
             }
             call.respond(MustacheContent("assets/unused.hbs", call.unusedAssetsModel()))
+        }
+
+        // The mirror image of /unused: references to assets that aren't there. Also a constant segment,
+        // so it matches ahead of "/{id}".
+        get("/broken") {
+            if (!call.canUploadAssetsHere()) {
+                call.respondForbidden()
+                return@get
+            }
+            call.respond(MustacheContent("assets/broken.hbs", call.brokenAssetRefsModel()))
         }
 
         get("/{id}") {
@@ -558,9 +569,19 @@ private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
 private data class AssetUsage(val type: String, val label: String, val locale: String, val url: String)
 
 /**
- * Every reference to every asset on this site, keyed by the asset's (locale, path). One index feeds
- * the manager's "Used by" count, the detail page's usage list, and `/f/unused`, so those three can't
- * disagree about what "used" means.
+ * What one scanned source contributes: the asset references it makes, plus any directory-relative URLs
+ * that source can't resolve (empty for page bodies, which resolve them against the page path).
+ */
+private data class AssetScan(
+    val refs: Set<AssetService.ContentRef>,
+    val unresolvable: Set<String>,
+    val usage: AssetUsage,
+)
+
+/**
+ * Every asset reference on this site, each paired with the place that makes it. Shared by
+ * [assetUsageIndex] and [brokenAssetRefsModel] so "unused" and "broken" can never drift apart about
+ * which surfaces get scanned.
  *
  * Covers the surfaces WikiKT itself renders content from:
  *  - page bodies **and infobox values** (infobox fields are Markdown-rendered, so they can embed images)
@@ -568,58 +589,123 @@ private data class AssetUsage(val type: String, val label: String, val locale: S
  *  - staged (not-yet-published) versions — without these an asset looks unused right up until the
  *    scheduled publish goes out with a broken image
  *  - the Markdown footer override
- *  - navigation item targets (item *icons* are MDI class names, never asset URLs, so they're skipped)
+ *
+ * Navigation targets are bare URLs rather than Markdown, so they come from [navAssetTargets] instead.
+ *
+ * Each source resolves its own URLs, because whether a *directory-relative* URL has a target at all
+ * depends on where it is written: only a page body gets `resolveRelativeLinks` applied at render time.
+ * That's why this returns resolved references rather than raw text — the base can't be reconstructed
+ * afterwards.
  *
  * Deliberately NOT covered, and called out on the /f/unused page: page revision history (counting it
  * would keep an asset "used" until history rotates out, defeating the point of the tool) and the
  * admin escape hatches — custom CSS and injected head/body HTML.
  */
-private suspend fun ApplicationCall.assetUsageIndex(): Map<AssetRef, List<AssetUsage>> {
+private suspend fun ApplicationCall.assetScanSources(): List<AssetScan> {
     val ctx = appContext
     val siteId = siteId()
     val default = ctx.config.defaultLocale
-    val out = mutableMapOf<AssetRef, MutableList<AssetUsage>>()
+    val out = mutableListOf<AssetScan>()
 
-    // Records [usage] against every asset referenced from [content]. A single source can mention the
-    // same asset more than once (body *and* infobox), so it's only counted once per source.
-    fun tally(content: String?, usage: AssetUsage) {
+    // Content whose render does NOT resolve directory-relative URLs. Only absolute refs are real here;
+    // the relative ones are collected separately so the report can name them instead of silently
+    // dropping them — they resolve to a different file per page, or to nothing at all.
+    fun addAbsolute(content: String?, usage: AssetUsage) {
         if (content.isNullOrBlank()) return
-        for (ref in ctx.assets.referencedAssetPaths(content, default)) {
-            val list = out.getOrPut(ref) { mutableListOf() }
-            if (list.none { it.type == usage.type && it.label == usage.label && it.locale == usage.locale }) {
-                list.add(usage)
-            }
+        out.add(
+            AssetScan(
+                ctx.assets.referencedLocalUrls(content, default),
+                ctx.assets.unresolvableRelativeRefs(content),
+                usage,
+            ),
+        )
+    }
+
+    // A page body: PageRenderService.resolveRelativeLinks rewrites relative URLs against the page path,
+    // so they're resolved here the same way. Fragments are expanded into the body before that pass runs,
+    // so a relative URL inside a fragment resolves against the *including* page too — picked up by
+    // rescanning the expanded text and keeping only what needed the base (an absolute URL resolves
+    // identically either way and cancels out, so it stays attributed to the fragment, not to the page).
+    suspend fun addPageBody(content: String?, locale: String, path: String, usage: AssetUsage) {
+        if (content.isNullOrBlank()) return
+        val refs = ctx.assets.referencedLocalUrls(content, default, path, locale).toMutableSet()
+        if (content.contains(FRAGMENT_REFERENCE_PREFIX)) {
+            val expanded = ctx.fragments.expand(siteId, content, locale, default)
+            refs += ctx.assets.referencedLocalUrls(expanded, default, path, locale) -
+                ctx.assets.referencedLocalUrls(expanded, default)
         }
+        out.add(AssetScan(refs, emptySet(), usage))
     }
 
     val pages = ctx.pages.list(siteId)
     for (page in pages) {
         val usage = AssetUsage("page", page.path, page.locale, wikiViewUrl(page.locale, page.path))
-        tally(page.content, usage)
-        tally(page.infobox, usage)
+        addPageBody(page.content, page.locale, page.path, usage)
+        // Infobox values are rendered by InfoboxService.renderCard, which never runs the relative pass —
+        // a relative URL there is left for the browser to resolve, so it has no target we can check.
+        addAbsolute(page.infobox, usage)
     }
     for (fragment in ctx.fragments.list(siteId)) {
-        tally(fragment.content, AssetUsage("fragment", fragment.key, fragment.locale, "/a/fragments/${fragment.id}/edit"))
+        addAbsolute(fragment.content, AssetUsage("fragment", fragment.key, fragment.locale, "/a/fragments/${fragment.id}/edit"))
     }
     val pagesById = pages.associateBy { it.id }
     for (staged in ctx.pages.listStaged(pages.map { it.id })) {
         val page = pagesById[staged.pageId] ?: continue
         val usage = AssetUsage("scheduled draft", page.path, page.locale, wikiViewUrl(page.locale, page.path))
-        tally(staged.content, usage)
-        tally(staged.infobox, usage)
+        addPageBody(staged.content, page.locale, page.path, usage)
+        addAbsolute(staged.infobox, usage)
     }
-    tally(
+    // The footer renders on every page, so it has no one page to resolve a relative URL against.
+    addAbsolute(
         ctx.settings.get(siteId, com.wikikt.service.SettingsService.SITE_FOOTER_OVERRIDE),
         AssetUsage("setting", "Footer override", "", "/a/settings"),
     )
-    // A nav target is a bare URL rather than Markdown, so resolve it directly.
-    for (menu in ctx.nav.listMenus(siteId)) {
+    return out
+}
+
+/** Cheap pre-check mirroring FragmentService's own early-out, so pages without fragments skip expansion. */
+private const val FRAGMENT_REFERENCE_PREFIX = "{{fragment:"
+
+/**
+ * Navigation item targets, as raw URLs paired with their source. Item *icons* are MDI class names,
+ * never asset URLs, so they can't reference an asset and are skipped.
+ */
+private suspend fun ApplicationCall.navAssetTargets(): List<Pair<String, AssetUsage>> {
+    val ctx = appContext
+    val out = mutableListOf<Pair<String, AssetUsage>>()
+    for (menu in ctx.nav.listMenus(siteId())) {
         for (item in ctx.nav.items(menu.id)) {
             val target = item.target?.takeIf { it.isNotBlank() } ?: continue
-            val ref = ctx.assets.resolveLocalAssetUrl(target, default) ?: continue
-            out.getOrPut(ref) { mutableListOf() }
-                .add(AssetUsage("navigation", item.label, "", "/a/navigation"))
+            out.add(target to AssetUsage("navigation", item.label, "", "/a/navigation"))
         }
+    }
+    return out
+}
+
+/**
+ * Every reference to every asset on this site, keyed by the asset's (locale, path). One index feeds
+ * the manager's "Used by" count, the detail page's usage list, and `/f/unused`, so those three can't
+ * disagree about what "used" means. See [assetScanSources] for what is and isn't scanned.
+ */
+private suspend fun ApplicationCall.assetUsageIndex(): Map<AssetRef, List<AssetUsage>> {
+    val ctx = appContext
+    val default = ctx.config.defaultLocale
+    val out = mutableMapOf<AssetRef, MutableList<AssetUsage>>()
+
+    // A single source can mention the same asset more than once (body *and* infobox), so it's only
+    // counted once per source.
+    fun tally(ref: AssetRef, usage: AssetUsage) {
+        val list = out.getOrPut(ref) { mutableListOf() }
+        if (list.none { it.type == usage.type && it.label == usage.label && it.locale == usage.locale }) {
+            list.add(usage)
+        }
+    }
+
+    for (scan in assetScanSources()) {
+        for (ref in scan.refs) tally(ref.ref, scan.usage)
+    }
+    for ((target, usage) in navAssetTargets()) {
+        ctx.assets.resolveLocalAssetUrl(target, default)?.let { tally(it, usage) }
     }
     return out
 }
@@ -705,5 +791,152 @@ private suspend fun ApplicationCall.brandingUsageByRef(): Map<AssetRef, List<Str
     add(com.wikikt.service.SettingsService.SITE_LOGO_URL, "Site logo")
     add(com.wikikt.service.SettingsService.SITE_FAVICON_URL, "Favicon")
     return out
+}
+
+/**
+ * A page path can never contain a period ([com.wikikt.model.validateWikiPath] is called with
+ * `allowExtension = false` for pages and `true` for assets), so a dotted final segment can only ever
+ * name an asset. That's what lets the broken scan tell a dead file link from a link to a page.
+ */
+private fun looksLikeFile(path: String): Boolean = path.substringAfterLast('/').contains('.')
+
+/**
+ * Whether [ref] has to be satisfied by an asset. An embed always does — nothing but an asset renders
+ * inside an `<img>`. A link only does when its path couldn't be a page path: an extension-less link
+ * that resolves nowhere is a wiki "red link" (a page not written yet), which is a normal state and not
+ * this tool's business.
+ */
+private fun isAssetReference(ref: AssetService.ContentRef): Boolean =
+    ref.kind == AssetService.RefKind.EMBED || looksLikeFile(ref.ref.path)
+
+/**
+ * The (locale, path) a reference actually resolves to at serve time, which is what decides whether it
+ * is broken:
+ *  - an explicit `/<locale>/…` binds to that locale
+ *  - a locale-relative **embed** binds to its source's locale — `renderAssetRefs` rewrites `<img src>`
+ *    to the page's locale so each translation serves its own file
+ *  - a locale-relative **link** is never rewritten, so the router resolves it at the default locale
+ *    (which is already what [com.wikikt.service.AssetService.resolveLocalAssetUrl] returned)
+ */
+private fun effectiveAssetRef(ref: AssetService.ContentRef, sourceLocale: String): AssetRef =
+    if (!ref.explicitLocale && ref.kind == AssetService.RefKind.EMBED && sourceLocale.isNotBlank()) {
+        AssetRef(sourceLocale, ref.ref.path)
+    } else {
+        ref.ref
+    }
+
+/**
+ * Model for `/f/broken`: the inverse of `/f/unused` — references pointing at an asset that isn't there,
+ * whether it was deleted, moved, renamed, or never uploaded. Scans the same surfaces as
+ * [assetScanSources] (plus nav targets), so the two reports agree about what content exists.
+ *
+ * A reference counts as broken only when nothing could serve it: the (locale, path) it binds to at
+ * serve time has no asset, and neither does the default locale when `assets.localeFallback` is on. That
+ * mirrors [com.wikikt.service.AssetService.resolve], so the report can't flag an image a reader sees
+ * perfectly well.
+ */
+private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
+    val ctx = appContext
+    val siteId = siteId()
+    val default = ctx.config.defaultLocale
+    val fallback = ctx.config.assets.localeFallback
+    val existing = ctx.assets.list(siteId).mapTo(mutableSetOf()) { AssetRef(it.locale, it.path) }
+
+    // Same resolution order the asset route serves with — including the default-locale fallback, so a
+    // /de/logo.png reference backed only by /en/logo.png isn't reported when fallback is enabled.
+    fun resolves(ref: AssetRef): Boolean =
+        ref in existing || (fallback && AssetRef(default, ref.path) in existing)
+
+    val broken = mutableMapOf<AssetRef, MutableList<AssetUsage>>()
+    fun record(ref: AssetRef, source: AssetUsage) {
+        val list = broken.getOrPut(ref) { mutableListOf() }
+        // One source referencing the same missing file twice (body *and* infobox) is still one place to fix.
+        if (list.none { it.type == source.type && it.label == source.label && it.locale == source.locale }) {
+            list.add(source)
+        }
+    }
+
+    // Directory-relative refs written where nothing can resolve them, keyed by the URL as written.
+    val unresolvable = mutableMapOf<String, MutableList<AssetUsage>>()
+
+    for (scan in assetScanSources()) {
+        for (ref in scan.refs) {
+            if (!isAssetReference(ref)) continue
+            val effective = effectiveAssetRef(ref, scan.usage.locale)
+            if (!resolves(effective)) record(effective, scan.usage)
+        }
+        for (url in scan.unresolvable) {
+            unresolvable.getOrPut(url) { mutableListOf() }.let { list ->
+                if (list.none { it.type == scan.usage.type && it.label == scan.usage.label && it.locale == scan.usage.locale }) {
+                    list.add(scan.usage)
+                }
+            }
+        }
+    }
+    // Nav targets are bare URLs: most point at pages, so only a file-looking one is an asset reference.
+    // A relative one has no page to resolve against either, so it lands in the same warning list.
+    for ((target, source) in navAssetTargets()) {
+        val ref = ctx.assets.resolveLocalAssetUrl(target, default)
+        if (ref == null) {
+            for (url in ctx.assets.unresolvableRelativeRefs("[x]($target)")) {
+                unresolvable.getOrPut(url) { mutableListOf() }.add(source)
+            }
+            continue
+        }
+        if (looksLikeFile(ref.path) && !resolves(ref)) record(ref, source)
+    }
+
+    val rows = broken.entries
+        .sortedWith(compareBy({ it.key.path }, { it.key.locale }))
+        .map { (ref, sources) ->
+            mapOf(
+                "locale" to ref.locale,
+                "path" to ref.path,
+                "url" to wikiViewUrl(ref.locale, ref.path),
+                // The upload path that would fix it, so the folder field can be prefilled from here.
+                "folder" to ref.path.substringBeforeLast('/', ""),
+                "refCount" to sources.size,
+                "sources" to sources.sortedWith(compareBy({ it.type }, { it.label })).map {
+                    mapOf(
+                        "type" to it.type,
+                        "label" to it.label,
+                        "locale" to it.locale,
+                        "hasLocale" to it.locale.isNotBlank(),
+                        "url" to it.url,
+                    )
+                },
+            )
+        }
+    val unresolvableRows = unresolvable.entries.sortedBy { it.key }.map { (url, sources) ->
+        mapOf(
+            "url" to url,
+            // What it should be written as: absolute, no locale — binds to the page's locale and falls
+            // back to the default. Only offered when the relative form has no "../", which has no
+            // single absolute equivalent.
+            "suggestion" to if (url.startsWith("..")) null else "/${url.removePrefix("./")}",
+            "refCount" to sources.size,
+            "sources" to sources.sortedWith(compareBy({ it.type }, { it.label })).map {
+                mapOf(
+                    "type" to it.type,
+                    "label" to it.label,
+                    "locale" to it.locale,
+                    "hasLocale" to it.locale.isNotBlank(),
+                    "url" to it.url,
+                )
+            },
+        )
+    }
+    return adminBaseModel() + mapOf(
+        // Standalone tool like the rest of /f: reachable with only write:assets, so offer the
+        // Administration gear only when this user can actually reach it.
+        "adminArea" to false,
+        "canAdmin" to ctx.permissions.canAccessAdmin(currentUserId()),
+        "broken" to rows,
+        "hasBroken" to rows.isNotEmpty(),
+        "brokenCount" to rows.size,
+        "unresolvable" to unresolvableRows,
+        "hasUnresolvable" to unresolvableRows.isNotEmpty(),
+        "unresolvableCount" to unresolvableRows.size,
+    )
 }
 

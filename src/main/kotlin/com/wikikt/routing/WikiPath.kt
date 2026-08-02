@@ -71,12 +71,12 @@ private val URL_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*:")
 
 /**
  * Resolves a directory-relative URL from a page body against the page that contains it, the way WikiJS
- * does: the containing page [pagePath] is treated as a *directory*, so `getting-started` on page
- * `docs/user-guide` targets `docs/user-guide/gettingxx-started`, and `../foo` climbs out of it. `.`/`..`
+ * does: the containing page [pagePath] is treated as a *directory*, so `file1` on page
+ * `dir1/dir2` targets `dir1/dir2/file1`, and `../foo` climbs out of it. `.`/`..`
  * segments are normalized and a climb past the locale root is clamped there. Returns a root-absolute
  * `/{locale}/{path}` (preserving any `?query`/`#fragment`), or null to leave the URL untouched — which
  * it is for empty, anchor-only (`#x`), root-absolute (`/x`), protocol-relative (`//x`), and scheme'd
- * (`https:`, `mailto:`, …) URLs. Without this the browser would resolve `getting-started` against the page as a
+ * (`https:`, `mailto:`, …) URLs. Without this the browser would resolve `file1` against the page as a
  * *file*, dropping its last segment and landing a directory too high.
  */
 fun resolveRelativeWikiUrl(rawUrl: String, locale: String, pagePath: String): String? {

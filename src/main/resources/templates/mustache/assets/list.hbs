@@ -50,9 +50,13 @@
     {{! Occasional-use maintenance links — deliberately at the bottom, out of the way of the day-to-day
         browse/upload flow. }}
     <h2 class="mt-4">Tools</h2>
-    <p class="mb-0">
+    <p class="mb-1">
         <a href="/f/unused"><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Find unused assets</a>
         <span class="text-secondary">- will list assets that are not referred to on any page, fragment, or setting on this site</span>
+    </p>
+    <p class="mb-0">
+        <a href="/f/broken"><i class="mdi mdi-image-broken-variant" aria-hidden="true"></i> Find broken references</a>
+        <span class="text-secondary">- the reverse: will list files referred to from a page, fragment, or setting that no asset provides</span>
     </p>
 </main>
 <script>window.__WK_ASSETS__ = {{{assetsJson}}}; window.__WK_UPLOAD_MAX__ = {{maxFiles}};</script>

@@ -19,6 +19,7 @@ import com.wikikt.service.MfaService
 import com.wikikt.service.PageService
 import com.wikikt.service.SelfUpdateService
 import com.wikikt.service.UpdateService
+import com.wikikt.service.WikiJsExportService
 import com.wikikt.service.PageRenderService
 import com.wikikt.service.PasswordResetService
 import com.wikikt.service.FragmentService
@@ -65,6 +66,7 @@ class AppContext(
     val update: UpdateService,
     val selfUpdate: SelfUpdateService,
     val backup: BackupService,
+    val wikiJsExport: WikiJsExportService,
     val emailTemplates: EmailTemplateService,
     val email: EmailService,
     val markdown: MarkdownRenderer,
@@ -185,6 +187,8 @@ suspend fun Application.createAppContext(): AppContext {
     // that they all exist (gitSync is the last, so this can't move earlier alongside the content services).
     sites.wireCascade(pages, assets, fragments, nav, settings, gitSync)
     val backup = BackupService(database, sites, pages, assets, fragments, nav, importer, settings, searchIndex, assetDir)
+    // One-way content export for leaving: a tree WikiJS 2.x imports directly (see WikiJsExportService).
+    val wikiJsExport = WikiJsExportService(pages, assets, fragments, infobox, config.defaultLocale)
     // Release update check (Administration > Updates, plus the dashboard's "update available" badge).
     // Lazy and opt-in: no background poller and nothing scheduled — a request happens only while a
     // root admin has the console open, and only after one has enabled checks (default: never asked,
@@ -224,6 +228,7 @@ suspend fun Application.createAppContext(): AppContext {
         update = update,
         selfUpdate = selfUpdate,
         backup = backup,
+        wikiJsExport = wikiJsExport,
         emailTemplates = emailTemplates,
         email = email,
         markdown = markdown,

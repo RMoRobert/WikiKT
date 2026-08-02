@@ -51,11 +51,13 @@
         </div>
 
         <h2>Editor</h2>
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" name="editorPlainView" value="1" {{#editorPlainView}}checked{{/editorPlainView}} id="editorPlainView">
-            <label for="editorPlainView" class="form-check-label">Use plain-text Markdown editor as default</label>
+        <div class="mb-3" style="max-width:24rem">
+            <label for="editorViewMode" class="form-label">Default editor view</label>
+            <select class="form-select" name="editorViewMode" id="editorViewMode">
+                {{#editorViewModeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/editorViewModeOptions}}
+            </select>
+            <p class="form-text">How the Markdown source is displayed while editing. <strong>Formatted</strong> renders inline styling as you type (<code>**bold**</code> appears bold, headings are sized). <strong>Plain text</strong> uses a monospace font and no styling at all, so the source reads as source. <strong>Basic</strong> sits between the two: monospace, but bold, italic and headings still show as bold. Editors can pick their own from the editor toolbar, and that choice is remembered in their browser.</p>
         </div>
-        <p class="form-text">When enabled, the Markdown editor defaults to a monospace font and does not show inline styling (e.g. <code>**bold**</code> is not rendered bold while editing). Users can still toggle the view for their current session from the editor toolbar.</p>
         <div class="mb-3" style="max-width:24rem">
             <label for="editorTheme" class="form-label">Editor surface</label>
             <select class="form-select" name="editorTheme" id="editorTheme">

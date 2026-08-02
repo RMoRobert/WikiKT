@@ -27,34 +27,34 @@ class SiteNavTreeTest {
         val roots = SiteNavTree.build(
             listOf(
                 page("home", "Home"),
-                page("docs/user-guide", "User Guide"),
-                page("docs/user-guide/getting-started", "Getting Started"),
-                page("guides/faq", "FAQ"),
+                page("dir1/dir2", "Dir Two"),
+                page("dir1/dir2/file1", "File One"),
+                page("dir3/file2", "File Two"),
             ),
         )
 
-        // Folders (docs, guides) sort before the leaf page (home); alpha within each group.
-        assertEquals(listOf("docs", "guides", "home"), roots.map { it.path })
+        // Folders (dir1, dir3) sort before the leaf page (home); alpha within each group.
+        assertEquals(listOf("dir1", "dir3", "home"), roots.map { it.path })
 
-        val docs = roots.first { it.path == "docs" }
-        // "docs" has no page of its own → a container folder labelled from the humanized segment.
-        assertFalse(docs.hasPage)
-        assertNull(docs.url)
-        assertEquals("Docs", docs.label)
-        assertEquals(1, docs.children.size)
+        val dir1 = roots.first { it.path == "dir1" }
+        // "dir1" has no page of its own → a container folder labelled from the humanized segment.
+        assertFalse(dir1.hasPage)
+        assertNull(dir1.url)
+        assertEquals("Dir1", dir1.label)
+        assertEquals(1, dir1.children.size)
 
-        val userGuide = docs.children.single()
-        // "docs/user-guide" is BOTH a page and a folder (it has a child).
-        assertTrue(userGuide.hasPage)
-        assertEquals("User Guide", userGuide.label)
-        assertEquals("/en/docs/user-guide", userGuide.url)
-        assertEquals(1, userGuide.children.size)
+        val dir2 = dir1.children.single()
+        // "dir1/dir2" is BOTH a page and a folder (it has a child).
+        assertTrue(dir2.hasPage)
+        assertEquals("Dir Two", dir2.label)
+        assertEquals("/en/dir1/dir2", dir2.url)
+        assertEquals(1, dir2.children.size)
 
-        val leaf = userGuide.children.single()
+        val leaf = dir2.children.single()
         assertTrue(leaf.hasPage)
-        assertEquals("docs/user-guide/getting-started", leaf.path)
-        assertEquals("Getting Started", leaf.label)
-        assertEquals("/en/docs/user-guide/getting-started", leaf.url)
+        assertEquals("dir1/dir2/file1", leaf.path)
+        assertEquals("File One", leaf.label)
+        assertEquals("/en/dir1/dir2/file1", leaf.url)
         assertTrue(leaf.children.isEmpty())
 
         val home = roots.first { it.path == "home" }
@@ -67,17 +67,17 @@ class SiteNavTreeTest {
     fun `sorts folders before leaf pages, each alphabetically`() {
         val roots = SiteNavTree.build(
             listOf(
-                page("docs/zebra", "Zebra"),            // leaf page
-                page("docs/user-guide/getting-started", "Getting Started"),  // under a folder-page
-                page("docs/user-guide", "User Guide"),
-                page("docs/alpha/intro", "Introduction"),      // under a container folder "alpha"
+                page("dir1/zebra", "Zebra"),            // leaf page
+                page("dir1/dir2/file1", "File One"),    // under a folder-page
+                page("dir1/dir2", "Dir Two"),
+                page("dir1/alpha/intro", "Introduction"),      // under a container folder "alpha"
             ),
         )
-        val docs = roots.single()
-        // Folders first (alpha, user-guide — both have children), then the leaf page (zebra).
-        assertEquals(listOf("docs/alpha", "docs/user-guide", "docs/zebra"), docs.children.map { it.path })
-        assertFalse(docs.children.first { it.path == "docs/alpha" }.hasPage)
-        assertTrue(docs.children.first { it.path == "docs/user-guide" }.hasPage)
+        val dir1 = roots.single()
+        // Folders first (alpha, dir2 — both have children), then the leaf page (zebra).
+        assertEquals(listOf("dir1/alpha", "dir1/dir2", "dir1/zebra"), dir1.children.map { it.path })
+        assertFalse(dir1.children.first { it.path == "dir1/alpha" }.hasPage)
+        assertTrue(dir1.children.first { it.path == "dir1/dir2" }.hasPage)
     }
 
     @Test

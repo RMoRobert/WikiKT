@@ -11,8 +11,8 @@ import io.ktor.http.contentType
 /**
  * Shared fixtures for integration tests that need a normal content pag, seeded here
  */
-const val SAMPLE_PAGE_PATH = "guides/getting-started"
-const val SAMPLE_PAGE_TITLE = "Getting Started"
+const val SAMPLE_PAGE_PATH = "dir1/file1"
+const val SAMPLE_PAGE_TITLE = "File One"
 
 /** Logs in as the default test admin over the JSON API; returns the CSRF token for subsequent writes. */
 suspend fun HttpClient.loginAsAdmin(username: String = "admin", password: String = "test"): String =

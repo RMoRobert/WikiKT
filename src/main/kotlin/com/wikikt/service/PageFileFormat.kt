@@ -150,9 +150,10 @@ object PageFileFormat {
      * front-matter (or null when there's no data). A nested object (a page matching more than one
      * template, keyed by template slug) recurses to a further-indented sub-block; strings are
      * YAML-quoted only when needed; arrays use flow style `[a, b]`; booleans/numbers are bare — the
-     * inverse of [parseYamlBlock].
+     * inverse of [parseYamlBlock]. Internal rather than private so the Wiki.js export can emit the same
+     * block for its "keep as front-matter" infobox mode.
      */
-    private fun infoboxToYaml(infoboxJson: String?): String? {
+    internal fun infoboxToYaml(infoboxJson: String?): String? {
         if (infoboxJson.isNullOrBlank()) return null
         val obj = runCatching { json.parseToJsonElement(infoboxJson) as? JsonObject }.getOrNull() ?: return null
         if (obj.isEmpty()) return null

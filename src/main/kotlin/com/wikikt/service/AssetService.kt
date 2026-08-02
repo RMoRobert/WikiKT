@@ -12,6 +12,7 @@ import com.wikikt.model.toAssetRecord
 import com.wikikt.model.toAssetRevisionRecord
 import com.wikikt.model.toAssetScheduledRecord
 import com.wikikt.routing.isLocaleSegment
+import com.wikikt.routing.resolveRelativeWikiUrl
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.toList
@@ -322,43 +323,139 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
     fun newTempFile(): Path = Files.createTempFile(storageRoot.resolve("tmp"), "upload", ".part")
 
     /**
+     * How a same-origin URL was written in content. An [EMBED] can only ever be satisfied by an asset —
+     * nothing else renders inside an `<img>`. A [LINK] may legitimately point at a wiki page instead, so
+     * the broken-reference scan can't demand an asset for one.
+     */
+    enum class RefKind { EMBED, LINK }
+
+    /**
+     * One same-origin URL found in content: the asset identity it resolves to, how it was written, and
+     * whether the URL named its locale explicitly. The last matters because a locale-relative URL binds
+     * late — see `renderAssetRefs` in WikiRouting — so it can resolve to a different locale per source.
+     */
+    data class ContentRef(val ref: AssetRef, val kind: RefKind, val explicitLocale: Boolean)
+
+    /**
      * The set of assets (by locale+path) referenced from [content] — markdown `![](…)`/`[](…)` and
      * raw HTML `src`/`href`. Code spans/blocks are masked out. Local URLs are normalized to (locale,
      * path) using the same locale parsing the page/asset router uses, so `/x.png` and `/<default>/x.png`
      * collapse while a non-default `/de/x.png` stays distinct.
      */
-    fun referencedAssetPaths(content: String, defaultLocale: String): Set<AssetRef> {
+    fun referencedAssetPaths(
+        content: String,
+        defaultLocale: String,
+        basePath: String = "",
+        baseLocale: String = "",
+    ): Set<AssetRef> =
+        referencedLocalUrls(content, defaultLocale, basePath, baseLocale).mapTo(mutableSetOf()) { it.ref }
+
+    /**
+     * The richer form of [referencedAssetPaths]: the same scan, but keeping embed-vs-link and whether
+     * the locale was explicit. The broken-reference report needs both — an `<img>` with no asset behind
+     * it is broken, while a link with no asset may simply be pointing at a page.
+     *
+     * When [basePath] is given, directory-relative URLs (`image.png`, `../shared/logo.png`) are
+     * resolved against it exactly as [com.wikikt.routing.resolveRelativeWikiUrl] does at render time —
+     * the containing page treated as a directory, landing in [baseLocale]. Pass it only for content
+     * whose render actually applies that pass (page bodies), since a relative URL elsewhere has no
+     * single target. Left blank, relative URLs are skipped entirely.
+     */
+    fun referencedLocalUrls(
+        content: String,
+        defaultLocale: String,
+        basePath: String = "",
+        baseLocale: String = "",
+    ): Set<ContentRef> {
         val masked = ContentMasking.maskedText(content)
-        val refs = mutableSetOf<AssetRef>()
-        for (m in MARKDOWN_URL.findAll(masked)) addLocalUrl(refs, m.groupValues[1], defaultLocale)
-        for (m in HTML_URL.findAll(masked)) addLocalUrl(refs, m.groupValues[1], defaultLocale)
+        val refs = mutableSetOf<ContentRef>()
+        fun add(rawUrl: String, kind: RefKind) {
+            // Relative first: resolveRelativeWikiUrl returns null for anything already absolute, so the
+            // absolute URL falls through to parseLocalUrl unchanged.
+            val url = basePath.takeIf { it.isNotBlank() }
+                ?.let { resolveRelativeWikiUrl(rawUrl, baseLocale.ifBlank { defaultLocale }, it) }
+                ?: rawUrl
+            val (ref, explicit) = parseLocalUrl(url, defaultLocale) ?: return
+            refs.add(ContentRef(ref, kind, explicit))
+        }
+        for (m in MARKDOWN_URL.findAll(masked)) {
+            add(m.groupValues[2], if (m.groupValues[1] == "!") RefKind.EMBED else RefKind.LINK)
+        }
+        for (m in HTML_URL.findAll(masked)) {
+            add(m.groupValues[2], if (m.groupValues[1].equals("src", ignoreCase = true)) RefKind.EMBED else RefKind.LINK)
+        }
         return refs
     }
 
-    private fun addLocalUrl(into: MutableSet<AssetRef>, rawUrl: String, defaultLocale: String) {
-        resolveLocalAssetUrl(rawUrl, defaultLocale)?.let { into.add(it) }
+    /**
+     * Directory-relative URLs in [content] that must name an asset (an embed, or a link to a path with
+     * a file extension — a page path can't contain a period). These are exactly what
+     * [referencedLocalUrls] drops when given no base, so the broken-reference report can list them for
+     * content whose render has no single page to resolve against: infobox values, fragments, the footer
+     * override, nav targets. The fix in every case is an absolute `/folder/file.png`, which binds to the
+     * page's locale and falls back to the default at serve time.
+     */
+    fun unresolvableRelativeRefs(content: String): Set<String> {
+        val masked = ContentMasking.maskedText(content)
+        val out = mutableSetOf<String>()
+        fun add(rawUrl: String, kind: RefKind) {
+            // A non-null result means it really is directory-relative: absolute, anchor, protocol-relative
+            // and scheme'd URLs all return null. The locale/path arguments are placeholders, unused here.
+            if (resolveRelativeWikiUrl(rawUrl, "x", "x") == null) return
+            val path = rawUrl.substringBefore('?').substringBefore('#').trim()
+            if (kind == RefKind.EMBED || path.substringAfterLast('/').contains('.')) out.add(path)
+        }
+        for (m in MARKDOWN_URL.findAll(masked)) {
+            add(m.groupValues[2], if (m.groupValues[1] == "!") RefKind.EMBED else RefKind.LINK)
+        }
+        for (m in HTML_URL.findAll(masked)) {
+            add(m.groupValues[2], if (m.groupValues[1].equals("src", ignoreCase = true)) RefKind.EMBED else RefKind.LINK)
+        }
+        return out
+    }
+
+    /**
+     * A human-readable message naming every directory-relative asset reference in [content] and the
+     * absolute form to replace it with, or null when there are none. [subject] names what is being
+     * checked ("Infobox values", "Fragment content") and starts the sentence.
+     *
+     * This is a **UI-layer** guard: it is called from the page editor and the fragment form only. The
+     * service layer stays permissive on purpose, so a WikiJS import, a backup restore, or the JSON API
+     * can't be failed over a link style — see the note on /f/broken.
+     */
+    fun relativeRefError(content: String, subject: String): String? {
+        val refs = unresolvableRelativeRefs(content)
+        if (refs.isEmpty()) return null
+        // A "../" reference has no single absolute equivalent, so it's named without a suggestion.
+        val fixes = refs.sorted().joinToString(", ") { url ->
+            if (url.startsWith("..")) "'$url'" else "'$url' → '/${url.removePrefix("./")}'"
+        }
+        return "$subject must use absolute file paths that start with '/': $fixes. " +
+            "An absolute path binds to the page's locale and falls back to the default locale, so it " +
+            "stays correct wherever it is shown."
     }
 
     /**
      * Maps a same-origin asset URL (`/x.png` or `/<locale>/x.png`) to its (locale, path) identity using
      * the same locale parsing as the router. Returns null for external/protocol-relative/anchor URLs.
      */
-    fun resolveLocalAssetUrl(rawUrl: String, defaultLocale: String): AssetRef? {
+    fun resolveLocalAssetUrl(rawUrl: String, defaultLocale: String): AssetRef? =
+        parseLocalUrl(rawUrl, defaultLocale)?.first
+
+    /** [resolveLocalAssetUrl], also reporting whether the URL carried its own locale segment. */
+    private fun parseLocalUrl(rawUrl: String, defaultLocale: String): Pair<AssetRef, Boolean>? {
         val url = rawUrl.substringBefore('?').substringBefore('#').trim()
         if (!url.startsWith("/") || url.startsWith("//") || url.contains(":")) return null
         val segments = url.removePrefix("/").split("/").filter { it.isNotEmpty() }
         if (segments.isEmpty()) return null
-        val (locale, pathSegments) = if (isLocaleSegment(segments.first()) && segments.size > 1) {
-            segments.first() to segments.drop(1)
-        } else {
-            defaultLocale to segments
-        }
-        val path = pathSegments.joinToString("/")
-        return if (path.isEmpty()) null else AssetRef(locale, path)
+        val explicitLocale = isLocaleSegment(segments.first()) && segments.size > 1
+        val locale = if (explicitLocale) segments.first() else defaultLocale
+        val path = (if (explicitLocale) segments.drop(1) else segments).joinToString("/")
+        return if (path.isEmpty()) null else AssetRef(locale, path) to explicitLocale
     }
 
     companion object {
-        private val MARKDOWN_URL = Regex("!?\\[[^\\]]*]\\(\\s*<?([^)\\s>]+)")
-        private val HTML_URL = Regex("(?:src|href)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+        private val MARKDOWN_URL = Regex("(!)?\\[[^\\]]*]\\(\\s*<?([^)\\s>]+)")
+        private val HTML_URL = Regex("(src|href)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
     }
 }

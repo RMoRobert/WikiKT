@@ -12,7 +12,10 @@
 <main id="main" tabindex="-1" class="container">
     <div class="page-meta">
         <h1><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Unused assets</h1>
-        <a class="btn btn-secondary" href="/f">Back to All Assets</a>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" href="/f/broken">Broken references</a>
+            <a class="btn btn-secondary" href="/f">Back to All Assets</a>
+        </div>
     </div>
 
     <p class="text-secondary">
@@ -26,8 +29,10 @@
     <div class="alert alert-warning py-2">
         <i class="mdi mdi-alert-outline" aria-hidden="true"></i>
         Verify before deleting, in particular for references the built-in scan can't detect: custom CSS,
-        injected head/body HTML, links from outside the wiki, or reference in page history (asset history is stored
-        separately and only current page data is scanned).
+        injected head/body HTML, links from outside the wiki, reference-style Markdown links, or reference in
+        page history (asset history is stored separately and only current page data is scanned). A relative
+        reference (<code>![](image.png)</code>) counts in a page body, but not in an infobox value or the
+        footer override — those render without a page path to resolve it against.
     </div>
 
     {{#hasUnused}}

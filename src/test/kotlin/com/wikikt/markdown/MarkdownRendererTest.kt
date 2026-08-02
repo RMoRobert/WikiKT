@@ -285,11 +285,11 @@ class MarkdownRendererTest {
 
     @Test
     fun `relative links to other wiki pages keep their href`() {
-        val html = renderer.render("* [Getting Started](/docs/user-guide/getting-started)", ContentFormat.MARKDOWN)
-        // The href must survive sanitizing (relative links were previously stripped to <a>Getting Started</a>)
+        val html = renderer.render("* [File One](/dir1/dir2/file1)", ContentFormat.MARKDOWN)
+        // The href must survive sanitizing (relative links were previously stripped to <a>File One</a>)
         // and stay relative — not rewritten to an absolute URL against the protocol-check base URI.
         assertTrue(
-            html.contains("href=\"/docs/user-guide/getting-started\""),
+            html.contains("href=\"/dir1/dir2/file1\""),
             "relative wiki link should be preserved: $html",
         )
     }
@@ -297,10 +297,10 @@ class MarkdownRendererTest {
     @Test
     fun `image sizing sets width and height, not literal text`() {
         // Width only (the dominant form in the imported content, e.g. `=350x`, `=900x`).
-        val w = renderer.render("![setup](/user-interface/devices/add-device/device-prompt.png =900x)", ContentFormat.MARKDOWN)
+        val w = renderer.render("![setup](/dir1/dir2/dir3/image1.png =900x)", ContentFormat.MARKDOWN)
         assertTrue(w.contains("<img"), "must render an <img>, not literal markdown: $w")
         assertFalse(w.contains("=900x"), "the size marker must be consumed, not shown: $w")
-        assertTrue(w.contains("src=\"/user-interface/devices/add-device/device-prompt.png\""), w)
+        assertTrue(w.contains("src=\"/dir1/dir2/dir3/image1.png\""), w)
         assertTrue(w.contains("width=\"900\""), "width attribute applied: $w")
         assertFalse(w.contains("height="), "no height when the H side is omitted: $w")
         assertFalse(w.contains("title="), "the size marker title is dropped: $w")
@@ -336,17 +336,17 @@ class MarkdownRendererTest {
     fun `image sizing and a title can be combined`() {
         // A title AND a size on the same image: both must survive (regression — used to fail together).
         val both = renderer.render(
-            "![Screenshot of hub homepage (Main Menu)](/user-interface/home-page/main-menu.png \"Hubitat Home Page\" =900x)",
+            "![Screenshot of dir1 (Main View)](/dir1/dir2/image1.png \"Image One\" =900x)",
             ContentFormat.MARKDOWN,
         )
         assertTrue(both.contains("<img"), "must render an <img>, not literal markdown: $both")
-        assertTrue(both.contains("src=\"/user-interface/home-page/main-menu.png\""), both)
+        assertTrue(both.contains("src=\"/dir1/dir2/image1.png\""), both)
         assertTrue(both.contains("width=\"900\""), "width attribute applied: $both")
         assertFalse(both.contains("height="), "no height when the H side is omitted: $both")
-        assertTrue(both.contains("title=\"Hubitat Home Page\""), "the author title is preserved: $both")
+        assertTrue(both.contains("title=\"Image One\""), "the author title is preserved: $both")
         assertFalse(both.contains("wk-img-size"), "the size marker is consumed, not leaked into the title: $both")
         assertFalse(both.contains("=900x"), "the size marker must be consumed, not shown: $both")
-        assertTrue(both.contains("alt=\"Screenshot of hub homepage (Main Menu)\""), "alt with parens kept: $both")
+        assertTrue(both.contains("alt=\"Screenshot of dir1 (Main View)\""), "alt with parens kept: $both")
 
         // Both dimensions plus a title.
         val wh = renderer.render("![x](/a.png \"Cap\" =350x200)", ContentFormat.MARKDOWN)

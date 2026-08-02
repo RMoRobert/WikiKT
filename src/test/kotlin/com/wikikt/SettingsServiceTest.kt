@@ -31,18 +31,18 @@ class SettingsServiceTest {
         val settings = SettingsService(database)
 
         // Unset key: null, and the boolean falls back to the supplied default.
-        assertNull(settings.get(siteId, SettingsService.EDITOR_PLAIN_VIEW))
-        assertFalse(settings.getBool(siteId, SettingsService.EDITOR_PLAIN_VIEW))
+        assertNull(settings.get(siteId, SettingsService.REGISTRATION_ENABLED))
+        assertFalse(settings.getBool(siteId, SettingsService.REGISTRATION_ENABLED))
         assertTrue(settings.getBool(siteId, "missing", default = true))
 
         // Set then read back (insert path).
-        settings.setBool(siteId, SettingsService.EDITOR_PLAIN_VIEW, true)
-        assertTrue(settings.getBool(siteId, SettingsService.EDITOR_PLAIN_VIEW))
-        assertEquals("true", settings.get(siteId, SettingsService.EDITOR_PLAIN_VIEW))
+        settings.setBool(siteId, SettingsService.REGISTRATION_ENABLED, true)
+        assertTrue(settings.getBool(siteId, SettingsService.REGISTRATION_ENABLED))
+        assertEquals("true", settings.get(siteId, SettingsService.REGISTRATION_ENABLED))
 
         // Set again (update path, no duplicate row / no crash).
-        settings.setBool(siteId, SettingsService.EDITOR_PLAIN_VIEW, false)
-        assertFalse(settings.getBool(siteId, SettingsService.EDITOR_PLAIN_VIEW))
+        settings.setBool(siteId, SettingsService.REGISTRATION_ENABLED, false)
+        assertFalse(settings.getBool(siteId, SettingsService.REGISTRATION_ENABLED))
         Unit
     }
 

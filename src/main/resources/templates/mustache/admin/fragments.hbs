@@ -41,6 +41,41 @@
         </tbody>
     </table>
     </div>
+    {{! The inverse of the "Used by" column: pages asking for a fragment that isn't there, which render
+        a visible "[missing fragment: key]" marker for readers. Grouped by key -- one row is one
+        fragment to create (or one rename to undo). }}
+    {{#hasMissing}}
+    <h2 class="h5 mt-4">Missing fragments <span class="badge text-bg-secondary">{{missingCount}}</span></h2>
+    <p class="text-secondary">
+        These keys are referenced but no fragment provides them, so every place below renders
+        <code>[missing fragment: key]</code> instead of content. A fragment may have been deleted or
+        renamed, or the reference may just be a typo.
+    </p>
+    <div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Key</th><th>References</th><th>Referenced from</th><th></th></tr></thead>
+        <tbody>
+        {{#missing}}
+        <tr>
+            <td><code>{{key}}</code></td>
+            <td>{{refCount}}</td>
+            <td>
+                <ul class="list-unstyled mb-0">
+                {{#sources}}
+                    <li><span class="badge text-bg-light">{{type}}</span> <a href="{{url}}">{{label}}</a> <span class="text-secondary">({{locale}})</span></li>
+                {{/sources}}
+                </ul>
+            </td>
+            {{! The query string is literal here on purpose: Mustache escapes "=" in an interpolated
+                value, so building the whole URL server-side would emit "?key&#61;…". }}
+            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/a/fragments/new?key={{key}}">Create</a></td>
+        </tr>
+        {{/missing}}
+        </tbody>
+    </table>
+    </div>
+    {{/hasMissing}}
+
     {{! Click-to-sort, plus drag-to-resize on desktop (enableColumnResize no-ops on touch/narrow screens). }}
     <script src="/static/wk-browser.js?v={{assetVersion}}"></script>
     <script>

@@ -23,8 +23,16 @@ import org.jetbrains.exposed.v1.r2dbc.update
  */
 class SettingsService(private val database: R2dbcDatabase) {
     companion object {
-        /** When true, the Markdown editor uses a monospace font and renders no inline styling. */
-        const val EDITOR_PLAIN_VIEW = "editor.plainView"
+        /**
+         * How the Markdown editor renders the source you type, from least to most styled:
+         * [EDITOR_VIEW_PLAIN] (monospace, no inline styling at all), [EDITOR_VIEW_BASIC] (monospace,
+         * but `**bold**` and headings really are bold), or [EDITOR_VIEW_FORMATTED] (full typographic
+         * rendering). Site-wide default only; the editor toolbar overrides it per browser.
+         */
+        const val EDITOR_VIEW_MODE = "editor.viewMode"
+        const val EDITOR_VIEW_PLAIN = "plain"
+        const val EDITOR_VIEW_BASIC = "basic"
+        const val EDITOR_VIEW_FORMATTED = "formatted"
 
         /**
          * Light/dark surface for the Markdown editor: [EDITOR_THEME_AUTO] (follow the reader's site
