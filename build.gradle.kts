@@ -33,7 +33,7 @@ group = "com.wikikt"
 // keeps reporting -SNAPSHOT. Bump this when cutting a release so source builds match the tag too.
 version = providers.gradleProperty("wikiktVersion")
     .orElse(providers.environmentVariable("WIKIKT_VERSION"))
-    .getOrElse("0.9.8-SNAPSHOT")
+    .getOrElse("0.9.9-SNAPSHOT")
 
 // The commit the build was made from, kept separate from `version` (BuildInfo.assetVersion embeds the
 // version in `?v=` URL query strings, so the version must stay a clean X.Y.Z[-suffix]). Same override
