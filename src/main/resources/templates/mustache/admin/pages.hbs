@@ -9,9 +9,15 @@
 </head>
 <body>
 {{>partials/admin-shell.hbs}}
-    <h1>Pages</h1>
-    <table class="table table-hover align-middle">
-        <thead><tr><th>Title</th><th>Locale</th><th>Path</th><th>Tags</th><th>Updated</th><th></th></tr></thead>
+    <div class="page-meta"><h1>Pages</h1><span class="text-secondary">{{#hasPages}}Showing {{firstRow}}-{{lastRow}} of {{/hasPages}}{{total}} site page{{^one}}s{{/one}}</span></div>
+    <div class="table-responsive">
+    <table class="table table-hover align-middle admin-sortable">
+        <thead><tr>
+            {{#columns}}
+            <th scope="col" aria-sort="{{ariaSort}}"><a class="admin-sort" href="{{url}}">{{label}}<i class="mdi {{#ascending}}mdi-menu-up{{/ascending}}{{#descending}}mdi-menu-down{{/descending}}{{^ascending}}{{^descending}}mdi-unfold-more-horizontal admin-sort-idle{{/descending}}{{/ascending}}" aria-hidden="true"></i></a></th>
+            {{/columns}}
+            <th scope="col"></th>
+        </tr></thead>
         <tbody>
         {{#pages}}
         <tr>
@@ -23,8 +29,44 @@
             <td><a class="btn btn-sm btn-outline-secondary" href="{{viewUrl}}">View</a> <a class="btn btn-sm btn-primary" href="{{editUrl}}">Edit</a></td>
         </tr>
         {{/pages}}
+        {{^hasPages}}
+        <tr><td colspan="6" class="text-secondary">Site has no pages</td></tr>
+        {{/hasPages}}
         </tbody>
     </table>
+    </div>
+    <div class="admin-pager">
+        {{#multiplePages}}
+        <nav aria-label="Page list pagination">
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item{{^hasPrev}} disabled{{/hasPrev}}">
+                    {{#hasPrev}}<a class="page-link" href="{{prevUrl}}" rel="prev" aria-label="Previous"><i class="mdi mdi-chevron-left" aria-hidden="true"></i></a>{{/hasPrev}}
+                    {{^hasPrev}}<span class="page-link" aria-hidden="true"><i class="mdi mdi-chevron-left"></i></span>{{/hasPrev}}
+                </li>
+                {{#pageLinks}}
+                {{#gap}}<li class="page-item disabled"><span class="page-link">…</span></li>{{/gap}}
+                {{^gap}}
+                <li class="page-item{{#current}} active{{/current}}">
+                    {{#current}}<span class="page-link" aria-current="page">{{label}}</span>{{/current}}
+                    {{^current}}<a class="page-link" href="{{url}}">{{label}}</a>{{/current}}
+                </li>
+                {{/gap}}
+                {{/pageLinks}}
+                <li class="page-item{{^hasNext}} disabled{{/hasNext}}">
+                    {{#hasNext}}<a class="page-link" href="{{nextUrl}}" rel="next" aria-label="Next"><i class="mdi mdi-chevron-right" aria-hidden="true"></i></a>{{/hasNext}}
+                    {{^hasNext}}<span class="page-link" aria-hidden="true"><i class="mdi mdi-chevron-right"></i></span>{{/hasNext}}
+                </li>
+            </ul>
+        </nav>
+        {{/multiplePages}}
+        <div class="admin-pager-sizes text-secondary">
+            Number of site pages to show per page:
+            {{#sizeOptions}}
+            {{#current}}<span class="admin-pager-size active" aria-current="true">{{label}}</span>{{/current}}
+            {{^current}}<a class="admin-pager-size" href="{{url}}">{{label}}</a>{{/current}}
+            {{/sizeOptions}}
+        </div>
+    </div>
 {{>partials/admin-shell-end.hbs}}
 {{{bodyHtml}}}</body>
 </html>

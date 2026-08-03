@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * How the three asset-source settings resolve, at the [loadUiConfig] level rather than through a
+ * How the four asset-source settings resolve, at the [loadUiConfig] level rather than through a
  * booted app. The contract is deliberately forgiving: none of them is mandatory, and only an explicit
  * `local` opts out of the CDN. Anything unrecognized lands on the CDN rather than pointing the page
  * at bundled files, because a wrong guess there is a visibly broken install (missing icons), while a
@@ -31,6 +31,7 @@ class UiConfigSourceTest {
         assertTrue(ui.useCdnAssets, "assetSource")
         assertTrue(ui.useCdnIconFont, "iconFontSource")
         assertTrue(ui.useCdnEmojiFont, "emojiFontSource")
+        assertTrue(ui.useCdnMermaid, "mermaidSource")
     }
 
     @Test
@@ -39,6 +40,11 @@ class UiConfigSourceTest {
         assertFalse(ui.useCdnIconFont, "the one that was set")
         assertTrue(ui.useCdnAssets, "the others are untouched")
         assertTrue(ui.useCdnEmojiFont)
+        assertTrue(ui.useCdnMermaid)
+
+        val mermaid = MapApplicationConfig().loadUiConfig(env("WIKIKT_UI_MERMAID_SOURCE" to "local"))
+        assertFalse(mermaid.useCdnMermaid, "Mermaid has its own knob")
+        assertTrue(mermaid.useCdnAssets, "and doesn't ride on assetSource")
     }
 
     @Test

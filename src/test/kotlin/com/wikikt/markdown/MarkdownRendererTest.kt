@@ -438,4 +438,22 @@ class MarkdownRendererTest {
         // Only the outer element of a multi-tag block is stamped, so the anchor list stays one per block.
         assertFalse(html.contains("<code data-line"), "the inner <code> is not stamped too: $html")
     }
+
+    /**
+     * A ```mermaid fence is the whole server-side contract for diagrams: the class marks the block and
+     * the definition survives verbatim, and `static/page-mermaid.js` draws it in the browser from
+     * there. If the sanitizer ever stopped allowing `class`, diagrams would silently stop rendering
+     * with nothing else to notice it by.
+     */
+    @Test
+    fun `a mermaid fence keeps its language class and its definition`() {
+        val md = "```mermaid\ngraph TD;\n  A[\"Start\"] --> B{Choice};\n```\n"
+        val html = renderer.render(md, ContentFormat.MARKDOWN)
+        assertTrue(html.contains("<code class=\"language-mermaid\">"), "block marked for the client: $html")
+        // The arrow and the quoted label are the parts an over-eager sanitizer would eat; escaped
+        // entities are fine (the browser hands textContent back decoded), a dropped line is not.
+        assertTrue(html.contains("graph TD;"), "definition kept: $html")
+        assertTrue(html.contains("--&gt; B{Choice};"), "edges and labels kept, HTML-escaped: $html")
+        assertTrue(html.contains("A[&quot;Start&quot;]") || html.contains("A[\"Start\"]"), "quoted label kept: $html")
+    }
 }

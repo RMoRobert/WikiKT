@@ -95,7 +95,7 @@ WIKIKT_ADMIN_PASSWORD=$(openssl rand -base64 18)
 COMPOSE_PROFILES=selfupdate
 EOF
 chmod 600 .env
-grep WIKIKT_ADMIN_PASSWORD .env   # the generated admin password -- SAVE THIS for first login!
+grep WIKIKT_ADMIN_PASSWORD .env   # generated admin password -- SAVE THIS for first login!
 ```
 
 The `COMPOSE_PROFILES=selfupdate` line enables the updater container that powers one-click updates
@@ -360,6 +360,7 @@ each works in any deployment style: Docker `.env`, a systemd `EnvironmentFile`, 
 | `WIKIKT_UI_ASSET_SOURCE` | `cdn` (default) or `local`; sources for Bootstrap and highlight.js. See [Asset delivery](#asset-delivery).                                                                                                                                        |
 | `WIKIKT_UI_ICON_FONT_SOURCE` | `cdn` (default) or `local`; sources for Material Design Icons webfont.                                                                                                                                                                        |
 | `WIKIKT_UI_EMOJI_FONT_SOURCE` | `cdn` (default) or `local`; source for emoji webfont.                                                                                                                                                                                          |
+| `WIKIKT_UI_MERMAID_SOURCE` | `cdn` (default) or `local`; source for the Mermaid diagram library (```mermaid fences).                                                                                                                                                          |
 | `WIKIKT_UPDATE_REQUEST_DIR` / `WIKIKT_UPDATE_STATE_DIR` | Directories of the self-update handshake with the optional updater container. Already set by the Compose files; leave alone unless building a custom stack. Unset (both) = the one-click update feature is absent.                                |
 
 ### Compose-only variables (not WikiKT settings)
@@ -386,7 +387,7 @@ and hostname routing are your own proxy's job and neither variable does anything
 WikiKT's front-end libraries and webfonts load from public CDNs by default. Most are also
 bundled in the JAR, so you can serve them yourself if you prefer a fully local/self-served setup.
 
-Three settings, one for each general category of assets, control this. Each accepts `cdn` (default)
+Four settings, one for each general category of assets, control this. Each accepts `cdn` (default)
 or `local`; the default (none or invalid value specified) results in `cdn`.
 
 | Setting (yaml) | Environment variable | Covers | Size | CDN host | Bundled at |
@@ -394,16 +395,20 @@ or `local`; the default (none or invalid value specified) results in `cdn`.
 | `wikikt.ui.assetSource` | `WIKIKT_UI_ASSET_SOURCE` | Bootstrap, highlight.js | ~440 KB | `cdn.jsdelivr.net` | `/static/vendor/` |
 | `wikikt.ui.iconFontSource` | `WIKIKT_UI_ICON_FONT_SOURCE` | Material Design Icons | ~750 KB | `cdn.jsdelivr.net` | `/static/vendor/mdi/` |
 | `wikikt.ui.emojiFontSource` | `WIKIKT_UI_EMOJI_FONT_SOURCE` | Noto Color Emoji | ~2 MB | `fonts.googleapis.com` | `/static/vendor/noto-emoji/` |
+| `wikikt.ui.mermaidSource` | `WIKIKT_UI_MERMAID_SOURCE` | Mermaid (diagrams) | ~3.5 MB | `cdn.jsdelivr.net` | `/static/vendor/mermaid/` |
 
 They are separate settings rather than one overarching setting because the sizes differ by an order
 of magnitude, and so do the consequences of a blocked CDN: missing *icons* might leave unexpected gaps
 in the UI (though otherwise functioning), while a missing emoji font degrades gracefully to the OS defaults.
+Mermaid is the largest of the lot but also the only one fetched *lazily* -- a page without a
+```mermaid diagram on it never requests it, and a blocked CDN just leaves the diagram showing as its
+source code block.
 
-The current state of all three is shown read-only under **Administration | Settings | Appearance |
+The current state of all four is shown read-only under **Administration | Settings | Appearance |
 Asset delivery**. (Read-only because it can only be configured at deployment for instance, not per
 site after deployment.)
 
-With Docker, add those three lines to your `.env` (see [`.env.example`](../.env.example)) and re-run
+With Docker, add those four lines to your `.env` (see [`.env.example`](../.env.example)) and re-run
 `docker compose up -d`. In a yaml config file, set the `wikikt.ui.*` keys instead.
 
 > **Note on fonts:** As of now, even with all set to `local`, the default (body and heading) fonts

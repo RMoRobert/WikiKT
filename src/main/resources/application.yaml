@@ -34,11 +34,12 @@ wikikt:
     maxAgeSeconds: 1296000
   ui:
     # --- Front-end asset delivery -------------------------------------------------------------
-    # Each of the three is "cdn" (the default) or "local". "local" serves the copy bundled in the
+    # Each of the four is "cdn" (the default) or "local". "local" serves the copy bundled in the
     # jar under static/vendor/ -- no Internet request, at the cost of your own bandwidth. They are
-    # separate knobs because the two webfonts are far larger than everything else, so you may want
-    # them handled differently. Set all three to "local" for completely offline install (but minnd
-    # fonts also); see docs/install.md. Administration > Appearance shows the effective values, read-only.
+    # separate knobs because the two webfonts and Mermaid are far larger than everything
+    # else, so you may want them handled differently. Set all four to "local" for completely offline
+    # install (but minnd fonts also); see docs/install.md. Administration > Appearance shows the
+    # effective values, read-only.
     #
     # Bootstrap + highlight.js (~440KB). Override via WIKIKT_UI_ASSET_SOURCE.
     assetSource: cdn
@@ -52,6 +53,11 @@ wikikt:
     # gracefully. Prefer "local" if outbound requests aren't possible/guaranteed.
     # Override via WIKIKT_UI_ICON_FONT_SOURCE.
     iconFontSource: cdn
+    # Mermaid, for ```mermaid diagrams: jsdelivr, or static/vendor/mermaid/ (~3.5MB). Loaded lazily and
+    # only by a page that has a diagram on it, so most page views never fetch it either way; a blocked
+    # CDN leaves the diagram's source showing as a code block.
+    # Override via WIKIKT_UI_MERMAID_SOURCE.
+    mermaidSource: cdn
   assets:
     # Directory for uploaded files (relative to the working dir, or absolute). Include it in backups.
     # Override via WIKIKT_ASSET_STORAGE_DIR.

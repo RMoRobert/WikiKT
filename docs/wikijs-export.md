@@ -111,11 +111,12 @@ reset, and other minor differences,
   resolved into each `![…]` is what readers get from then on.
 - **Rendering is close but not identical.** Everything WikiKT renders, Wiki.js also renders: tables,
   strikethrough, task lists, footnotes, sub/sup (`~x~`, `^x^`), `:emoji:` shortcodes, `{.is-info}` and
-  friends, and `{.tabset}` headings. So a page that looks right here looks right there — modulo Wiki.js
-  drawing emoji as Twemoji images rather than the font glyphs WikiKT uses.
+  friends, `{.tabset}` headings, and ` ```mermaid ` diagrams (both draw them client-side from the same
+  fence, so they travel unchanged in either direction). So a page that looks right here looks right
+  there — modulo Wiki.js drawing emoji as Twemoji images rather than the font glyphs WikiKT uses.
 
   The gap runs the *other* way, and matters when content comes back: Wiki.js additionally supports
-  `==mark==`, abbreviations, general `{.attrs}` decorations, KaTeX, Mermaid, PlantUML and Kroki, none of
+  `==mark==`, abbreviations, general `{.attrs}` decorations, KaTeX, PlantUML and Kroki, none of
   which WikiKT renders. A page authored in Wiki.js using those imports fine but shows the raw syntax.
 - **Sanitizing differs.** Wiki.js sanitizes with DOMPurify and (by default) allows inline HTML; WikiKT
   uses jsoup with its own allowlist. Raw HTML that WikiKT strips today may survive there, and vice

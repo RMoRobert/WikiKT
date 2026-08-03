@@ -101,10 +101,11 @@ services:
 
       # Asset delivery:
       # Where frontend libraries and webfonts load from: "cdn" (default) or "local" (to serve the copies
-      # bundled in the image). Set all three in .env for a fully local install; see docs/install.md ("Asset delivery").
+      # bundled in the image). Set all four in .env for a fully local install; see docs/install.md ("Asset delivery").
       WIKIKT_UI_ASSET_SOURCE: ${WIKIKT_UI_ASSET_SOURCE:-cdn}             # Bootstrap, highlight.js (~440KB)
       WIKIKT_UI_ICON_FONT_SOURCE: ${WIKIKT_UI_ICON_FONT_SOURCE:-cdn}     # icons (~750KB); if unavailable, gaps in UI
       WIKIKT_UI_EMOJI_FONT_SOURCE: ${WIKIKT_UI_EMOJI_FONT_SOURCE:-cdn}   # emoji font (~2MB); if unavailable, uses OS emoji
+      WIKIKT_UI_MERMAID_SOURCE: ${WIKIKT_UI_MERMAID_SOURCE:-cdn}         # Mermaid (~3.5MB, lazy); if unavailable, diagram source shown
       # inline (B): set the literal value, e.g. WIKIKT_UI_ASSET_SOURCE: "local"
       # Self-update handshake with the optional wikikt-updater service (see it below). Inert unless
       # that service is enabled via `--profile selfupdate` (which also needs the GHCR `image:`

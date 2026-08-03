@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.toList
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.LikePattern
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNotNull
@@ -38,6 +39,7 @@ import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.min
 import org.jetbrains.exposed.v1.r2dbc.R2dbcDatabase
 import org.jetbrains.exposed.v1.r2dbc.deleteWhere
 import org.jetbrains.exposed.v1.r2dbc.insert
@@ -50,6 +52,27 @@ import org.jetbrains.exposed.v1.r2dbc.update
 // part of a longer path (e.g. /en/foo inside /en/foobar or /fr/en/foo), not a link to the target.
 private val PATH_CONTINUATION: Set<Char> =
     (('a'..'z') + ('A'..'Z') + ('0'..'9')).toSet() + setOf('-', '_', '/', '.', '~')
+
+/**
+ * A sortable column of the admin page list (`/a/pages`). [key] is what travels in the `?sort=` query
+ * parameter, so it is part of the admin URL contract — keep the values stable.
+ */
+enum class PageSortColumn(val key: String) {
+    TITLE("title"),
+    LOCALE("locale"),
+    PATH("path"),
+    TAGS("tags"),
+    UPDATED("updated"),
+    ;
+
+    companion object {
+        /** The column [key] names, or null when it names nothing (unknown/absent → caller's default). */
+        fun fromKey(key: String?): PageSortColumn? = entries.firstOrNull { it.key == key }
+    }
+}
+
+/** One window of [PageService.listPaged]: the rows asked for, plus the unpaged total behind them. */
+data class PagedPages(val pages: List<PageRecord>, val total: Long)
 
 private fun contentLinksTo(content: String, target: String): Boolean {
     var i = content.indexOf(target)
@@ -133,6 +156,78 @@ class PageService(private val database: R2dbcDatabase) {
         // Load tags for just this site's pages, not the whole (all-sites) PageTagsTable.
         val tagsByPage = loadTagsForPages(pages.map { it.id })
         pages.map { it.copy(tags = tagsByPage[it.id].orEmpty().sorted()) }
+    }
+
+    /**
+     * One sorted, paginated window of a site's pages — what the admin page list (`/a/pages`) renders,
+     * so only that window is fetched however large the wiki is. Ordering and the [limit]/[offset] both
+     * happen in SQL; [PagedPages.total] is the unpaged row count, for the pager.
+     *
+     * Selects [SEARCH_PAGE_COLUMNS] — no page bodies, which is the point of paging this at all — so
+     * the returned records have an empty `content` (see [toSearchPageRecord]). Tags come from one
+     * batched side query over just this window.
+     *
+     * Text columns sort case-insensitively (`LOWER()`), matching how the list reads on screen rather
+     * than the database's collation. Every sort ends with the page id so the order is total and the
+     * windows stay stable across pages.
+     */
+    suspend fun listPaged(
+        siteId: UInt,
+        sort: PageSortColumn = PageSortColumn.TITLE,
+        descending: Boolean = false,
+        offset: Long = 0,
+        limit: Int = 25,
+    ): PagedPages = suspendTransaction(database) {
+        val total = PagesTable.select(PagesTable.id).where { PagesTable.siteId eq siteId }.count()
+        val order = if (descending) SortOrder.DESC else SortOrder.ASC
+        val pages = if (sort == PageSortColumn.TAGS) {
+            listPageIdsByTag(siteId, descending, offset, limit).let { ids ->
+                val byId = PagesTable.select(SEARCH_PAGE_COLUMNS)
+                    .where { PagesTable.id inList ids }
+                    .map { it.toSearchPageRecord() }
+                    .toList()
+                    .associateBy { it.id }
+                ids.mapNotNull(byId::get)
+            }
+        } else {
+            val ordering = when (sort) {
+                PageSortColumn.TITLE -> listOf(PagesTable.title.lowerCase() to order)
+                PageSortColumn.LOCALE -> listOf(PagesTable.locale to order, PagesTable.title.lowerCase() to SortOrder.ASC)
+                PageSortColumn.PATH -> listOf(PagesTable.path.lowerCase() to order)
+                PageSortColumn.UPDATED -> listOf(PagesTable.updatedAt to order)
+                PageSortColumn.TAGS -> error("handled above")
+            } + (PagesTable.id to SortOrder.ASC)
+            PagesTable.select(SEARCH_PAGE_COLUMNS)
+                .where { PagesTable.siteId eq siteId }
+                .orderBy(*ordering.toTypedArray())
+                .limit(limit).offset(offset)
+                .map { it.toSearchPageRecord() }
+                .toList()
+        }
+        val tagsByPage = loadTagsForPages(pages.map { it.id })
+        PagedPages(pages.map { it.copy(tags = tagsByPage[it.id].orEmpty().sorted()) }, total)
+    }
+
+    /**
+     * Ids of one window of pages ordered by their tags. Tags live in a side table, so the window can't
+     * be picked by a plain ORDER BY on [PagesTable]: this groups the (left-joined) tag rows per page
+     * and orders on each page's alphabetically first tag — which is what the comma-joined tag cell
+     * leads with. Untagged pages have no tag rows, so they sort last in both directions.
+     *
+     * Only ids are selected, because grouping and selecting the full row isn't portable across H2 and
+     * Postgres; the caller re-reads the rows by id and restores this order. Call within a transaction.
+     */
+    private suspend fun listPageIdsByTag(siteId: UInt, descending: Boolean, offset: Long, limit: Int): List<UInt> {
+        val firstTag = PageTagsTable.tag.min()
+        val tagOrder = if (descending) SortOrder.DESC_NULLS_LAST else SortOrder.ASC_NULLS_LAST
+        return (PagesTable leftJoin PageTagsTable)
+            .select(PagesTable.id, firstTag)
+            .where { PagesTable.siteId eq siteId }
+            .groupBy(PagesTable.id)
+            .orderBy(firstTag to tagOrder, PagesTable.id to SortOrder.ASC)
+            .limit(limit).offset(offset)
+            .map { it[PagesTable.id].value }
+            .toList()
     }
 
     /**

@@ -27,6 +27,7 @@ class SeedService(
     private val config: WikiKtConfig,
     private val sites: SiteService,
     private val pageService: PageService,
+    private val settings: SettingsService,
 ) {
     suspend fun seedIfEmpty() {
         seedGroups()
@@ -38,18 +39,39 @@ class SeedService(
     /**
      * Gives a freshly created site the same starter content a first-run install gets: a home page from
      * /seed/home.md — so a new hostname greets visitors with a real page instead of a "create this page"
-     * 404. No navigation menu is seeded: the sidebar's Home shortcut (Administration > Navigation, on by
-     * default) already provides that link, so a seeded "Home" item would only duplicate it. Idempotent
-     * (it reuses the guarded seeder below), so it's a no-op on a site that already has a home page.
+     * 404 — and the same starting settings. No navigation menu is seeded: the sidebar's Home shortcut
+     * (Administration > Navigation, on by default) already provides that link, so a seeded "Home" item
+     * would only duplicate it. Idempotent (it reuses the guarded seeders below), so it's a no-op on a
+     * site that already has a home page or has had its settings touched.
      */
     suspend fun seedNewSite(siteId: UInt) {
         seedHomePage(siteId)
+        seedSiteSettings(siteId)
     }
 
     /** The default catch-all site (created on first run); its id owns the seeded content. */
     private suspend fun seedDefaultSite(): UInt {
         sites.all().firstOrNull()?.let { return it.id }
-        return sites.create(name = "Main site", hostname = null, isCatchAll = true).id
+        val created = sites.create(name = "Main site", hostname = null, isCatchAll = true)
+        seedSiteSettings(created.id)
+        return created.id
+    }
+
+    /**
+     * Settings a brand-new site starts with, where the stored value should differ from the code default
+     * in [com.wikikt.markdown.RenderOptions] / [SettingsService]. Only ever written for a site created
+     * from now on: an install upgrading into a new starting value keeps whatever its unset keys already
+     * fall back to, so its pages never re-render differently after an update. Skips any key an admin has
+     * already set, which also makes it safe to re-run.
+     *
+     * Currently one entry — line breaks. The parser's own default is CommonMark's (a single newline joins
+     * to the same paragraph), but the wanted behaviour for a wiki is the literal one: a hand-wrapped line
+     * stays its own line, which is what an author typing them expects to see.
+     */
+    private suspend fun seedSiteSettings(siteId: UInt) {
+        if (settings.get(siteId, SettingsService.RENDER_LINE_BREAKS) == null) {
+            settings.setBool(siteId, SettingsService.RENDER_LINE_BREAKS, true)
+        }
     }
 
     private suspend fun seedGroups() {

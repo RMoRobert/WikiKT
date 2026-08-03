@@ -700,6 +700,11 @@
       .then(function (html) {
         if (seq !== previewSeq) return;
         pane.innerHTML = '<div class="wiki-content">' + html + '</div>';
+        // Mermaid fences are rendered in the browser, so a fresh pane needs that pass run over it again
+        // (page-mermaid.js; absent if the page didn't include it). A diagram replaces a code block with
+        // a taller SVG well after this render returns, shifting every offset below it — so re-anchor
+        // when it lands, exactly as the image handler in onPreviewRendered does.
+        if (window.wkRenderMermaid) window.wkRenderMermaid(pane).then(invalidateAnchors);
         onPreviewRendered(pane);
       })
       .catch(function () {

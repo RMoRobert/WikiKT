@@ -5,9 +5,11 @@
   'use strict';
 
   // --- Main Menu ⇄ Browse picker (both mode); remembers the choice per browser in the wk-nav-view cookie. ---
-  // The picker is a Bootstrap dropdown. Its trigger icon is fixed (it names the control, not the
-  // selection); which view is current lives in the menu's .active item and in the trigger's
-  // title/aria-label, plus the label the trigger shows when there's no Home button beside it.
+  // The picker is a Bootstrap dropdown whose trigger MIRRORS the current view: its icon is the selected
+  // item's own glyph (data-nav-icon) and its label the item's own text, so the button states which pane is
+  // live while the caret states that others exist. Which view is current therefore lives in four places
+  // that must move together — the trigger's icon, its label, its title/aria-label, and the menu's .active
+  // item — so they're all written in one pass here, from the same source the template rendered from.
   function switchInit(side) {
     if (side.dataset.navSwitchWired) return;
     side.dataset.navSwitchWired = '1';
@@ -16,6 +18,7 @@
     var trigger = side.querySelector('[data-nav-view-trigger]');
     if (!items.length || !trigger) return;
     var triggerLabel = trigger.querySelector('.wk-nav-view-label');
+    var triggerIcon = trigger.querySelector('[data-nav-view-icon]');
 
     function show(view) {
       panes.forEach(function (p) { p.classList.toggle('is-active', p.getAttribute('data-nav-view') === view); });
@@ -26,16 +29,21 @@
         it.classList.toggle('active', on);
         if (on) it.setAttribute('aria-current', 'true'); else it.removeAttribute('aria-current');
         if (!on) return;
-        // Same wording partials/sidebar.hbs renders server-side — keep the two in step.
-        var label = 'Navigation view mode: ' + it.getAttribute('data-nav-label');
-        if (triggerLabel) triggerLabel.textContent = it.getAttribute('data-nav-label');
-        trigger.setAttribute('title', label);
-        trigger.setAttribute('aria-label', label);
+        // Same wording and glyph partials/sidebar.hbs renders server-side — keep the two in step.
+        var name = it.getAttribute('data-nav-label');
+        if (triggerLabel) triggerLabel.textContent = name;
+        if (triggerIcon) triggerIcon.className = 'mdi mdi-' + it.getAttribute('data-nav-icon');
+        trigger.setAttribute('title', 'Navigation view: ' + name);
+        trigger.setAttribute('aria-label', 'Navigation view: ' + name);
       });
       try { document.cookie = 'wk-nav-view=' + view + '; path=/; max-age=31536000; SameSite=Lax'; } catch (e) {}
     }
     items.forEach(function (it) {
-      it.addEventListener('click', function () { show(it.getAttribute('data-nav-view')); });
+      it.addEventListener('click', function () {
+        // Re-picking the live view would rewrite the cookie and re-render the pane for nothing.
+        if (it.classList.contains('active')) return;
+        show(it.getAttribute('data-nav-view'));
+      });
     });
   }
 

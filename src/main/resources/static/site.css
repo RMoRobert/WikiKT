@@ -35,7 +35,7 @@ textarea::placeholder {
 
 /* --- Page chrome palette. Content sits directly on --bs-body-bg (white / dark); the
    chrome around it is a full-height colored nav sidebar plus a muted breadcrumb band (--wk-crumb-bg)
-   under the header. Dark mode turns the sidebar into a plain dark surface.
+   under the header. Dark mode keeps that same blue column, only deepened.
    The sidebar bg + foreground tints are admin-customizable per site (Admin > Appearance): partials/
    brand-style.hbs overrides --wk-sidebar-bg for light/dark mode and flips the fg vars to black-based
    tints when the chosen color is light. Keep the two var sets in sync with that partial. --- */
@@ -55,8 +55,13 @@ textarea::placeholder {
     --wk-sidebar-gap: 0.75rem;
     --wk-sidebar-bg: #2168ab;
     --wk-sidebar-fg: rgba(255, 255, 255, 0.95);
-    /* 0.82 (not 0.72) keeps muted sidebar text at >=4.5:1 on the default #2168ab background (WCAG 1.4.3). */
-    --wk-sidebar-fg-muted: rgba(255, 255, 255, 0.82);
+    /* Muted sidebar text is this alpha composited over --wk-sidebar-bg, so the pair — not the alpha alone
+       — decides whether it clears WCAG 1.4.3's 4.5:1 for normal text (everything using this var is well
+       under 18px). Recheck the ratio whenever either value changes: 0.72 fails outright on the default
+       background and 0.82 lands a hair under at 4.47:1, which is why this sits at 0.83. Deliberately no
+       exact passing figure recorded here — it is a property of both values and goes stale the moment the
+       background is retuned, as the two comments that used to quote one both did. */
+    --wk-sidebar-fg-muted: rgba(255, 255, 255, 0.83);
     --wk-sidebar-hover-bg: rgba(255, 255, 255, 0.14);
     --wk-sidebar-active-bg: rgba(255, 255, 255, 0.22);
     --wk-sidebar-line: rgba(255, 255, 255, 0.3);
@@ -69,8 +74,8 @@ textarea::placeholder {
     --wk-sidebar-header-line: var(--bs-border-width) solid var(--wk-sidebar-line);
     /* Admin console sidebar — a FIXED neutral palette, deliberately NOT the customizable --wk-sidebar-*
        vars above: a bad admin color pick would make the console (incl. the page needed to fix it)
-       unreadable. Light mode = light-gray column; dark mode = the same dark surface the public
-       sidebar uses. brand-style.hbs must never override these. */
+       unreadable. Light mode = light-gray column; dark mode = a plain dark column (the public sidebar
+       is blue in both modes). brand-style.hbs must never override these. */
     --wk-admin-bg: #f4f6f9;
     --wk-admin-fg: var(--bs-body-color);
     --wk-admin-fg-muted: var(--bs-secondary-color);
@@ -79,13 +84,13 @@ textarea::placeholder {
 }
 [data-bs-theme="dark"] {
     --wk-crumb-bg: #1a1e22;
-    --wk-sidebar-bg: #212529;
-    --wk-sidebar-fg: rgba(255, 255, 255, 0.85);
-    --wk-sidebar-fg-muted: rgba(255, 255, 255, 0.55);
-    --wk-sidebar-hover-bg: rgba(255, 255, 255, 0.1);
-    --wk-sidebar-active-bg: rgba(255, 255, 255, 0.16);
-    --wk-sidebar-line: rgba(255, 255, 255, 0.16);
-    --wk-sidebar-edge: var(--bs-border-color);
+    /* Same blue as light mode, deepened (~0.8x per channel) so a saturated column doesn't glare against
+       the dark canvas, and pulled a little toward navy — hue 212 against light mode's 207. Only the
+       background is overridden here: the surface is still a dark, saturated blue, so every foreground
+       tint, overlay and the transparent outer edge is inherited from :root — including the muted alpha,
+       which clears WCAG 1.4.3's 4.5:1 with room to spare on this background (being darker than light
+       mode's, it is the easier of the two; see the note on that alpha in :root). */
+    --wk-sidebar-bg: #1a4f8a;
     --wk-admin-bg: #212529;
     --wk-admin-fg: rgba(255, 255, 255, 0.85);
     --wk-admin-fg-muted: rgba(255, 255, 255, 0.55);
@@ -385,6 +390,14 @@ h2 { margin-top: 2rem; }
     font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
     font-size: 0.85em;
 }
+/* The digits are not a separate column in the DOM: CodeMirror renders a .CodeMirror-gutter-wrapper
+   *inside* each line and pins it left with absolute positioning, so a drag across several lines runs
+   straight through them and they land in the clipboard mixed into the code. Taking the wrapper out of
+   selection excludes it from both the highlight and the copy; the gutter has no text worth selecting,
+   and clicking it (to place the caret or set a marker) is unaffected. The ::selection rule is a
+   belt-and-braces for engines that still paint a band over unselectable text. */
+.CodeMirror-gutter-wrapper, .CodeMirror-gutter-wrapper * { user-select: none; -webkit-user-select: none; }
+.CodeMirror-gutter-wrapper ::selection, .CodeMirror-gutter-wrapper::selection { background: transparent; }
 /* `span` only to raise specificity: an overlay token is layered *on top of* whatever Markdown token it
    lands in, so `{.is-warning}` under a `>` quote also carries .cm-quote — which plain view resets to
    inherit. Without the extra weight the brace form would lose its tint in exactly the spot callouts
@@ -1283,10 +1296,33 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     color: var(--bs-secondary-color);
 }
 .wiki-content img { max-width: 100%; height: auto; }
+/* An image that fails to load (class added by broken-images.js). Left to the browser it renders as
+   its alt text in the body font — indistinguishable from the prose around it, and with an empty alt,
+   invisible. A dashed, muted box says "an image belongs here and isn't loading" at a glance, keeps
+   the alt readable as a caption-ish label, and still shows something when there is no alt at all. The
+   min sizes are what guarantee that last case; `height: auto` above means the box otherwise collapses
+   to the text. */
+.wiki-content img.wk-img-broken,
+.editor-preview-side img.wk-img-broken,
+.editor-preview img.wk-img-broken {
+    display: inline-block;
+    min-width: 8rem;
+    min-height: 2.5rem;
+    max-width: 100%;
+    padding: 0.4rem 0.6rem;
+    /* Dashed in the muted *text* colour, not --bs-border-color: against the fill that border is nearly
+       invisible in the light theme, and the outline is the whole signal here. */
+    border: 1px dashed var(--bs-secondary-color);
+    border-radius: var(--bs-border-radius, 0.375rem);
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+    font-style: italic;
+}
 
 .wiki-content header {
     border-bottom: 1px solid var(--bs-light-border-subtle);
-    margin-bottom: 1em;.
+    margin-bottom: 1em;
 }
 
 .wiki-content header p {
@@ -1412,6 +1448,28 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .wiki-content .code-copy-btn.copied { opacity: 1; color: var(--bs-success, #198754); }
 .wiki-content .code-copy-btn .mdi { font-size: 1rem; line-height: 1; }
 @media (hover: none) { .wiki-content .code-copy-btn { opacity: 0.6; } }
+
+/* Mermaid diagrams (```mermaid fences, drawn by page-mermaid.js). The wrapper holds both the SVG and
+   the original code block, and only swaps to the diagram once one is actually in — so a reader with no
+   JS, a blocked library, or a diagram with a typo in it sees the source rather than a blank space.
+   Wide diagrams scroll inside the wrapper instead of widening the article. */
+.wiki-content .wk-mermaid > .wk-mermaid-svg { display: none; }
+.wiki-content .wk-mermaid.is-rendered > .wk-mermaid-svg {
+    display: block;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+.wiki-content .wk-mermaid.is-rendered > pre { display: none; }
+.wiki-content .wk-mermaid svg { max-width: 100%; height: auto; }
+/* Failed render: say why the code block is there, rather than leaving it looking like a stray fence. */
+.wiki-content .wk-mermaid.is-failed::before {
+    content: "Diagram could not be rendered — showing its source.";
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+}
 
 /* Small inline copy button next to a value in a table or form (added by copy-inline.js). Unlike the
    code-block button it stays visible — it sits inside table rows where a hover-reveal is easy to miss
@@ -1589,6 +1647,12 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
         width: var(--wk-sidebar-w);
         overflow-y: auto;
         scrollbar-width: thin;
+        /* Reserve the scrollbar's gutter whether or not it's currently needed, so the column's content
+           width doesn't change when the pane does. Without it a long Main Menu scrolls and a short Browse
+           level doesn't, and every row in the sidebar shifts by the scrollbar's width as you switch views
+           — most visibly the Home shortcut, which is the only one wide enough to show it. No-op on
+           platforms with overlay scrollbars, which never took the space to begin with. */
+        scrollbar-gutter: stable;
         border-right: var(--bs-border-width) solid var(--wk-sidebar-edge);
         /* Hairline against the header. The column's top edge already sits exactly at the bar's bottom
            (top: --wikikt-header-h), so a border here reads as a divider level with the bar rather than
@@ -1684,6 +1748,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
         max-width: 100vw;
         max-height: calc(100vh - var(--wikikt-header-h));
         overflow-y: auto;
+        scrollbar-gutter: stable;               /* same reason as the desktop column above */
         z-index: 1019;
         border-radius: 0 0 0.4rem 0;            /* square against the top/left edges; only the free bottom-right corner softened */
         /* Same header seam as the desktop column — the drawer's own shadow is thrown down and out, so it
@@ -2082,6 +2147,33 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .admin-main > h1:first-child { margin-top: 0.25rem; }
 .admin-main .edit-form { max-width: 42rem; }
 .admin-nav-toggle { display: none; }
+
+/* --- Sortable table headers + pager (admin/pages.hbs). Sorting and paging are plain links, so this
+       is styling only — no JS, and it works with the keyboard for free. --- */
+.admin-sortable th { white-space: nowrap; }
+.admin-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    color: inherit;
+    text-decoration: none;
+}
+.admin-sort:hover { color: var(--bs-primary); }
+.admin-sort .mdi { font-size: 1.05rem; line-height: 1; }
+/* The unsorted columns keep their (dimmed) indicator so the header doesn't jump on click. */
+.admin-sort-idle { opacity: 0.3; }
+.admin-sort:hover .admin-sort-idle { opacity: 0.6; }
+.admin-pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+.admin-pager-sizes { font-size: 0.9rem; margin-left: auto; }
+.admin-pager-size { margin-left: 0.35rem; }
+.admin-pager-size.active { font-weight: 600; color: var(--bs-body-color); }
 /* Desktop: pin the sidebar as a full-height fixed column flush with the viewport's top-left (under
    the sticky header), and offset the console content past it — mirrors .wiki-sidebar. */
 @media (min-width: 768.02px) {
@@ -2332,15 +2424,20 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 .wiki-sidebar .nav-parent.active { color: var(--wk-sidebar-fg); background: var(--wk-sidebar-active-bg); }
 
 /* --- Sidebar navigation modes: static ⇄ tree view switch + drill-down page browser (wk-nav-browser.js) --- */
-/* Top-of-sidebar control row (both mode): the optional Home shortcut, then the view picker. Both sit
-   flat on the sidebar — a permanent fill on either would read as "selected" when it only means
-   "available", and the sidebar already spends its two fills on hover and current-page. align-items
-   :stretch keeps them the same height whatever each holds. */
+/* Top-of-sidebar control row (both mode): the optional Home shortcut, then the view toggle. align-items
+   :stretch keeps them the same height whatever each holds, so the toggle inherits the ~40px height of a
+   nav row and its segments are a comfortable touch target vertically whatever they hold.
+   The row is a query container so the segment labels can appear exactly when the sidebar is wide enough
+   to seat them — see .wk-nav-view-label. Querying the row (not .wiki-sidebar) keeps containment on a
+   box whose own width is imposed by its block parent, so nothing here can depend on its own contents;
+   the admin nav-editor preview reuses .wiki-sidebar and must stay content-sized. */
 .wiki-sidebar .wk-nav-switch {
     display: flex;
     align-items: stretch;
     gap: 0.4rem;
     margin-bottom: 0.6rem;
+    container-type: inline-size;
+    container-name: wk-nav-switch;
 }
 /* .wk-nav-home-btn is the in-row placement of the same Home shortcut .wk-nav-home-link renders on its
    own (the class name predates it looking like a link); it's styled by the nav-link rules further up
@@ -2348,17 +2445,27 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    first menu item — including taking the current-page fill only when you're actually on /home. All it
    needs here is to claim the row's slack. */
 .wiki-sidebar .wk-nav-switch .wk-nav-home-btn { flex: 1 1 auto; min-width: 0; }
-/* The picker is the quiet half of the pair: flat until you touch it. Same behaviour as .nav-icon in
-   the top bar (hover AND focus-visible, so the clue isn't pointer-only) — mirrored rather than shared
-   because that rule is scoped to the navbar and keyed to the navbar tint. .show keeps the fill while
-   the menu is open so the button doesn't read as detached from it. Bootstrap has no flat/ghost button
-   variant to inherit any of this from. */
+/* The picker is the quiet half of the pair: flat until you touch it, so nothing here carries a permanent
+   fill. That matters more than it looks — this column spends its fills on hover and current-page, and a
+   resting fill on a control that only means "available" would read as a selection. The *state* is carried
+   by the trigger's icon (swapped to whichever view is live, see the template) rather than by a fill, which
+   is what lets the control stay flat and stay small. Same hover behaviour as .nav-icon in the top bar
+   (hover AND focus-visible, so the clue isn't pointer-only) — mirrored rather than shared because that
+   rule is scoped to the navbar and keyed to the navbar tint. .show keeps the fill while the menu is open
+   so the button doesn't read as detached from it. Bootstrap has no flat/ghost button variant to inherit
+   any of this from. */
+.wiki-sidebar .wk-nav-view-picker { flex: 0 0 auto; display: flex; }
 .wiki-sidebar .wk-nav-view-btn {
+    flex: 1 1 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
-    padding: 0.3rem 0.6rem;
+    /* Enough that an icon-and-caret target stays comfortable under a thumb; the row's height comes from
+       Home (~40px), so this keeps the button roughly square. Home has the width to spare — it needs ~82px
+       for icon + "Home" and is handed ~140px. */
+    min-width: 2.5rem;
+    padding: 0.3rem 0.55rem;
     border: 0;
     border-radius: var(--bs-border-radius);
     background: transparent;
@@ -2375,13 +2482,6 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     background: var(--wk-sidebar-hover-bg);
     color: var(--wk-sidebar-fg);
 }
-/* With Home turned off the picker is the row's only child, so it takes the width and shows its label
-   instead of leaving a lone icon button adrift in an empty row. */
-.wiki-sidebar .wk-nav-view-picker { flex: 0 0 auto; display: flex; }
-.wiki-sidebar .wk-nav-view-btn { flex: 1 1 auto; }
-.wiki-sidebar .wk-nav-view-label { display: none; }
-.wiki-sidebar .wk-nav-view-picker:only-child { flex: 1 1 auto; min-width: 0; }
-.wiki-sidebar .wk-nav-view-picker:only-child .wk-nav-view-label { display: inline; }
 /* Bootstrap's caret is a border triangle sized in em; at this font size it needs the nudge to sit on
    the icon's optical centre rather than the text baseline it's designed against. */
 .wiki-sidebar .wk-nav-view-btn.dropdown-toggle::after { margin-left: 0.1rem; vertical-align: 0.08em; }
@@ -2397,6 +2497,17 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 }
 .wiki-sidebar .wk-nav-view-menu .wk-nav-view-check { margin-left: auto; }
 .wiki-sidebar .wk-nav-view-menu .dropdown-item:not(.active) .wk-nav-view-check { visibility: hidden; }
+/* The trigger's label is off by default: at the stock 16rem sidebar it would crowd out Home's own label,
+   and the trigger's icon already names the live view. It appears in the two cases where it genuinely
+   fits — an unusually wide sidebar (a site that has raised --wk-sidebar-w or restyled the column), and
+   Home switched off, which hands the picker the whole row. The :only-child rule outranks the container
+   query on specificity, so their order here doesn't matter. */
+.wiki-sidebar .wk-nav-view-label { display: none; }
+@container wk-nav-switch (min-width: 320px) {
+    .wiki-sidebar .wk-nav-view-label { display: inline; }
+}
+.wiki-sidebar .wk-nav-switch .wk-nav-view-picker:only-child { flex: 1 1 auto; min-width: 0; }
+.wiki-sidebar .wk-nav-switch .wk-nav-view-picker:only-child .wk-nav-view-label { display: inline; }
 
 /* Panes: only the active one is shown. Single-mode sidebars have one pane, always active. */
 .wiki-sidebar .wk-nav-pane { display: none; }

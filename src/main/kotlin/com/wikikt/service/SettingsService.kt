@@ -249,7 +249,12 @@ class SettingsService(private val database: R2dbcDatabase) {
         /**
          * Content rendering toggles (Administration > Settings > Rendering), read on each page render
          * into a [RenderOptions] (see [renderOptions]). Defaults live in [RenderOptions] and are the
-         * fallback when a key is unset — iframes/style off (security), autolink on.
+         * fallback when a key is unset — iframes/style off (security), autolink on, line breaks off.
+         *
+         * [RENDER_LINE_BREAKS] is the one whose *product* default differs from that fallback: sites
+         * created from now on are seeded with it on (see `SeedService.seedSiteSettings`). Existing sites
+         * keep the unset-key fallback, so upgrading never reflows content written under the old
+         * behaviour.
          */
         const val RENDER_ALLOW_IFRAMES = "render.allowIframes"
         const val RENDER_ALLOW_STYLE = "render.allowStyleAttr"

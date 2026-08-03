@@ -105,14 +105,15 @@ data class GitSyncDirConfig(
 )
 
 /**
- * Front-end asset delivery — where Bootstrap, the icon font and the emoji font are fetched from.
+ * Front-end asset delivery — where Bootstrap, the icon font, the emoji font and Mermaid are fetched
+ * from.
  *
- * All three default to the CDN, and each has a bundled counterpart under `static/vendor/` that a
+ * All four default to the CDN, and each has a bundled counterpart under `static/vendor/` that a
  * matching `local` setting serves instead. They are *separate* knobs rather than one because the two
- * webfonts dwarf everything else (2 MB and 750 KB against a few hundred KB), so an operator may
- * reasonably want the big ones off their own bandwidth while keeping the small ones in-house, or the
- * reverse. An install with no guaranteed outbound access sets all three to `local`; see the
- * air-gapped note in `docs/install.md`.
+ * webfonts and Mermaid dwarf everything else (3.5 MB, 2 MB and 750 KB against a few hundred KB), so an
+ * operator may reasonably want the big ones off their own bandwidth while keeping the small ones
+ * in-house, or the reverse. An install with no guaranteed outbound access sets all four to `local`;
+ * see the air-gapped note in `docs/install.md`.
  *
  * This is deployment config (yaml/env), not a per-site admin setting, because it answers "does this
  * *network* allow outbound requests" — an instance-wide, operator-level question. Every site on an
@@ -144,6 +145,13 @@ data class UiConfig(
      * so a blocked CDN means missing glyphs rather than a graceful fallback.
      */
     val useCdnIconFont: Boolean,
+    /**
+     * Where the Mermaid diagram library loads from (~3.5 MB of JS); `local` serves
+     * `static/vendor/mermaid/mermaid.min.js`. It is fetched lazily and only by a page that actually
+     * contains a ```mermaid fence, so most page views never touch it either way. A blocked CDN degrades
+     * to the diagram's source shown as a code block (see `static/page-mermaid.js`).
+     */
+    val useCdnMermaid: Boolean,
 )
 
 /** Supported (decodable + validatable) asset MIME types. The effective allowlist is this ∩ config. */
@@ -252,7 +260,7 @@ internal fun ApplicationConfig.loadGitSyncDirConfig(): GitSyncDirConfig {
 }
 
 /**
- * Resolves the three asset-source settings. None is mandatory: an unset (or blank) key falls through
+ * Resolves the four asset-source settings. None is mandatory: an unset (or blank) key falls through
  * to `"cdn"`, so a deployment that configures nothing here still boots and simply uses the CDN.
  *
  * Only an explicit `local` opts out. Anything unrecognized — a typo, `true`, `bundled` — is treated as
@@ -266,6 +274,7 @@ internal fun ApplicationConfig.loadUiConfig(getEnv: (String) -> String? = System
         useCdnAssets = source("wikikt.ui.assetSource", "WIKIKT_UI_ASSET_SOURCE"),
         useCdnEmojiFont = source("wikikt.ui.emojiFontSource", "WIKIKT_UI_EMOJI_FONT_SOURCE"),
         useCdnIconFont = source("wikikt.ui.iconFontSource", "WIKIKT_UI_ICON_FONT_SOURCE"),
+        useCdnMermaid = source("wikikt.ui.mermaidSource", "WIKIKT_UI_MERMAID_SOURCE"),
     )
 }
 

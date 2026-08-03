@@ -19,6 +19,7 @@ import com.wikikt.model.UpdateGroupRequest
 import com.wikikt.model.UpdateUserRequest
 import com.wikikt.model.toDto
 import com.wikikt.service.InfoboxService
+import com.wikikt.service.PageSortColumn
 import com.wikikt.service.SafeRegex
 import com.wikikt.service.UpdateCheck
 import com.wikikt.service.UpdateService
@@ -1312,30 +1313,7 @@ fun Route.configureAdminRouting() {
                 call.respondForbidden()
                 return@get
             }
-            val siteId = call.adminSiteId()
-            val ctx = call.appContext
-            val formats = call.displayFormats()
-            val origin = call.managedSiteOrigin()
-            val pages = ctx.pages.list(siteId).map { page ->
-                val dto = ctx.pages.toDto(page)
-                mapOf(
-                    "id" to dto.id,
-                    "title" to dto.title,
-                    "description" to dto.description,
-                    "locale" to dto.locale,
-                    "path" to dto.path,
-                    "tags" to dto.tags.joinToString(", "),
-                    "updatedAt" to DateDisplay.format(page.updatedAt, formats),
-                    "viewUrl" to origin + wikiViewUrl(dto.locale, dto.path),
-                    "editUrl" to origin + wikiEditUrl(dto.locale, dto.path),
-                )
-            }
-            call.respond(
-                MustacheContent(
-                    "admin/pages.hbs",
-                    call.adminBaseModel() + mapOf("pages" to pages),
-                ),
-            )
+            call.respond(MustacheContent("admin/pages.hbs", call.pagesModel()))
         }
 
         get("/navigation") {
@@ -1936,6 +1914,155 @@ internal fun apiKeyRowModel(
         "status" to status,
         "isActive" to (status == "Active"),
     )
+}
+
+// --- Admin page list (/a/pages): server-side sorting + pagination. Only the visible window is
+//     fetched, so the view stays flat however many pages the site has. ---
+
+/** Rows-per-page choices offered by the page list. */
+private val PAGE_LIST_SIZES = listOf(10, 25, 50, 100)
+
+/** Rows per page when the URL doesn't ask for a (valid) size. */
+private const val PAGE_LIST_DEFAULT_SIZE = 25
+
+/** How many numbered page links sit either side of the current one before the list elides. */
+private const val PAGE_LIST_WINDOW = 2
+
+/**
+ * A `/a/pages` link carrying the full list state, so sorting keeps the page size and paging keeps the
+ * sort. Defaults are left out to keep the common URL clean. Every value is an enum key or an int, so
+ * none of them needs escaping.
+ */
+private fun pageListUrl(sort: PageSortColumn, descending: Boolean, page: Int, size: Int): String {
+    val params = buildList {
+        if (sort != PageSortColumn.TITLE || descending) add("sort=${sort.key}")
+        if (descending) add("dir=desc")
+        if (page > 1) add("page=$page")
+        if (size != PAGE_LIST_DEFAULT_SIZE) add("size=$size")
+    }
+    return if (params.isEmpty()) "/a/pages" else "/a/pages?" + params.joinToString("&")
+}
+
+/**
+ * The sorted, paginated page list. `?sort=` / `?dir=` / `?page=` / `?size=` drive it; anything
+ * unrecognised falls back to the default (title, ascending, first page, 25 rows) rather than erroring,
+ * since these come straight from user-editable URLs. A `page` beyond the end is clamped to the last
+ * page and re-fetched, so a stale link (or a deletion) lands on real rows instead of an empty table.
+ */
+private suspend fun io.ktor.server.application.ApplicationCall.pagesModel(): Map<String, Any?> {
+    val siteId = adminSiteId()
+    val ctx = appContext
+    val formats = displayFormats()
+    val origin = managedSiteOrigin()
+
+    val sort = PageSortColumn.fromKey(request.queryParameters["sort"]) ?: PageSortColumn.TITLE
+    val descending = request.queryParameters["dir"] == "desc"
+    val size = request.queryParameters["size"]?.toIntOrNull()?.takeIf { it in PAGE_LIST_SIZES }
+        ?: PAGE_LIST_DEFAULT_SIZE
+    val requestedPage = (request.queryParameters["page"]?.toIntOrNull() ?: 1).coerceAtLeast(1)
+
+    suspend fun fetch(page: Int) = ctx.pages.listPaged(
+        siteId = siteId,
+        sort = sort,
+        descending = descending,
+        offset = (page - 1).toLong() * size,
+        limit = size,
+    )
+
+    var current = requestedPage
+    var result = fetch(current)
+    val totalPages = maxOf(1, ((result.total + size - 1) / size).toInt())
+    if (current > totalPages) {
+        current = totalPages
+        result = fetch(current)
+    }
+
+    val rows = result.pages.map { page ->
+        mapOf(
+            "id" to page.id.toString(),
+            "title" to page.title,
+            "description" to page.description,
+            "locale" to page.locale,
+            "path" to page.path,
+            "tags" to page.tags.joinToString(", "),
+            "updatedAt" to DateDisplay.format(page.updatedAt, formats),
+            "viewUrl" to origin + wikiViewUrl(page.locale, page.path),
+            "editUrl" to origin + wikiEditUrl(page.locale, page.path),
+        )
+    }
+
+    // Header cells. Clicking the sorted column flips its direction; a fresh column starts ascending —
+    // except Updated, where "most recent first" is the useful first click.
+    val columns = listOf(
+        PageSortColumn.TITLE to "Title",
+        PageSortColumn.LOCALE to "Locale",
+        PageSortColumn.PATH to "Path",
+        PageSortColumn.TAGS to "Tags",
+        PageSortColumn.UPDATED to "Updated",
+    ).map { (column, label) ->
+        val active = column == sort
+        val nextDescending = if (active) !descending else column == PageSortColumn.UPDATED
+        mapOf(
+            "label" to label,
+            "url" to pageListUrl(column, nextDescending, 1, size),
+            "ascending" to (active && !descending),
+            "descending" to (active && descending),
+            "ariaSort" to when {
+                !active -> "none"
+                descending -> "descending"
+                else -> "ascending"
+            },
+        )
+    }
+
+    val firstRow = if (result.total == 0L) 0 else (current - 1).toLong() * size + 1
+    return adminBaseModel() + mapOf(
+        "pages" to rows,
+        "hasPages" to rows.isNotEmpty(),
+        "columns" to columns,
+        "total" to result.total,
+        "one" to (result.total == 1L),
+        "firstRow" to firstRow,
+        "lastRow" to firstRow + rows.size - if (rows.isEmpty()) 0 else 1,
+        "multiplePages" to (totalPages > 1),
+        "hasPrev" to (current > 1),
+        "prevUrl" to pageListUrl(sort, descending, current - 1, size),
+        "hasNext" to (current < totalPages),
+        "nextUrl" to pageListUrl(sort, descending, current + 1, size),
+        "pageLinks" to pageListLinks(sort, descending, current, totalPages, size),
+        "sizeOptions" to PAGE_LIST_SIZES.map {
+            mapOf("label" to it.toString(), "url" to pageListUrl(sort, descending, 1, it), "current" to (it == size))
+        },
+    )
+}
+
+/**
+ * Numbered pager links: the first and last page always, plus [PAGE_LIST_WINDOW] either side of the
+ * current one, with `…` gaps standing in for what's left out.
+ */
+private fun pageListLinks(
+    sort: PageSortColumn,
+    descending: Boolean,
+    current: Int,
+    totalPages: Int,
+    size: Int,
+): List<Map<String, Any?>> {
+    val shown = (1..totalPages).filter {
+        it == 1 || it == totalPages || (it >= current - PAGE_LIST_WINDOW && it <= current + PAGE_LIST_WINDOW)
+    }
+    val links = mutableListOf<Map<String, Any?>>()
+    var previous = 0
+    for (page in shown) {
+        if (page - previous > 1) links += mapOf("gap" to true)
+        links += mapOf(
+            "gap" to false,
+            "label" to page.toString(),
+            "url" to pageListUrl(sort, descending, page, size),
+            "current" to (page == current),
+        )
+        previous = page
+    }
+    return links
 }
 
 /** Admin API keys list — every key, with owner column and a picker on the create form. [newKey],
@@ -2635,6 +2762,10 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
             mapOf(
                 "label" to "Emoji font (Noto Color Emoji)", "size" to "~2 MB", "env" to "WIKIKT_UI_EMOJI_FONT_SOURCE",
                 "cdn" to ui.useCdnEmojiFont, "host" to "fonts.googleapis.com", "path" to "/static/vendor/noto-emoji/",
+            ),
+            mapOf(
+                "label" to "Mermaid (diagrams)", "size" to "~3.5 MB", "env" to "WIKIKT_UI_MERMAID_SOURCE",
+                "cdn" to ui.useCdnMermaid, "host" to "cdn.jsdelivr.net", "path" to "/static/vendor/mermaid/",
             ),
         ),
         "customCssValue" to settings.get(siteId, s.APPEARANCE_CUSTOM_CSS).orEmpty(),

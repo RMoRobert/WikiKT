@@ -253,6 +253,11 @@
     powers the asset detail modal + tabs (Bootstrap Modal/Tab plugins) used from Insert Image. }}
 {{#assetsCdn}}<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>{{/assetsCdn}}{{^assetsCdn}}<script src="/static/vendor/bootstrap/bootstrap.bundle.min.js?v={{assetVersion}}"></script>{{/assetsCdn}}
 <script src="/static/wk-browser.js?v={{assetVersion}}"></script>
+{{! Diagrams in the live preview: page-edit.js calls window.wkRenderMermaid on each rendered pane. }}
+{{>partials/mermaid-js.hbs}}
 <script src="/static/page-edit.js?v={{assetVersion}}"></script>
+{{! Broken-image placeholders in the live preview too: a typo'd image path is worth catching while
+    writing the page, not after saving it. }}
+<script src="/static/broken-images.js?v={{assetVersion}}"></script>
 {{{bodyHtml}}}</body>
 </html>

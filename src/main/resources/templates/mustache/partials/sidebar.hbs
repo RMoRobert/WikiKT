@@ -15,11 +15,23 @@
         Home takes the label and the width — it's the one thing here a visitor is most likely to want,
         and a labelled target beats a mystery glyph. It wears the sidebar's own nav-link styling (same
         as the switch-less .wk-nav-home-link placement below), so it reads as somewhere you can go and
-        only fills in when you're actually on /home. The view picker beside it is a menu button whose
-        icon stands for the control, NOT for the current view: mirroring the selection would put a
-        hamburger here whenever the curated menu is showing, which is the same glyph the mobile header
-        uses to mean "open the sidebar". The pane below already shows which view you're in, so the
-        state lives in title/aria-label and the menu's own check instead.
+        only fills in when you're actually on /home.
+
+        The picker beside it is a menu button whose icon mirrors the CURRENT view — the same glyph that
+        view's menu item carries — with Bootstrap's caret beside it. That split is the whole point: the
+        icon states which pane you're looking at, the caret states that there are others to pick. An
+        earlier revision used a fixed mdi-tune-variant standing for "the control", which named the
+        widget instead of the state and so told a visitor nothing; a two-chip segmented toggle stated the
+        state but left both glyphs to be decoded and spent width doing it. One state-bearing glyph plus a
+        caret is the smallest thing that answers both questions, and it leaves Home the most room.
+
+        The icons are mdi-view-list-outline (curated menu) and mdi-file-tree-outline (drill-down browser)
+        — both outline, matching every other glyph in this column, and deliberately NOT
+        mdi-format-list-bulleted for the menu: that one is near-identical to the mdi-menu hamburger the
+        compact header uses to mean "open the sidebar", which is exactly why the fixed-glyph revision
+        refused to mirror the selection at all. Pick a glyph with some box structure and the objection
+        goes away. Keep each menu item's icon in step with what the trigger shows for that view — the JS
+        reads data-nav-icon from the item it selects, so the two can't drift.
 
         Menu markup follows the language switcher in partials/header.hbs — Bootstrap has no checked-item
         component, so its `.active` + aria-current is the selection signal and the trailing mdi-check is
@@ -32,9 +44,9 @@
         {{#navShowHome}}<a class="wk-nav-home-btn{{#navHomeActive}} active{{/navHomeActive}}" href="{{navHomeUrl}}"{{#navHomeActive}} aria-current="page"{{/navHomeActive}}><i class="mdi mdi-home-outline" aria-hidden="true"></i>Home</a>{{/navShowHome}}
         <div class="dropdown wk-nav-view-picker">
             <button type="button" class="wk-nav-view-btn dropdown-toggle" data-bs-toggle="dropdown" data-nav-view-trigger aria-expanded="false"
-                    title="Navigation view mode: {{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}"
-                    aria-label="Navigation view mode: {{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}">
-                <i class="mdi mdi-tune-variant" aria-hidden="true"></i>
+                    title="Navigation view: {{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}"
+                    aria-label="Navigation view: {{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}">
+                <i class="mdi mdi-{{#navTreeActive}}file-tree-outline{{/navTreeActive}}{{^navTreeActive}}view-list-outline{{/navTreeActive}}" aria-hidden="true" data-nav-view-icon></i>
                 <span class="wk-nav-view-label">{{#navTreeActive}}Browse{{/navTreeActive}}{{^navTreeActive}}Main Menu{{/navTreeActive}}</span>
             </button>
             {{! -end so the menu grows leftwards from the trigger: the picker sits at the right of a
@@ -42,8 +54,8 @@
                 overflow-x too), so a menu opening rightwards would be the one thing here that can
                 clip. }}
             <ul class="dropdown-menu dropdown-menu-end wk-nav-view-menu">
-                <li><button type="button" class="dropdown-item{{#navStaticActive}} active{{/navStaticActive}}"{{#navStaticActive}} aria-current="true"{{/navStaticActive}} data-nav-view="static" data-nav-label="Main Menu"><i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i>Main Menu<i class="mdi mdi-check wk-nav-view-check" aria-hidden="true"></i></button></li>
-                <li><button type="button" class="dropdown-item{{#navTreeActive}} active{{/navTreeActive}}"{{#navTreeActive}} aria-current="true"{{/navTreeActive}} data-nav-view="tree" data-nav-label="Browse"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i>Browse<i class="mdi mdi-check wk-nav-view-check" aria-hidden="true"></i></button></li>
+                <li><button type="button" class="dropdown-item{{#navStaticActive}} active{{/navStaticActive}}"{{#navStaticActive}} aria-current="true"{{/navStaticActive}} data-nav-view="static" data-nav-label="Main Menu" data-nav-icon="view-list-outline"><i class="mdi mdi-view-list-outline" aria-hidden="true"></i>Main Menu<i class="mdi mdi-check wk-nav-view-check" aria-hidden="true"></i></button></li>
+                <li><button type="button" class="dropdown-item{{#navTreeActive}} active{{/navTreeActive}}"{{#navTreeActive}} aria-current="true"{{/navTreeActive}} data-nav-view="tree" data-nav-label="Browse" data-nav-icon="file-tree-outline"><i class="mdi mdi-file-tree-outline" aria-hidden="true"></i>Browse<i class="mdi mdi-check wk-nav-view-check" aria-hidden="true"></i></button></li>
             </ul>
         </div>
     </div>

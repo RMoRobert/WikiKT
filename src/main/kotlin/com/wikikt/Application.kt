@@ -108,6 +108,8 @@ fun Application.module() {
                 // Webfont hosts, each independent of assetsCdn (see UiConfig.useCdnEmojiFont / useCdnIconFont).
                 "emojiFontCdn" to ctx.config.ui.useCdnEmojiFont,
                 "iconFontCdn" to ctx.config.ui.useCdnIconFont,
+                // Mermaid, loaded lazily by page-mermaid.js (see UiConfig.useCdnMermaid).
+                "mermaidCdn" to ctx.config.ui.useCdnMermaid,
                 // Session CSRF hidden-input on every page (empty when logged out), so shared
                 // chrome — e.g. the header's POST /logout form — always has a token to submit.
                 "csrfField" to call.csrfField(),

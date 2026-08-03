@@ -34,11 +34,15 @@
 </main>
 </div>
 {{>partials/footer.hbs}}
+{{>partials/mermaid-js.hbs}}
 <script src="/static/vendor/highlight/highlight.min.js?v={{assetVersion}}"></script>
 <script src="/static/vendor/highlight/groovy.min.js?v={{assetVersion}}"></script>
 <script>if (window.hljs) hljs.highlightAll();</script>
 <script src="/static/code-copy.js?v={{assetVersion}}"></script>
 {{! Copy-link icon + stable ids on section headings (same as the live page view). }}
 <script src="/static/heading-anchors.js?v={{assetVersion}}"></script>
+{{! Same broken-image placeholder as the live page view — a revision is likelier to reference an asset
+    that has since been deleted, so it matters more here. }}
+<script src="/static/broken-images.js?v={{assetVersion}}"></script>
 {{{bodyHtml}}}</body>
 </html>

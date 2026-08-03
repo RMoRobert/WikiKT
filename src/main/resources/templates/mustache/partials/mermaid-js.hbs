@@ -1,0 +1,5 @@
+{{! Mermaid diagrams (```mermaid fences). Follows mermaidCdn, NOT assetsCdn -- like the two webfonts
+    this one is big enough (~3.5 MB) to warrant its own switch, and defaults to the CDN. Nothing is
+    fetched on a page without a diagram on it: page-mermaid.js loads the library lazily, from whichever
+    of the two URLs below it is handed here. Include this BEFORE highlight.js -- see page-mermaid.js. }}
+<script src="/static/page-mermaid.js?v={{assetVersion}}" data-mermaid-src="{{#mermaidCdn}}https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js{{/mermaidCdn}}{{^mermaidCdn}}/static/vendor/mermaid/mermaid.min.js?v={{assetVersion}}{{/mermaidCdn}}"{{#mermaidCdn}} data-mermaid-integrity="sha384-T/0lMUdJpd2S1ZHtRiofG3htU3xPCrFVeAQ1UUE2TJwlEJSV5NUwn30kP28n238E"{{/mermaidCdn}}></script>

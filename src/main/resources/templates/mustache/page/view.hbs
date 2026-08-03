@@ -178,6 +178,9 @@
 {{! TOC builder + share box. The TOC part no-ops when the tocEnabled markup above wasn't rendered
     (it early-returns without #pageToc), so no conditional is needed around the include. }}
 <script src="/static/page-view.js?v={{assetVersion}}"></script>
+{{! Flags images that fail to load so they show as a placeholder instead of disappearing into the text. }}
+<script src="/static/broken-images.js?v={{assetVersion}}"></script>
+{{>partials/mermaid-js.hbs}}
 <script src="/static/vendor/highlight/highlight.min.js?v={{assetVersion}}"></script>
 <script src="/static/vendor/highlight/groovy.min.js?v={{assetVersion}}"></script>
 <script>if (window.hljs) hljs.highlightAll();</script>

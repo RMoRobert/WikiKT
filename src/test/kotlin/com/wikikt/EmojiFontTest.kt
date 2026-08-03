@@ -87,9 +87,10 @@ class EmojiFontTest {
         assertTrue(panel.contains("WIKIKT_UI_ASSET_SOURCE"), "names the variable for each row")
         assertTrue(panel.contains("WIKIKT_UI_ICON_FONT_SOURCE"))
         assertTrue(panel.contains("WIKIKT_UI_EMOJI_FONT_SOURCE"))
-        // Two configured local, one left at the CDN default — the panel must distinguish them.
+        assertTrue(panel.contains("WIKIKT_UI_MERMAID_SOURCE"))
+        // Two configured local, two left at the CDN default — the panel must distinguish them.
         assertEquals(2, Regex(">Local<").findAll(panel).count(), "both local sources reported as local")
-        assertEquals(1, Regex(">CDN<").findAll(panel).count(), "the icon font is still on the CDN")
+        assertEquals(2, Regex(">CDN<").findAll(panel).count(), "the icon font and Mermaid are still on the CDN")
         assertFalse(panel.contains("<input"), "read-only: no form control that would imply it's editable here")
     }
 
