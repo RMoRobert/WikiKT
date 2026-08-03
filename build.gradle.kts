@@ -193,10 +193,14 @@ tasks.processResources {
     // Recorded as a task input because expand() values are invisible to up-to-date checks: without it,
     // changing the version alone leaves this task UP-TO-DATE and bakes the *previous* version into the
     // jar (and so into the admin console and backup metadata).
-    inputs.property("wikiktVersion", project.version.toString())
+    // The version is read here, at configuration time, rather than inside filesMatching below: that
+    // block runs during execution, where reaching back through `project` is deprecated (and illegal
+    // under the configuration cache).
+    val wikiktVersion = project.version.toString()
+    inputs.property("wikiktVersion", wikiktVersion)
     inputs.property("wikiktGitSha", wikiktGitSha)
     filesMatching("wikikt.properties") {
-        expand("version" to project.version, "gitSha" to wikiktGitSha)
+        expand("version" to wikiktVersion, "gitSha" to wikiktGitSha)
     }
 
     // Minifiy static/site.css and first-party static JS if building prod JAR; keep as-is for dev for
