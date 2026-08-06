@@ -6,6 +6,7 @@ import com.wikikt.currentSite
 import com.wikikt.siteId
 import com.wikikt.auth.CSRF_FIELD
 import com.wikikt.auth.isCsrfValid
+import com.wikikt.db.ContentFormat
 import com.wikikt.model.AssetRecord
 import com.wikikt.model.AssetRef
 import com.wikikt.model.normalizeAssetPath
@@ -21,6 +22,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
+import io.ktor.http.encodeURLParameter
 import io.ktor.server.http.content.LocalFileContent
 import io.ktor.http.content.forEachPart
 import io.ktor.server.application.ApplicationCall
@@ -146,6 +148,41 @@ fun Route.configureAssetRouting() {
             val params = call.receiveParameters()
             if (!call.validateFormCsrf(params)) return@post
             call.appContext.assets.updateMeta(asset.id, params["altText"], params["description"])
+            call.respondRedirect("/f/${asset.id}")
+        }
+
+        // Move/rename: changes the asset's (locale, path) identity — a metadata-only update, since
+        // bytes are stored by id. References in content are NOT rewritten; the form warns about them
+        // and the broken-references report lists each one after the move.
+        post("/{id}/rename") {
+            val asset = call.manageableAsset() ?: return@post
+            val params = call.receiveParameters()
+            if (!call.validateFormCsrf(params)) return@post
+            val ctx = call.appContext
+            suspend fun fail(message: String) =
+                call.respond(MustacheContent("assets/detail.hbs", call.assetDetailModel(asset, message)))
+            val locale = com.wikikt.model.normalizeLocale(params["locale"]?.trim().orEmpty()) ?: run {
+                fail("Choose a valid locale.")
+                return@post
+            }
+            // Same normalization + naming rules as the upload path, so a move can't mint a path an
+            // upload couldn't have created.
+            val newPath = try {
+                normalizeAssetPath(params["path"]?.trim().orEmpty()).also { validateWikiPath(it, allowExtension = true) }
+            } catch (e: IllegalArgumentException) {
+                fail(e.message ?: "Invalid path.")
+                return@post
+            }
+            // Moving is creating the asset at the destination: the same per-path write:assets check
+            // the upload runs, so an asset can't be moved into a subtree the user couldn't upload to.
+            if (!ctx.permissions.check(call.currentUserId(), com.wikikt.service.AccessResolver.Perm.WRITE_ASSETS, asset.siteId, locale, newPath)) {
+                call.respondForbidden()
+                return@post
+            }
+            if (!ctx.assets.rename(asset.id, locale, newPath)) {
+                fail("An asset already exists at $locale/$newPath.")
+                return@post
+            }
             call.respondRedirect("/f/${asset.id}")
         }
 
@@ -469,6 +506,11 @@ private suspend fun ApplicationCall.assetDetailModel(asset: AssetRecord, message
         // asset that appears "used" but is referenced by no page is explained.
         "brandingUses" to brandingUses,
         "hasBrandingUses" to brandingUses.isNotEmpty(),
+        // Anything at all pointing at the current path — gates the Move form's stale-reference warning.
+        "hasReferences" to (usages.isNotEmpty() || brandingUses.isNotEmpty()),
+        // For the Move form's locale select; a locale no longer enabled is kept so a move can't
+        // silently change it (same rule as the page editor's select).
+        "localeOptions" to localeSelectOptions(ctx.settings.enabledLocales(asset.siteId, ctx.config.defaultLocale), asset.locale),
         "revisions" to revisions,
         "hasRevisions" to revisions.isNotEmpty(),
         "maxVersions" to ctx.config.assets.maxAssetVersions,
@@ -636,14 +678,17 @@ private suspend fun ApplicationCall.assetScanSources(): List<AssetScan> {
     }
 
     // A page body: PageRenderService.resolveRelativeLinks rewrites relative URLs against the page path,
-    // so they're resolved here the same way. Fragments are expanded into the body before that pass runs,
-    // so a relative URL inside a fragment resolves against the *including* page too — picked up by
-    // rescanning the expanded text and keeping only what needed the base (an absolute URL resolves
-    // identically either way and cancels out, so it stays attributed to the fragment, not to the page).
-    suspend fun addPageBody(content: String?, locale: String, path: String, usage: AssetUsage) {
+    // so they're resolved here the same way — for HTML-format pages too, whose content is scanned as
+    // raw HTML rather than parsed as Markdown. Fragments (Markdown only, matching renderBody) are
+    // expanded into the body before that pass runs, so a relative URL inside a fragment resolves
+    // against the *including* page too — picked up by rescanning the expanded text and keeping only
+    // what needed the base (an absolute URL resolves identically either way and cancels out, so it
+    // stays attributed to the fragment, not to the page).
+    suspend fun addPageBody(content: String?, locale: String, path: String, format: ContentFormat, usage: AssetUsage) {
         if (content.isNullOrBlank()) return
-        val refs = ctx.assets.referencedLocalUrls(content, default, path, locale).toMutableSet()
-        if (content.contains(FRAGMENT_REFERENCE_PREFIX)) {
+        val html = format == ContentFormat.HTML
+        val refs = ctx.assets.referencedLocalUrls(content, default, path, locale, html).toMutableSet()
+        if (!html && content.contains(FRAGMENT_REFERENCE_PREFIX)) {
             val expanded = ctx.fragments.expand(siteId, content, locale, default)
             refs += ctx.assets.referencedLocalUrls(expanded, default, path, locale) -
                 ctx.assets.referencedLocalUrls(expanded, default)
@@ -654,7 +699,7 @@ private suspend fun ApplicationCall.assetScanSources(): List<AssetScan> {
     val pages = ctx.pages.list(siteId)
     for (page in pages) {
         val usage = AssetUsage("page", page.path, page.locale, wikiViewUrl(page.locale, page.path))
-        addPageBody(page.content, page.locale, page.path, usage)
+        addPageBody(page.content, page.locale, page.path, page.contentFormat, usage)
         // Infobox values are rendered by InfoboxService.renderCard, which never runs the relative pass —
         // a relative URL there is left for the browser to resolve, so it has no target we can check.
         addAbsolute(page.infobox, usage)
@@ -666,7 +711,7 @@ private suspend fun ApplicationCall.assetScanSources(): List<AssetScan> {
     for (staged in ctx.pages.listStaged(pages.map { it.id })) {
         val page = pagesById[staged.pageId] ?: continue
         val usage = AssetUsage("scheduled draft", page.path, page.locale, wikiViewUrl(page.locale, page.path))
-        addPageBody(staged.content, page.locale, page.path, usage)
+        addPageBody(staged.content, page.locale, page.path, staged.contentFormat, usage)
         addAbsolute(staged.infobox, usage)
     }
     // The footer renders on every page, so it has no one page to resolve a relative URL against.
@@ -700,10 +745,23 @@ private suspend fun ApplicationCall.navAssetTargets(): List<Pair<String, AssetUs
  * Every reference to every asset on this site, keyed by the asset's (locale, path). One index feeds
  * the manager's "Used by" count, the detail page's usage list, and `/f/unused`, so those three can't
  * disagree about what "used" means. See [assetScanSources] for what is and isn't scanned.
+ *
+ * A reference is tallied against every asset serve-time resolution could pick for it — mirroring
+ * `resolves` in [brokenAssetRefsModel], so the two reports agree by construction:
+ *  - the locale it binds to at serve time (see [effectiveAssetRef]);
+ *  - the default locale too when `assets.localeFallback` is on, since [AssetService.resolve] falls
+ *    back to it — without this, a `/de/x.png` reference served by the `en` fallback shows nothing on
+ *    /f/broken while `en/x.png` sits on /f/unused as safe to delete;
+ *  - for a locale-relative embed outside any page (a fragment, the footer override), every locale the
+ *    site renders in (enabled locales plus any locale existing content still uses): such content
+ *    renders into pages of any locale, and the render-time asset pass (`renderAssetRefs`) binds the
+ *    embed to each rendering page's locale in turn.
  */
 private suspend fun ApplicationCall.assetUsageIndex(): Map<AssetRef, List<AssetUsage>> {
     val ctx = appContext
     val default = ctx.config.defaultLocale
+    val fallback = ctx.config.assets.localeFallback
+    val enabledLocales = ctx.settings.enabledLocales(siteId(), default)
     val out = mutableMapOf<AssetRef, MutableList<AssetUsage>>()
 
     // A single source can mention the same asset more than once (body *and* infobox), so it's only
@@ -715,11 +773,34 @@ private suspend fun ApplicationCall.assetUsageIndex(): Map<AssetRef, List<AssetU
         }
     }
 
-    for (scan in assetScanSources()) {
-        for (ref in scan.refs) tally(ref.ref, scan.usage)
+    val scans = assetScanSources()
+    // Locales content actually renders in: the enabled list plus any locale existing content uses —
+    // a page on a since-removed locale still renders, and still binds render-anywhere embeds to its
+    // locale, so that locale must stay in the render-anywhere tally.
+    val renderLocales = (enabledLocales + scans.mapNotNull { it.usage.locale.ifBlank { null } }).distinct()
+
+    fun tallyServable(ref: AssetService.ContentRef, usage: AssetUsage) {
+        val locales = when {
+            // Explicit locale in the URL, or a link (never locale-rewritten): serves as parsed.
+            ref.explicitLocale || ref.kind == AssetService.RefKind.LINK -> listOf(ref.ref.locale)
+            // A page-scoped embed binds to its page's locale (matching effectiveAssetRef). These type
+            // strings are the ones assetScanSources creates for page-resolved content.
+            usage.type == "page" || usage.type == "scheduled draft" -> listOf(usage.locale)
+            // A render-anywhere embed (fragment, footer override) binds per rendering page.
+            else -> renderLocales
+        }
+        for (locale in locales) tally(AssetRef(locale, ref.ref.path), usage)
+        if (fallback) tally(AssetRef(default, ref.ref.path), usage)
+    }
+
+    for (scan in scans) {
+        for (ref in scan.refs) tallyServable(ref, scan.usage)
     }
     for ((target, usage) in navAssetTargets()) {
-        ctx.assets.resolveLocalAssetUrl(target, default)?.let { tally(it, usage) }
+        ctx.assets.resolveLocalAssetUrl(target, default)?.let {
+            tally(it, usage)
+            if (fallback) tally(AssetRef(default, it.path), usage)
+        }
     }
     return out
 }
@@ -792,11 +873,16 @@ private suspend fun ApplicationCall.brandingUsageByRef(): Map<AssetRef, List<Str
     val ctx = appContext
     val siteId = siteId()
     val default = ctx.config.defaultLocale
+    val fallback = ctx.config.assets.localeFallback
     val out = mutableMapOf<AssetRef, MutableList<String>>()
     suspend fun add(key: String, label: String) {
         val ref = ctx.settings.get(siteId, key)?.ifBlank { null }
             ?.let { ctx.assets.resolveLocalAssetUrl(it, default) } ?: return
         out.getOrPut(ref) { mutableListOf() }.add(label)
+        // The logo/favicon URL serves through the same locale fallback as any asset request, so when
+        // the stored URL names another locale the default-locale asset backs it (or may be what's
+        // actually served) — it must count as branding-used too.
+        if (fallback && ref.locale != default) out.getOrPut(AssetRef(default, ref.path)) { mutableListOf() }.add(label)
     }
     add(com.wikikt.service.SettingsService.SITE_LOGO_URL, "Site logo")
     add(com.wikikt.service.SettingsService.SITE_FAVICON_URL, "Favicon")
@@ -835,6 +921,78 @@ private fun effectiveAssetRef(ref: AssetService.ContentRef, sourceLocale: String
         ref.ref
     }
 
+// --- /f/broken list state: text/locale filter, server-side sorting, pagination. Same URL scheme
+//     and template pattern as /a/pages, but cut from the in-memory scan result rather than SQL —
+//     the scan has to walk everything anyway to find what's broken. ---
+
+/** Rows-per-page choices offered by the broken-references list. */
+private val BROKEN_LIST_SIZES = listOf(10, 25, 50, 100)
+
+/** Rows per page when the URL doesn't ask for a (valid) size. */
+private const val BROKEN_LIST_DEFAULT_SIZE = 25
+
+/** How many numbered page links sit either side of the current one before the list elides. */
+private const val BROKEN_LIST_WINDOW = 2
+
+/** Sortable columns of the broken-references table; the key is what `?sort=` carries. */
+private enum class BrokenSortColumn(val key: String) {
+    PATH("path"),
+    LOCALE("locale"),
+    REFS("refs");
+
+    companion object {
+        fun fromKey(key: String?): BrokenSortColumn? = entries.firstOrNull { it.key == key }
+    }
+}
+
+/**
+ * A `/f/broken` link carrying the full list state, so changing any one of filter, sort, page, or size
+ * keeps the others. Defaults are left out to keep the common URL clean; the free-text filter and the
+ * locale are the only values that need escaping.
+ */
+private fun brokenListUrl(q: String, locale: String, sort: BrokenSortColumn, descending: Boolean, page: Int, size: Int): String {
+    val params = buildList {
+        if (q.isNotEmpty()) add("q=${q.encodeURLParameter()}")
+        if (locale.isNotEmpty()) add("locale=${locale.encodeURLParameter()}")
+        if (sort != BrokenSortColumn.PATH || descending) add("sort=${sort.key}")
+        if (descending) add("dir=desc")
+        if (page > 1) add("page=$page")
+        if (size != BROKEN_LIST_DEFAULT_SIZE) add("size=$size")
+    }
+    return if (params.isEmpty()) "/f/broken" else "/f/broken?" + params.joinToString("&")
+}
+
+/**
+ * Numbered pager links: the first and last page always, plus [BROKEN_LIST_WINDOW] either side of the
+ * current one, with `…` gaps standing in for what's left out.
+ */
+private fun brokenListLinks(
+    q: String,
+    locale: String,
+    sort: BrokenSortColumn,
+    descending: Boolean,
+    current: Int,
+    totalPages: Int,
+    size: Int,
+): List<Map<String, Any?>> {
+    val shown = (1..totalPages).filter {
+        it == 1 || it == totalPages || (it >= current - BROKEN_LIST_WINDOW && it <= current + BROKEN_LIST_WINDOW)
+    }
+    val links = mutableListOf<Map<String, Any?>>()
+    var previous = 0
+    for (page in shown) {
+        if (page - previous > 1) links += mapOf("gap" to true)
+        links += mapOf(
+            "gap" to false,
+            "label" to page.toString(),
+            "url" to brokenListUrl(q, locale, sort, descending, page, size),
+            "current" to (page == current),
+        )
+        previous = page
+    }
+    return links
+}
+
 /**
  * Model for `/f/broken`: the inverse of `/f/unused` — references pointing at an asset that isn't there,
  * whether it was deleted, moved, renamed, or never uploaded. Scans the same surfaces as
@@ -844,6 +1002,10 @@ private fun effectiveAssetRef(ref: AssetService.ContentRef, sourceLocale: String
  * serve time has no asset, and neither does the default locale when `assets.localeFallback` is on. That
  * mirrors [com.wikikt.service.AssetService.resolve], so the report can't flag an image a reader sees
  * perfectly well.
+ *
+ * The main table is filtered, sorted, and paginated by `?q=` (path substring) / `?locale=` / `?sort=` /
+ * `?dir=` / `?page=` / `?size=`. Anything unrecognised falls back to the default (path, ascending,
+ * first page, 25 rows) rather than erroring, since these come straight from user-editable URLs.
  */
 private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
     val ctx = appContext
@@ -888,7 +1050,7 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
     for ((target, source) in navAssetTargets()) {
         val ref = ctx.assets.resolveLocalAssetUrl(target, default)
         if (ref == null) {
-            for (url in ctx.assets.unresolvableRelativeRefs("[x]($target)")) {
+            ctx.assets.unresolvableRelativeRef(target, AssetService.RefKind.LINK)?.let { url ->
                 unresolvable.getOrPut(url) { mutableListOf() }.add(source)
             }
             continue
@@ -896,8 +1058,36 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
         if (looksLikeFile(ref.path) && !resolves(ref)) record(ref, source)
     }
 
-    val rows = broken.entries
-        .sortedWith(compareBy({ it.key.path }, { it.key.locale }))
+    val q = request.queryParameters["q"]?.trim().orEmpty()
+    val localeFilter = request.queryParameters["locale"]?.trim().orEmpty()
+    val sort = BrokenSortColumn.fromKey(request.queryParameters["sort"]) ?: BrokenSortColumn.PATH
+    val descending = request.queryParameters["dir"] == "desc"
+    val size = request.queryParameters["size"]?.toIntOrNull()?.takeIf { it in BROKEN_LIST_SIZES }
+        ?: BROKEN_LIST_DEFAULT_SIZE
+
+    val all = broken.toList()
+    // The dropdown offers the locales that actually have broken refs — there is no configured list of
+    // site locales to draw from, and any other choice could only ever show an empty table.
+    val localeOptions = all.map { it.first.locale }.distinct().sorted().map {
+        mapOf("value" to it, "selected" to (it == localeFilter))
+    }
+    val filtered = all.filter { (ref, _) ->
+        (localeFilter.isEmpty() || ref.locale == localeFilter) &&
+            (q.isEmpty() || ref.path.contains(q, ignoreCase = true))
+    }
+    val comparator: Comparator<Pair<AssetRef, List<AssetUsage>>> = when (sort) {
+        BrokenSortColumn.PATH -> compareBy({ it.first.path }, { it.first.locale })
+        BrokenSortColumn.LOCALE -> compareBy({ it.first.locale }, { it.first.path })
+        BrokenSortColumn.REFS -> compareBy({ it.second.size }, { it.first.path })
+    }
+    val sorted = filtered.sortedWith(if (descending) comparator.reversed() else comparator)
+
+    val requestedPage = (request.queryParameters["page"]?.toIntOrNull() ?: 1).coerceAtLeast(1)
+    val totalPages = maxOf(1, (sorted.size + size - 1) / size)
+    // A page beyond the end is clamped to the last one, so a stale link lands on real rows.
+    val current = requestedPage.coerceAtMost(totalPages)
+
+    val rows = sorted.drop((current - 1) * size).take(size)
         .map { (ref, sources) ->
             mapOf(
                 "locale" to ref.locale,
@@ -917,6 +1107,30 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
                 },
             )
         }
+
+    // Header cells. Clicking the sorted column flips its direction; a fresh column starts ascending —
+    // except References, where "most referenced first" is the useful first click.
+    val columns = listOf(
+        BrokenSortColumn.PATH to "Missing file",
+        BrokenSortColumn.LOCALE to "Locale",
+        BrokenSortColumn.REFS to "References",
+    ).map { (column, label) ->
+        val active = column == sort
+        val nextDescending = if (active) !descending else column == BrokenSortColumn.REFS
+        mapOf(
+            "label" to label,
+            "url" to brokenListUrl(q, localeFilter, column, nextDescending, 1, size),
+            "ascending" to (active && !descending),
+            "descending" to (active && descending),
+            "ariaSort" to when {
+                !active -> "none"
+                descending -> "descending"
+                else -> "ascending"
+            },
+        )
+    }
+
+    val firstRow = if (sorted.isEmpty()) 0 else (current - 1) * size + 1
     val unresolvableRows = unresolvable.entries.sortedBy { it.key }.map { (url, sources) ->
         mapOf(
             "url" to url,
@@ -938,8 +1152,33 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
     }
     return adminBaseModel() + assetShellModel() + mapOf(
         "broken" to rows,
-        "hasBroken" to rows.isNotEmpty(),
-        "brokenCount" to rows.size,
+        // The section (filter form included) shows whenever anything at all is broken — a filter that
+        // matches nothing must still render the form, or there'd be no way to clear it.
+        "hasBroken" to all.isNotEmpty(),
+        "brokenCount" to all.size,
+        "hasRows" to rows.isNotEmpty(),
+        "filteredCount" to sorted.size,
+        "isFiltered" to (q.isNotEmpty() || localeFilter.isNotEmpty()),
+        "q" to q,
+        "localeOptions" to localeOptions,
+        "columns" to columns,
+        "firstRow" to firstRow,
+        "lastRow" to firstRow + rows.size - if (rows.isEmpty()) 0 else 1,
+        "multiplePages" to (totalPages > 1),
+        "hasPrev" to (current > 1),
+        "prevUrl" to brokenListUrl(q, localeFilter, sort, descending, current - 1, size),
+        "hasNext" to (current < totalPages),
+        "nextUrl" to brokenListUrl(q, localeFilter, sort, descending, current + 1, size),
+        "pageLinks" to brokenListLinks(q, localeFilter, sort, descending, current, totalPages, size),
+        "sizeOptions" to BROKEN_LIST_SIZES.map {
+            mapOf("label" to it.toString(), "url" to brokenListUrl(q, localeFilter, sort, descending, 1, it), "current" to (it == size))
+        },
+        "clearUrl" to brokenListUrl("", "", sort, descending, 1, size),
+        // Hidden form fields carrying sort/size through a filter submit — only when non-default, so
+        // applying a filter keeps the URL as clean as clicking a link would.
+        "sortParam" to sort.key.takeIf { sort != BrokenSortColumn.PATH },
+        "dirParam" to "desc".takeIf { descending },
+        "sizeParam" to size.toString().takeIf { size != BROKEN_LIST_DEFAULT_SIZE },
         "unresolvable" to unresolvableRows,
         "hasUnresolvable" to unresolvableRows.isNotEmpty(),
         "unresolvableCount" to unresolvableRows.size,

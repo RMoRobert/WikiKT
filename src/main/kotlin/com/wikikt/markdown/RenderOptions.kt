@@ -15,11 +15,10 @@ data class RenderOptions(
     val allowStyleAttr: Boolean = false,
     /** Turn bare `http(s)://…` / `www.` text into clickable links (autolinking). */
     val autoLink: Boolean = true,
-    /** Render single newlines as `<br>` (hard breaks) instead of collapsing them to a space. False here
-     *  is the CommonMark baseline, not the product default: new sites are seeded with the setting on
-     *  (see `SeedService.seedSiteSettings`), while sites predating that keep this fallback so their
-     *  pages don't reflow on upgrade. */
-    val lineBreaks: Boolean = false,
+    /** Render single newlines as `<br>` (hard breaks) instead of collapsing them to a space. On by
+     *  default — CommonMark's joining behaviour surprises wiki authors, who expect a hand-wrapped
+     *  line to stay its own line (this matches Wiki.js). */
+    val lineBreaks: Boolean = true,
     /** Whether (and how far out) a link gets an "opens elsewhere" icon appended (see [ExternalLinkMode]). */
     val externalLinkMode: ExternalLinkMode = ExternalLinkMode.OFF,
     /** Hostnames treated as internal for [ExternalLinkMode.INSTANCE] (all sites on this instance plus the

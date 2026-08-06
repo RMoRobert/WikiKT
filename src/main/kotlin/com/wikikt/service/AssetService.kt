@@ -11,8 +11,10 @@ import com.wikikt.model.nowMillis
 import com.wikikt.model.toAssetRecord
 import com.wikikt.model.toAssetRevisionRecord
 import com.wikikt.model.toAssetScheduledRecord
+import com.wikikt.markdown.MarkdownRefScanner
 import com.wikikt.routing.isLocaleSegment
 import com.wikikt.routing.resolveRelativeWikiUrl
+import io.ktor.http.decodeURLPart
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.toList
@@ -99,6 +101,28 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
         Files.createDirectories(dest.parent)
         Files.move(tempFile, dest, StandardCopyOption.ATOMIC_MOVE)
         AssetRecord(id, siteId, locale, path, originalFilename, mime, sizeBytes, now, now, uploadedBy)
+    }
+
+    /**
+     * Moves the asset's virtual identity to ([newLocale], [newPath]). The bytes never move — storage
+     * is keyed by id — and revisions/scheduled replacements key by id too, so this is metadata-only:
+     * the asset's URL changes and content references do NOT follow (the caller warns about them; the
+     * broken-references report lists each one afterwards). Returns false when another asset already
+     * sits at the target for the same site; the (siteId, locale, path) unique index backstops races.
+     */
+    suspend fun rename(id: UInt, newLocale: String, newPath: String): Boolean = suspendTransaction(database) {
+        val asset = AssetsTable.selectAll().where { AssetsTable.id eq id }
+            .map { it.toAssetRecord() }.singleOrNull() ?: return@suspendTransaction false
+        if (asset.locale == newLocale && asset.path == newPath) return@suspendTransaction true
+        val taken = AssetsTable.selectAll()
+            .where { (AssetsTable.siteId eq asset.siteId) and (AssetsTable.locale eq newLocale) and (AssetsTable.path eq newPath) }
+            .map { it[AssetsTable.id].value }.singleOrNull() != null
+        if (taken) return@suspendTransaction false
+        AssetsTable.update({ AssetsTable.id eq id }) {
+            it[AssetsTable.locale] = newLocale
+            it[AssetsTable.path] = newPath
+        }
+        true
     }
 
     suspend fun delete(id: UInt): Boolean = suspendTransaction(database) {
@@ -337,10 +361,10 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
     data class ContentRef(val ref: AssetRef, val kind: RefKind, val explicitLocale: Boolean)
 
     /**
-     * The set of assets (by locale+path) referenced from [content] — markdown `![](…)`/`[](…)` and
-     * raw HTML `src`/`href`. Code spans/blocks are masked out. Local URLs are normalized to (locale,
-     * path) using the same locale parsing the page/asset router uses, so `/x.png` and `/<default>/x.png`
-     * collapse while a non-default `/de/x.png` stays distinct.
+     * The set of assets (by locale+path) referenced from [content] — markdown images/links (including
+     * reference-style and nested forms) and raw HTML `src`/`href`, via [MarkdownRefScanner]. Local URLs
+     * are normalized to (locale, path) using the same locale parsing the page/asset router uses, so
+     * `/x.png` and `/<default>/x.png` collapse while a non-default `/de/x.png` stays distinct.
      */
     fun referencedAssetPaths(
         content: String,
@@ -360,29 +384,26 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
      * the containing page treated as a directory, landing in [baseLocale]. Pass it only for content
      * whose render actually applies that pass (page bodies), since a relative URL elsewhere has no
      * single target. Left blank, relative URLs are skipped entirely.
+     *
+     * [html] marks HTML-format content: it is scanned for src/href attributes directly instead of being
+     * parsed as Markdown (whose block rules — indented lines become code — would hide references).
      */
     fun referencedLocalUrls(
         content: String,
         defaultLocale: String,
         basePath: String = "",
         baseLocale: String = "",
+        html: Boolean = false,
     ): Set<ContentRef> {
-        val masked = ContentMasking.maskedText(content)
         val refs = mutableSetOf<ContentRef>()
-        fun add(rawUrl: String, kind: RefKind) {
+        for (scanned in MarkdownRefScanner.scan(content, html)) {
             // Relative first: resolveRelativeWikiUrl returns null for anything already absolute, so the
             // absolute URL falls through to parseLocalUrl unchanged.
             val url = basePath.takeIf { it.isNotBlank() }
-                ?.let { resolveRelativeWikiUrl(rawUrl, baseLocale.ifBlank { defaultLocale }, it) }
-                ?: rawUrl
-            val (ref, explicit) = parseLocalUrl(url, defaultLocale) ?: return
-            refs.add(ContentRef(ref, kind, explicit))
-        }
-        for (m in MARKDOWN_URL.findAll(masked)) {
-            add(m.groupValues[2], if (m.groupValues[1] == "!") RefKind.EMBED else RefKind.LINK)
-        }
-        for (m in HTML_URL.findAll(masked)) {
-            add(m.groupValues[2], if (m.groupValues[1].equals("src", ignoreCase = true)) RefKind.EMBED else RefKind.LINK)
+                ?.let { resolveRelativeWikiUrl(scanned.url, baseLocale.ifBlank { defaultLocale }, it) }
+                ?: scanned.url
+            val (ref, explicit) = parseLocalUrl(url, defaultLocale) ?: continue
+            refs.add(ContentRef(ref, if (scanned.embed) RefKind.EMBED else RefKind.LINK, explicit))
         }
         return refs
     }
@@ -395,23 +416,25 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
      * override, nav targets. The fix in every case is an absolute `/folder/file.png`, which binds to the
      * page's locale and falls back to the default at serve time.
      */
-    fun unresolvableRelativeRefs(content: String): Set<String> {
-        val masked = ContentMasking.maskedText(content)
+    fun unresolvableRelativeRefs(content: String, html: Boolean = false): Set<String> {
         val out = mutableSetOf<String>()
-        fun add(rawUrl: String, kind: RefKind) {
-            // A non-null result means it really is directory-relative: absolute, anchor, protocol-relative
-            // and scheme'd URLs all return null. The locale/path arguments are placeholders, unused here.
-            if (resolveRelativeWikiUrl(rawUrl, "x", "x") == null) return
-            val path = rawUrl.substringBefore('?').substringBefore('#').trim()
-            if (kind == RefKind.EMBED || path.substringAfterLast('/').contains('.')) out.add(path)
-        }
-        for (m in MARKDOWN_URL.findAll(masked)) {
-            add(m.groupValues[2], if (m.groupValues[1] == "!") RefKind.EMBED else RefKind.LINK)
-        }
-        for (m in HTML_URL.findAll(masked)) {
-            add(m.groupValues[2], if (m.groupValues[1].equals("src", ignoreCase = true)) RefKind.EMBED else RefKind.LINK)
+        for (scanned in MarkdownRefScanner.scan(content, html)) {
+            unresolvableRelativeRef(scanned.url, if (scanned.embed) RefKind.EMBED else RefKind.LINK)?.let { out.add(it) }
         }
         return out
+    }
+
+    /**
+     * [rawUrl]'s path if it is directory-relative AND must name an asset ([kind] embed, or a dotted
+     * final segment), else null. Public for the one caller with a bare URL rather than content to scan:
+     * the broken-reference report's check of navigation targets.
+     */
+    fun unresolvableRelativeRef(rawUrl: String, kind: RefKind): String? {
+        // A non-null result means it really is directory-relative: absolute, anchor, protocol-relative
+        // and scheme'd URLs all return null. The locale/path arguments are placeholders, unused here.
+        if (resolveRelativeWikiUrl(rawUrl, "x", "x") == null) return null
+        val path = rawUrl.substringBefore('?').substringBefore('#').trim()
+        return if (kind == RefKind.EMBED || path.substringAfterLast('/').contains('.')) path else null
     }
 
     /**
@@ -446,16 +469,17 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
     private fun parseLocalUrl(rawUrl: String, defaultLocale: String): Pair<AssetRef, Boolean>? {
         val url = rawUrl.substringBefore('?').substringBefore('#').trim()
         if (!url.startsWith("/") || url.startsWith("//") || url.contains(":")) return null
+        // Percent-decode each segment the way the router does (it splits the raw path on '/', then
+        // Ktor decodes each captured segment) — so `/caf%C3%A9.png`, which serves fine, matches the
+        // stored `café.png` here too instead of scanning as a different (broken/unused) path. A
+        // segment that fails to decode is kept raw: a literal `%` can't appear in an asset path, so
+        // it matches nothing — same as at serve time.
         val segments = url.removePrefix("/").split("/").filter { it.isNotEmpty() }
+            .map { seg -> runCatching { seg.decodeURLPart() }.getOrDefault(seg) }
         if (segments.isEmpty()) return null
         val explicitLocale = isLocaleSegment(segments.first()) && segments.size > 1
         val locale = if (explicitLocale) segments.first() else defaultLocale
         val path = (if (explicitLocale) segments.drop(1) else segments).joinToString("/")
         return if (path.isEmpty()) null else AssetRef(locale, path) to explicitLocale
-    }
-
-    companion object {
-        private val MARKDOWN_URL = Regex("(!)?\\[[^\\]]*]\\(\\s*<?([^)\\s>]+)")
-        private val HTML_URL = Regex("(src|href)\\s*=\\s*[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
     }
 }

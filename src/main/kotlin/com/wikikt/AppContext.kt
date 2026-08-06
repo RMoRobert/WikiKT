@@ -205,7 +205,7 @@ suspend fun Application.createAppContext(): AppContext {
     require(java.nio.file.Files.isWritable(assetDir)) { "Asset storage dir is not writable: $assetDir" }
     val assets = AssetService(database, assetDir)
 
-    val seed = SeedService(database, config, sites, pages, settings)
+    val seed = SeedService(database, config, sites, pages)
     seed.seedIfEmpty()
 
     // Search index + render cache: both are rebuilt when a page's live content changes (one page) or a

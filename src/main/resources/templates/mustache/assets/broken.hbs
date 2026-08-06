@@ -29,7 +29,8 @@
            left out deliberately -- see the note below. }}
     <div class="alert alert-warning py-2">
         <i class="mdi mdi-alert-outline" aria-hidden="true"></i>
-        Not everything is scanned: reference-style Markdown links, custom CSS, and injected head/body
+        Not everything is scanned: custom CSS/JavaScript (site-wide or per-page, including inline
+        <code>style</code> attributes), URLs inside Mermaid diagrams, and injected head/body
         HTML are not checked. Links to <em>pages</em> that don't exist aren't listed here, either,
         only files. Relative references (<code>![](image.png)</code>) are checked in
         page bodies, where they resolve against the page's own path; others are listed under the
@@ -38,22 +39,47 @@
 
     {{#hasBroken}}
         <h2>Found <span class="text-secondary fs-6">({{brokenCount}})</span></h2>
+        {{! Filtering, sorting, and paging are all server-side, /a/pages-style: header links and pager
+            links carry the whole list state, and the form is a plain GET so a filtered view is a
+            shareable URL. Hidden inputs re-carry sort/size through a submit (page resets on purpose --
+            a new filter starts from its first page). }}
+        <form method="get" action="/f/broken" class="row g-2 align-items-center mb-2" role="search" aria-label="Filter broken references">
+            <div class="col-auto">
+                <input type="search" class="form-control form-control-sm" name="q" value="{{q}}"
+                       placeholder="Filter by file path…" aria-label="Filter by file path">
+            </div>
+            <div class="col-auto">
+                <select class="form-select form-select-sm" name="locale" aria-label="Filter by locale">
+                    <option value="">All locales</option>
+                    {{#localeOptions}}
+                    <option value="{{value}}"{{#selected}} selected{{/selected}}>{{value}}</option>
+                    {{/localeOptions}}
+                </select>
+            </div>
+            {{#sortParam}}<input type="hidden" name="sort" value="{{sortParam}}">{{/sortParam}}
+            {{#dirParam}}<input type="hidden" name="dir" value="{{dirParam}}">{{/dirParam}}
+            {{#sizeParam}}<input type="hidden" name="size" value="{{sizeParam}}">{{/sizeParam}}
+            <div class="col-auto"><button type="submit" class="btn btn-sm btn-secondary">Apply</button></div>
+            {{#isFiltered}}<div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{clearUrl}}">Clear</a></div>{{/isFiltered}}
+            <div class="col-auto ms-auto text-secondary small">
+                {{#hasRows}}Showing {{firstRow}}–{{lastRow}} of {{filteredCount}}{{#isFiltered}} matching{{/isFiltered}}{{/hasRows}}
+            </div>
+        </form>
         <div class="table-responsive">
-            {{! data-sort-type marks a column click-to-sort (see WkBrowserCore.enableTableSort); the
-                "Referenced from" column carries none -- it holds a list, not one sortable value. }}
-            <table class="table table-hover align-middle" id="brokenTable">
+            {{! The "Referenced from" column carries no sort link -- it holds a list, not one sortable value. }}
+            <table class="table table-hover align-middle admin-sortable" id="brokenTable">
                 <thead><tr>
-                    <th data-sort-type="text">Missing file</th>
-                    <th data-sort-type="text">Locale</th>
-                    <th data-sort-type="number">References</th>
-                    <th>Referenced from</th>
+                    {{#columns}}
+                    <th scope="col" aria-sort="{{ariaSort}}"><a class="admin-sort" href="{{url}}">{{label}}<i class="mdi {{#ascending}}mdi-menu-up{{/ascending}}{{#descending}}mdi-menu-down{{/descending}}{{^ascending}}{{^descending}}mdi-unfold-more-horizontal admin-sort-idle{{/descending}}{{/ascending}}" aria-hidden="true"></i></a></th>
+                    {{/columns}}
+                    <th scope="col">Referenced from</th>
                 </tr></thead>
                 <tbody>
                 {{#broken}}
                     <tr>
                         <td><code>{{path}}</code></td>
                         <td>{{locale}}</td>
-                        <td data-sort="{{refCount}}">{{refCount}}</td>
+                        <td>{{refCount}}</td>
                         <td>
                             <ul class="list-unstyled mb-0">
                             {{#sources}}
@@ -66,8 +92,43 @@
                         </td>
                     </tr>
                 {{/broken}}
+                {{^hasRows}}
+                    <tr><td colspan="4" class="text-secondary">No broken references match the current filter.</td></tr>
+                {{/hasRows}}
                 </tbody>
             </table>
+        </div>
+        <div class="admin-pager">
+            {{#multiplePages}}
+            <nav aria-label="Broken references pagination">
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item{{^hasPrev}} disabled{{/hasPrev}}">
+                        {{#hasPrev}}<a class="page-link" href="{{prevUrl}}" rel="prev" aria-label="Previous"><i class="mdi mdi-chevron-left" aria-hidden="true"></i></a>{{/hasPrev}}
+                        {{^hasPrev}}<span class="page-link" aria-hidden="true"><i class="mdi mdi-chevron-left"></i></span>{{/hasPrev}}
+                    </li>
+                    {{#pageLinks}}
+                    {{#gap}}<li class="page-item disabled"><span class="page-link">…</span></li>{{/gap}}
+                    {{^gap}}
+                    <li class="page-item{{#current}} active{{/current}}">
+                        {{#current}}<span class="page-link" aria-current="page">{{label}}</span>{{/current}}
+                        {{^current}}<a class="page-link" href="{{url}}">{{label}}</a>{{/current}}
+                    </li>
+                    {{/gap}}
+                    {{/pageLinks}}
+                    <li class="page-item{{^hasNext}} disabled{{/hasNext}}">
+                        {{#hasNext}}<a class="page-link" href="{{nextUrl}}" rel="next" aria-label="Next"><i class="mdi mdi-chevron-right" aria-hidden="true"></i></a>{{/hasNext}}
+                        {{^hasNext}}<span class="page-link" aria-hidden="true"><i class="mdi mdi-chevron-right"></i></span>{{/hasNext}}
+                    </li>
+                </ul>
+            </nav>
+            {{/multiplePages}}
+            <div class="admin-pager-sizes text-secondary">
+                Rows per page:
+                {{#sizeOptions}}
+                {{#current}}<span class="admin-pager-size active" aria-current="true">{{label}}</span>{{/current}}
+                {{^current}}<a class="admin-pager-size" href="{{url}}">{{label}}</a>{{/current}}
+                {{/sizeOptions}}
+            </div>
         </div>
     {{/hasBroken}}
     {{^hasBroken}}
@@ -121,15 +182,16 @@
 </main></div>
 <script src="/static/wk-browser.js?v={{assetVersion}}"></script>
 <script>
-  // Click-to-sort, and drag-to-resize on desktop (enableColumnResize no-ops on touch/narrow screens,
-  // and both no-op entirely if the table isn't on the page).
+  // Drag-to-resize on desktop for both tables (no-ops on touch/narrow screens, or if a table isn't on
+  // the page). Click-to-sort stays only on the unresolvable table -- the broken table sorts
+  // server-side through its header links, so its rows here are just the current page.
   (function () {
     if (!window.WkBrowserCore) return;
     window.WkBrowserCore.ensureStyle();
     ['brokenTable', 'unresolvableTable'].forEach(function (id) {
       var table = document.getElementById(id);
       if (!table) return;
-      window.WkBrowserCore.enableTableSort(table, id);
+      if (id === 'unresolvableTable') window.WkBrowserCore.enableTableSort(table, id);
       window.WkBrowserCore.enableColumnResize(table, id);
     });
   })();

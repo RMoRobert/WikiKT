@@ -56,14 +56,14 @@
             <select class="form-select" name="editorViewMode" id="editorViewMode">
                 {{#editorViewModeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/editorViewModeOptions}}
             </select>
-            <p class="form-text">How the Markdown source is displayed while editing. <strong>Formatted</strong> renders inline styling as you type (<code>**bold**</code> appears bold, headings are sized). <strong>Plain text</strong> uses a monospace font and no styling at all, so the source reads as source. <strong>Basic</strong> sits between the two: monospace, but bold, italic and headings still show as bold. Editors can pick their own from the editor toolbar, and that choice is remembered in their browser.</p>
+            <p class="form-text">Deafult Markdown editor view. Users can override, remembered per-browser.</p>
         </div>
-        <div class="mb-3" style="max-width:24rem">
-            <label for="editorTheme" class="form-label">Editor surface</label>
-            <select class="form-select" name="editorTheme" id="editorTheme">
+        <div class="mb-3" style="max-width:24rem">Default editor theme</label>
+            <select class="form-select" name="edito
+            <label for="editorTheme" class="form-label">EditorTheme" id="editorTheme">
                 {{#editorThemeOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/editorThemeOptions}}
             </select>
-            <p class="form-text">Light or dark background for the Markdown source you type. A dark editor keeps the source clearly distinct from the rendered preview beside it, which stays in the site theme either way. Editors can flip this for their own browser from the editor toolbar.</p>
+            <p class="form-text">Default Makrdown editor theme. Users can override, remembered per-browser.</p>
         </div>
 
         <button type="submit" class="btn btn-primary">Save</button>

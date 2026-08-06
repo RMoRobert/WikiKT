@@ -81,7 +81,7 @@ class BrokenReferencesTest {
                 header("X-CSRF-Token", csrf)
                 setBody(
                     """{"locale":"en","path":"mixed-refs","title":"Mixed","content":
-                       "![a](/en/images/present.png) ![b](/en/images/gone.png) [c](/en/files/manual.pdf) [d](/en/not-written-yet) `![e](/en/images/incode.png)`"}"""
+                       "![a](/en/images/present.png) ![b](/en/images/gone.png) [c](/en/files/manual.pdf) [d](/en/not-written-yet) `![e](/en/images/incode.png)` ![f][rref]\n\n[rref]: /en/images/refgone.png\n\n~~~\n![g](/en/images/intilde.png)\n~~~"}"""
                         .trimIndent().replace("\n", ""),
                 )
             }.status,
@@ -99,9 +99,117 @@ class BrokenReferencesTest {
             // page not written yet is a normal wiki state, not a broken asset.
             assertFalse(html.contains(row("not-written-yet")), "extension-less link is a page link, not an asset")
             assertFalse(html.contains(row("images/incode.png")), "refs inside code spans are not references")
+            assertTrue(html.contains(row("images/refgone.png")), "reference-style embed with no asset is broken")
+            assertFalse(html.contains(row("images/intilde.png")), "refs inside tilde fences are not references")
             // The source of each broken ref is named, so it's actionable.
             assertTrue(html.contains("mixed-refs"), "the referencing page is listed")
         }
+
+        storage.toFile().deleteRecursively()
+    }
+
+    /**
+     * The list view's state — `?q=` / `?locale=` / `?sort=` / `?dir=` / `?page=` / `?size=` — filters,
+     * sorts, and windows the table server-side, /a/pages-style. Junk values must degrade to the
+     * defaults rather than error: they arrive from hand-editable URLs.
+     */
+    @Test
+    fun `broken list filters by locale and path, sorts, and paginates`() = testApplication {
+        val storage = Files.createTempDirectory("wikikt-broken-list-test")
+        environment {
+            config = MapApplicationConfig(
+                "wikikt.defaultLocale" to "en",
+                "wikikt.defaultAdmin.username" to "admin",
+                "wikikt.defaultAdmin.password" to "test",
+                "wikikt.database.type" to "h2",
+                "wikikt.database.h2.r2dbcUrl" to "r2dbc:h2:mem:///wikikt-broken-list-test;DB_CLOSE_DELAY=-1",
+                "wikikt.database.h2.username" to "sa",
+                "wikikt.database.h2.password" to "",
+                "wikikt.assets.storageDir" to storage.toString(),
+            )
+        }
+        application { configure() }
+
+        val client = createClient { install(HttpCookies); followRedirects = false }
+        val csrf = client.loginAsAdmin()
+
+        // 14 broken refs from one page — 12 en images (enough to spill past a 10-row page), one bound
+        // to another locale, and a pdf whose path shares no substring with the images — plus a second
+        // page re-referencing m01, so exactly one row has two references for the sort check.
+        val images = (1..12).joinToString(" ") { "![x](/en/images/m${it.toString().padStart(2, '0')}.png)" }
+        assertEquals(
+            HttpStatusCode.Created,
+            client.post("/u/v1/pages") {
+                contentType(ContentType.Application.Json)
+                header("X-CSRF-Token", csrf)
+                setBody("""{"locale":"en","path":"many-refs","title":"Many","content":"$images ![de](/de/images/nur-de.png) [pdf](/en/files/manual.pdf)"}""")
+            }.status,
+        )
+        assertEquals(
+            HttpStatusCode.Created,
+            client.post("/u/v1/pages") {
+                contentType(ContentType.Application.Json)
+                header("X-CSRF-Token", csrf)
+                setBody("""{"locale":"en","path":"one-more","title":"More","content":"![again](/en/images/m01.png)"}""")
+            }.status,
+        )
+
+        fun row(path: String) = "<code>$path</code>"
+
+        // Default view: everything on one page (14 rows < 25), sorted by path ascending.
+        client.get("/f/broken").bodyAsText().let { html ->
+            assertTrue(html.contains(row("images/nur-de.png")), "all locales are listed by default")
+            val pdf = html.indexOf(row("files/manual.pdf"))
+            val m01 = html.indexOf(row("images/m01.png"))
+            assertTrue(pdf >= 0 && m01 > pdf, "sorted by path ascending by default")
+        }
+
+        // Locale filter: only the de row remains, and the count line says what the filter kept.
+        client.get("/f/broken?locale=de").bodyAsText().let { html ->
+            assertTrue(html.contains(row("images/nur-de.png")), "the de row survives its locale filter")
+            assertFalse(html.contains(row("images/m01.png")), "en rows are filtered out")
+            assertTrue(html.contains("of 1 matching"), "the count reflects the filter")
+            assertTrue(html.contains("<option value=\"de\" selected>"), "the dropdown keeps the choice")
+        }
+
+        // Path filter: case-insensitive substring on the missing file's path.
+        client.get("/f/broken?q=MANUAL").bodyAsText().let { html ->
+            assertTrue(html.contains(row("files/manual.pdf")), "substring match, case-insensitive")
+            assertFalse(html.contains(row("images/m01.png")), "non-matches are filtered out")
+        }
+
+        // A filter matching nothing still renders the form — there'd be no way to clear it otherwise.
+        client.get("/f/broken?q=no-such-file").bodyAsText().let { html ->
+            assertTrue(html.contains("No broken references match"), "empty state is named")
+            assertTrue(html.contains("name=\"q\""), "the filter form is still there")
+        }
+
+        // Sort by references, descending: the doubly-referenced m01 leads.
+        client.get("/f/broken?sort=refs&dir=desc").bodyAsText().let { html ->
+            val m01 = html.indexOf(row("images/m01.png"))
+            val pdf = html.indexOf(row("files/manual.pdf"))
+            assertTrue(m01 >= 0 && pdf > m01, "most-referenced first")
+        }
+
+        // Pagination: 14 rows at 10 per page — by path, page 1 ends at m09 and page 2 starts at m10.
+        client.get("/f/broken?size=10").bodyAsText().let { html ->
+            assertTrue(html.contains(row("images/m09.png")), "row 10 is on the first page")
+            assertFalse(html.contains(row("images/m10.png")), "row 11 is not")
+            assertTrue(html.contains("Showing 1–10 of 14"), "the window is named")
+        }
+        client.get("/f/broken?size=10&page=2").bodyAsText().let { html ->
+            assertFalse(html.contains(row("images/m09.png")), "page 1's rows are gone")
+            assertTrue(html.contains(row("images/m10.png")), "page 2 picks up where page 1 ended")
+            assertTrue(html.contains("Showing 11–14 of 14"), "the window is named")
+        }
+
+        // A page past the end clamps to the last page instead of showing an empty table, and
+        // unrecognised sort/size values fall back to the defaults rather than erroring.
+        assertTrue(
+            client.get("/f/broken?size=10&page=999").bodyAsText().contains(row("images/nur-de.png")),
+            "a stale page number lands on the last real page",
+        )
+        assertEquals(HttpStatusCode.OK, client.get("/f/broken?sort=bogus&size=7&page=x&locale=zz").status)
 
         storage.toFile().deleteRecursively()
     }

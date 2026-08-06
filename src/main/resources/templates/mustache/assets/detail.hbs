@@ -63,6 +63,37 @@
                     <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-swap-horizontal" aria-hidden="true"></i> Replace</button>
                 </form>
                 
+                {{#hasPending}}
+                <div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-outline" aria-hidden="true"></i> A replacement ({{pendingFilename}}) is scheduled for {{pendingScheduledAt}}.
+                    <form method="post" action="/f/{{id}}/pending/delete" onsubmit="return confirm('Cancel the scheduled replacement?');" class="ms-auto m-0">
+                        {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                    </form>
+                </div>
+                {{/hasPending}}
+
+                <h2 class="h5 border-top pt-3 mt-4">Move/Rename</h2>
+                <p class="text-secondary">Change folder, filename, or locale</p>
+                {{#hasReferences}}
+                <div class="alert alert-warning py-2">
+                    <i class="mdi mdi-alert-outline" aria-hidden="true"></i>
+                    This asset is in use in {{usageCount}} place(s){{#hasBrandingUses}}
+                    and as {{#brandingUses}}{{.}} {{/brandingUses}}in Site settings{{/hasBrandingUses}} (see the Info tab).
+                    Update references after moving if so desired (or see the
+                    <a href="/f/broken">broken references report</a>).
+                </div>
+                {{/hasReferences}}
+                <form method="post" action="/f/{{id}}/rename" {{#hasReferences}}onsubmit="return confirm('Move this asset? Note that references to asset as existing path will break.');"{{/hasReferences}} class="edit-form">
+                    {{{csrfField}}}
+                    <div class="mb-3"><label class="form-label">Locale</label>
+                        <select name="locale" class="form-select">{{#localeOptions}}<option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>{{/localeOptions}}</select>
+                    </div>
+                    <div class="mb-3"><label class="form-label">Path</label>
+                        <input type="text" name="path" value="{{path}}" required class="form-control" placeholder="folder/image.png">
+                        <p class="form-text">Full path including the filename, e.g. <code>images/file.png</code></p>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary"><i class="mdi mdi-folder-move-outline" aria-hidden="true"></i> Move</button>
+                </form>
+
                 <h2 class="h5 border-top pt-3 mt-4">File Data</h2>
                 <dl class="row mb-2">
                     <dt class="col-sm-3">Locale</dt><dd class="col-sm-9">{{locale}}</dd>
@@ -73,14 +104,6 @@
                     <dt class="col-sm-3">Filename</dt><dd class="col-sm-9">{{originalFilename}}</dd>
                     <dt class="col-sm-3">URL</dt><dd class="col-sm-9"><code>{{url}}</code></dd>
                 </dl>
-
-                {{#hasPending}}
-                <div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-clock-outline" aria-hidden="true"></i> A replacement ({{pendingFilename}}) is scheduled for {{pendingScheduledAt}}.
-                    <form method="post" action="/f/{{id}}/pending/delete" onsubmit="return confirm('Cancel the scheduled replacement?');" class="ms-auto m-0">
-                        {{{csrfField}}}<button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
-                    </form>
-                </div>
-                {{/hasPending}}
             </div>
 
             <div class="tab-pane fade" id="asset-pane-info" role="tabpanel" aria-labelledby="asset-tab-info">

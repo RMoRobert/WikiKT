@@ -1296,12 +1296,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     color: var(--bs-secondary-color);
 }
 .wiki-content img { max-width: 100%; height: auto; }
-/* An image that fails to load (class added by broken-images.js). Left to the browser it renders as
-   its alt text in the body font — indistinguishable from the prose around it, and with an empty alt,
-   invisible. A dashed, muted box says "an image belongs here and isn't loading" at a glance, keeps
-   the alt readable as a caption-ish label, and still shows something when there is no alt at all. The
-   min sizes are what guarantee that last case; `height: auto` above means the box otherwise collapses
-   to the text. */
+/* An image that fails to load (class added by broken-images.js). Override default browser display (or lack thereof). */
 .wiki-content img.wk-img-broken,
 .editor-preview-side img.wk-img-broken,
 .editor-preview img.wk-img-broken {
@@ -1310,12 +1305,10 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     min-height: 2.5rem;
     max-width: 100%;
     padding: 0.4rem 0.6rem;
-    /* Dashed in the muted *text* colour, not --bs-border-color: against the fill that border is nearly
-       invisible in the light theme, and the outline is the whole signal here. */
-    border: 1px dashed var(--bs-secondary-color);
+    border: 1px dashed var(--bs-tertiary-color);
     border-radius: var(--bs-border-radius, 0.375rem);
     background: var(--bs-tertiary-bg);
-    color: var(--bs-secondary-color);
+    color: var(--bs-tertiary-color);
     font-size: 0.875rem;
     font-style: italic;
 }
@@ -1997,7 +1990,7 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
    (Admin > Appearance "Heading underline color", emitted by partials/brand-style.hbs), falling
    back to the neutral border color when unset. */
 .wiki-content h2 {
-    margin-top: 2.5rem; /* extra separation above sections (the global h2 default is 2rem) */
+    margin-top: 1.5rem;
     padding-bottom: 0.3rem;
     background: linear-gradient(90deg, var(--wk-heading-line-color, var(--bs-border-color)), transparent) left bottom / 100% 2px no-repeat;
 }
@@ -2071,12 +2064,55 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 }
 .edit-form + form { margin-top: 1rem; }
 
-/* --- Print: drop the site chrome (navbar, nav sidebar, side column, footer) and print the content. --- */
+/* --- Print: drop the interactive site chrome (navbar, nav sidebar, TOC, buttons) and print the
+   article full-bleed, with the breadcrumb trail, page details and site footer kept as plain
+   header/footer lines around it. --- */
 @media print {
-    /* .page-toc explicitly too: on compact screens it lives INSIDE the article, not the aside. */
-    .wk-navbar, .wiki-sidebar, .wk-nav-toggle, .page-aside, .page-toc, .site-footer, .wk-crumbbar { display: none !important; }
-    .wiki-layout { display: block; }
+    /* .page-toc explicitly too: on compact screens it lives INSIDE the article, not the aside.
+       The Share/Print card is identified by the print button it holds — it has no class of its own. */
+    .wk-navbar, .wiki-sidebar, .wk-nav-toggle, .page-toc, .skip-link,
+    .page-aside .page-card:has(#printPage) { display: none !important; }
+
+    /* Desktop keeps the article clear of the fixed nav column by pushing the layout, the crumb band's
+       inner container and the footer right by the column's width. A sheet lays out wider than the
+       768.02px breakpoint (Letter/A4 at the usual margins is ~780-800 CSS px), so those offsets apply
+       on paper too even though the column itself is hidden — that was the empty gutter down the left
+       of every printed page. Drop the offsets and .container's centering so the article gets the
+       whole sheet. */
+    .wiki-layout,
+    .wk-crumbbar > .container,
+    .site-footer,
+    .site-footer > .container {
+        width: auto !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+    .wiki-layout { display: block; padding-top: 0; }
     .wiki-main { width: 100%; }
+
+    /* Breadcrumb trail as a header line: no band, no rule — just the path above the title. */
+    .wk-crumbbar { padding: 0; background: none; border: 0; }
+
+    /* Side column: it follows <main> in the DOM, so unpinning it lands its remaining cards (Tags,
+       Page details) after the article as a footer block rather than beside it. Borderless — a card
+       outline is screen furniture. */
+    .page-aside {
+        display: block !important;
+        position: static !important;
+        max-height: none;
+        overflow: visible;
+        margin-top: 1.5rem;
+        border-top: var(--bs-border-width) solid var(--bs-border-color);
+        padding-top: 0.5rem;
+        font-size: 0.8rem;
+    }
+    .page-aside .page-card { padding: 0; margin-top: 0.75rem; border: 0 !important; }
+    /* "View history" is a dead end on paper. */
+    .page-meta-box .page-meta-row:has(a) { display: none; }
+    .site-footer { margin-top: 1.5rem; padding-bottom: 0; }
 }
 
 
@@ -2656,6 +2692,56 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
 [data-bs-theme="dark"] .hljs-name, [data-bs-theme="dark"] .hljs-quote, [data-bs-theme="dark"] .hljs-selector-tag, [data-bs-theme="dark"] .hljs-selector-pseudo { color: #7ee787; }
 [data-bs-theme="dark"] .hljs-emphasis { font-style: italic; }
 [data-bs-theme="dark"] .hljs-strong { font-weight: bold; }
+
+/* Printing a page that's being read in dark mode: browsers drop backgrounds when printing, so the dark
+   palette's pale text lands on white paper and all but disappears. Print the light palette instead —
+   restated here rather than inherited, because data-bs-theme is an attribute and no media query can
+   unset it. Only the tokens the ARTICLE uses are listed; the dark --wk-* vars are all chrome (sidebar,
+   crumb band, admin column), which the print block above hides outright. Sits after the dark rules so
+   the callout/highlight overrides win on source order at equal specificity. */
+@media print {
+    :root[data-bs-theme="dark"] {
+        color-scheme: light;
+        --bs-body-color: #212529;
+        --bs-body-color-rgb: 33, 37, 41;
+        --bs-body-bg: #fff;
+        --bs-body-bg-rgb: 255, 255, 255;
+        --bs-emphasis-color: #000;
+        --bs-emphasis-color-rgb: 0, 0, 0;
+        --bs-secondary-color: rgba(33, 37, 41, 0.75);
+        --bs-secondary-color-rgb: 33, 37, 41;
+        --bs-secondary-bg: #e9ecef;
+        --bs-secondary-bg-rgb: 233, 236, 239;
+        --bs-tertiary-color: rgba(33, 37, 41, 0.5);
+        --bs-tertiary-color-rgb: 33, 37, 41;
+        --bs-tertiary-bg: #f8f9fa;              /* code-block and table-stripe surface */
+        --bs-tertiary-bg-rgb: 248, 249, 250;
+        --bs-border-color: #dee2e6;
+        --bs-border-color-translucent: rgba(0, 0, 0, 0.175);
+        --bs-code-color: #d63384;
+        --bs-highlight-color: #212529;
+        --bs-highlight-bg: #fff3cd;
+    }
+    /* Links are set on the element, not through --bs-link-color: brand-style.hbs declares the dark link
+       color at :root[data-bs-theme='dark'] from the admin's brand setting, which ties this rule's
+       specificity and is emitted later in <head>, so overriding the variable here would lose. */
+    [data-bs-theme="dark"] a { color: #0a58ca; }
+    /* Callouts carry their own dark fills; without the background they'd be light text on white. */
+    [data-bs-theme="dark"] .wiki-content .is-info { border-color: #1976d2; background: #e3f2fd; color: #0d3c61; }
+    [data-bs-theme="dark"] .wiki-content .is-info .callout-icon { color: #1976d2; }
+    [data-bs-theme="dark"] .wiki-content .is-success { border-color: #2e7d32; background: #e8f5e9; color: #1b5e20; }
+    [data-bs-theme="dark"] .wiki-content .is-success .callout-icon { color: #2e7d32; }
+    [data-bs-theme="dark"] .wiki-content .is-warning { border-color: #f9a825; background: #fff8e1; color: #6d4c00; }
+    [data-bs-theme="dark"] .wiki-content .is-warning .callout-icon { color: #c87f00; }
+    [data-bs-theme="dark"] .wiki-content .is-danger,
+    [data-bs-theme="dark"] .wiki-content .is-error { border-color: #d32f2f; background: #fdecea; color: #8e1b16; }
+    [data-bs-theme="dark"] .wiki-content .is-danger .callout-icon,
+    [data-bs-theme="dark"] .wiki-content .is-error .callout-icon { color: #d32f2f; }
+    /* Syntax highlighting: the dark token palette is tuned for a dark surface and there's no way to
+       selectively restore the vendored light theme it overrides, so print the code monochrome. */
+    [data-bs-theme="dark"] .hljs,
+    [data-bs-theme="dark"] .hljs * { color: inherit; }
+}
 
 /* Honor the OS "reduce motion" preference (WCAG 2.3.3). The site's own transitions are short
    color/opacity/transform tweaks, so near-zeroing them is safe; 0.01ms (rather than none) still fires

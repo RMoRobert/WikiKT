@@ -241,4 +241,95 @@ class UnusedAssetsTest {
 
         storage.toFile().deleteRecursively()
     }
+
+    /**
+     * References that only serve because of resolution machinery — the locale fallback, reference-style
+     * definitions, an image nested in a link — must keep their assets off the unused list. Each of these
+     * renders a real image or download for a reader, and each was invisible to an earlier version of the
+     * scan, which is precisely how a working asset gets deleted. `/f/unused` and `/f/broken` must also
+     * agree: nothing referenced here may appear in either report.
+     */
+    @Test
+    fun `locale fallback, reference-style and nested references keep assets off the unused list`() = testApplication {
+        val storage = Files.createTempDirectory("wikikt-unused-resolution-test")
+        environment {
+            config = MapApplicationConfig(
+                "wikikt.defaultLocale" to "en",
+                "wikikt.defaultAdmin.username" to "admin",
+                "wikikt.defaultAdmin.password" to "test",
+                "wikikt.database.type" to "h2",
+                "wikikt.database.h2.r2dbcUrl" to "r2dbc:h2:mem:///wikikt-unused-res-test;DB_CLOSE_DELAY=-1",
+                "wikikt.database.h2.username" to "sa",
+                "wikikt.database.h2.password" to "",
+                "wikikt.assets.storageDir" to storage.toString(),
+                "wikikt.assets.localeFallback" to "true",
+            )
+        }
+        application { configure() }
+
+        val client = createClient { install(HttpCookies); followRedirects = false }
+        val csrf = client.post("/u/v1/auth/login") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"username":"admin","password":"test"}""")
+        }.headers["X-CSRF-Token"]!!
+
+        suspend fun upload(filename: String) = client.post("/f") {
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("_csrf", csrf)
+                        append("folder", "pics")
+                        append("locale", "en")
+                        append(
+                            "file", png,
+                            Headers.build {
+                                append(HttpHeaders.ContentDisposition, "filename=\"$filename\"")
+                                append(HttpHeaders.ContentType, "image/png")
+                            },
+                        )
+                    },
+                )
+            )
+        }
+        fun row(path: String) = "<td>$path</td>"
+
+        listOf("fallback.png", "thumb.png", "full.png", "refstyle.png", "encoded.png", "control.png").forEach { upload(it) }
+
+        // One page carrying all four reference shapes:
+        //  - /de/pics/fallback.png — an explicit non-default locale; only the en asset exists, so the
+        //    reader is served by the locale fallback (and /f/broken agrees nothing is broken).
+        //  - a clickable thumbnail — the linked full-size image is a reference too.
+        //  - a reference-style image, whose URL lives in a `[ref]: …` definition line.
+        //  - a percent-encoded URL (`%6F` = o) — the router decodes it, so it serves.
+        assertEquals(
+            HttpStatusCode.Created,
+            client.post("/u/v1/pages") {
+                contentType(ContentType.Application.Json)
+                header("X-CSRF-Token", csrf)
+                setBody(
+                    """{"locale":"en","path":"resolution-refs","title":"Refs","content":
+                       "![f](/de/pics/fallback.png) [![t](/en/pics/thumb.png)](/en/pics/full.png) ![e](/en/pics/enc%6Fded.png) ![r][ref]\n\n[ref]: /en/pics/refstyle.png"}"""
+                        .trimIndent().replace("\n", ""),
+                )
+            }.status,
+        )
+
+        client.get("/f/unused").bodyAsText().let { html ->
+            assertFalse(html.contains(row("pics/fallback.png")), "asset served via locale fallback is used")
+            assertFalse(html.contains(row("pics/thumb.png")), "thumbnail image is used")
+            assertFalse(html.contains(row("pics/full.png")), "link target of a nested image is used")
+            assertFalse(html.contains(row("pics/refstyle.png")), "reference-style image is used")
+            assertFalse(html.contains(row("pics/encoded.png")), "percent-encoded reference is used")
+            assertTrue(html.contains(row("pics/control.png")), "untouched asset is still reported unused")
+        }
+
+        // The mirror report must agree: everything above serves, so nothing here is broken.
+        client.get("/f/broken").bodyAsText().let { html ->
+            assertFalse(html.contains("pics/fallback.png"), "fallback-served reference is not broken")
+            assertFalse(html.contains("pics/refstyle.png"), "reference-style reference is not broken")
+            assertFalse(html.contains("pics/encoded.png"), "percent-encoded reference is not broken")
+        }
+
+        storage.toFile().deleteRecursively()
+    }
 }

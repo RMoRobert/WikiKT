@@ -60,6 +60,23 @@ class AssetServiceTest {
         assertTrue(assets.referencedAssetPaths("`![x](/images/logo.png)`", "en").isEmpty(), "code-span refs not counted")
         assertTrue(AssetRef("de", "x.png") in assets.referencedAssetPaths("![a](/de/x.png)", "en"), "explicit non-default locale")
         assertTrue(AssetRef("en", "p.png") in assets.referencedAssetPaths("<img src=\"/p.png\">", "en"), "raw HTML src")
+        // Percent-encoded URLs serve fine (the router decodes each path segment), so the scan decodes
+        // the same way: an encoded reference must match the stored, decoded path.
+        assertEquals(
+            setOf(AssetRef("en", "images/café.png")),
+            assets.referencedAssetPaths("![x](/images/caf%C3%A9.png)", "en"),
+            "percent-encoded unicode decodes to the stored path",
+        )
+        assertEquals(
+            setOf(AssetRef("en", "images/my-pic.png")),
+            assets.referencedAssetPaths("![x](/images/my%2Dpic.png)", "en"),
+            "percent-encoded ASCII decodes to the stored path",
+        )
+        assertEquals(
+            setOf(AssetRef("en", "images/50%.png")),
+            assets.referencedAssetPaths("![x](/images/50%.png)", "en"),
+            "a segment that fails to decode is kept raw (matches nothing, same as at serve time)",
+        )
 
         // Delete removes row and file
         assertTrue(assets.delete(asset.id))

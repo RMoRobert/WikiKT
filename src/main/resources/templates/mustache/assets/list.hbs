@@ -44,7 +44,7 @@
         <div class="mb-3 form-check">
             <input type="checkbox" name="overwrite" value="1" id="uploadOverwrite" class="form-check-input" checked>
             <label class="form-check-label" for="uploadOverwrite">Overwrite files with the same name</label>
-            <p class="form-text mb-0">On by default: a file whose path already exists replaces it (the previous version is kept in history). Uncheck to skip existing files instead.</p>
+            <p class="form-text mb-0">On by default: replace file if path plus name alredy exists (previous version kept in history if enabled).</p>
         </div>
         <div class="mb-3"><label class="form-label">Files</label><input type="file" name="file" multiple accept="image/png,image/jpeg,image/gif,image/webp" class="form-control"></div>
         <p class="text-secondary">Images only (png, jpeg, gif, webp). Up to {{maxFiles}} files, {{maxMb}} MB each. Full path becomes the above upload path plus the filename.</p>
@@ -55,12 +55,10 @@
         browse/upload flow. }}
     <h2 class="mt-4">Tools</h2>
     <p class="mb-1">
-        <a href="/f/unused"><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Find unused assets</a>
-        <span class="text-secondary">- will list assets that are not referred to on any page, fragment, or setting on this site</span>
+        <a href="/f/unused"><i class="mdi mdi-link-variant-off" aria-hidden="true"></i> Find unused assets</a><span class="text-secondary">: list assets that are not referred to on any page, fragment, or setting on this site</span>
     </p>
     <p class="mb-0">
-        <a href="/f/broken"><i class="mdi mdi-image-broken-variant" aria-hidden="true"></i> Find broken references</a>
-        <span class="text-secondary">- the reverse: will list files referred to from a page, fragment, or setting that no asset provides</span>
+        <a href="/f/broken"><i class="mdi mdi-image-broken-variant" aria-hidden="true"></i> Find broken references</a><span class="text-secondary">: list assets referred to from a page, fragment, or setting that have no corresponding file</span>
     </p>
 </main></div>
 <script>window.__WK_ASSETS__ = {{{assetsJson}}}; window.__WK_UPLOAD_MAX__ = {{maxFiles}};</script>

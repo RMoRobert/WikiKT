@@ -2,8 +2,9 @@ package com.wikikt.service
 
 /**
  * Masks Markdown code spans and fenced blocks behind placeholder tokens so reference scanners
- * (fragment keys, asset URLs) don't match references that are only being *documented* in code.
- * Shared by FragmentService and AssetService so both behave identically.
+ * (fragment keys) don't match references that are only being *documented* in code. Used by
+ * FragmentService; the asset scans instead walk the CommonMark AST (see MarkdownRefScanner),
+ * which skips code by construction.
  */
 object ContentMasking {
     private val FENCED = Regex("(?s)(`{3,}).*?\\1")

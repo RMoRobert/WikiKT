@@ -128,8 +128,11 @@ class MarkdownRenderer {
          * syntax shown in a fenced block or an inline `code` span is left verbatim. Fenced blocks are tracked
          * line-by-line; inline spans are skipped within each remaining line. (Indented 4-space code blocks are
          * not detected; showing image syntax that way is rare, and misfiring there only mangles an example.)
+         *
+         * Internal (not private) because [MarkdownRefScanner] applies the same rewrite before parsing, so a
+         * sized image scans as the same reference it renders as.
          */
-        private fun liftImageSizes(content: String): String {
+        internal fun liftImageSizes(content: String): String {
             if (!content.contains("=") || !content.contains("![")) return content // cheap skip
             val out = StringBuilder(content.length + 16)
             var fence: String? = null // the active fence run (e.g. "```"), or null when outside a fenced block

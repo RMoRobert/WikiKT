@@ -28,11 +28,13 @@
         an asset. Revision history is scanned-by-omission on purpose (see assetUsageIndex). }}
     <div class="alert alert-warning py-2">
         <i class="mdi mdi-alert-outline" aria-hidden="true"></i>
-        Verify before deleting, in particular for references the built-in scan can't detect: custom CSS,
-        injected head/body HTML, links from outside the wiki, reference-style Markdown links, or reference in
-        page history (asset history is stored separately and only current page data is scanned). A relative
-        reference (<code>![](image.png)</code>) counts in a page body, but not in an infobox value or the
-        footer override — those render without a page path to resolve it against.
+        While this scan aims to be accurate, please verify before deleting — in particular for references
+        that the built-in scan does not detect: custom CSS
+        or JavaScript (site-wide, per page, or inline <code>style</code>), injected
+        head/body HTML, references inside diagram languages, references in
+        page history (asset history is stored separately and only current page data is scanned), relative
+        references (<code>![](image.png)</code>) in infobox or footer (not recommended as there is no consistent
+        resolution path; absolute paths are detected), or links/references from outside the wiki.
     </div>
 
     {{#hasUnused}}

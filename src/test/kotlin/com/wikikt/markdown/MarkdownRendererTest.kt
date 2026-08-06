@@ -244,9 +244,9 @@ class MarkdownRendererTest {
     @Test
     fun `line breaks toggle turns single newlines into br`() {
         val md = "line one\nline two"
-        assertFalse(renderer.render(md, ContentFormat.MARKDOWN).contains("<br"), "no br by default")
-        val br = renderer.render(md, ContentFormat.MARKDOWN, RenderOptions(lineBreaks = true))
-        assertTrue(br.contains("<br"), "single newline becomes br when enabled: $br")
+        assertTrue(renderer.render(md, ContentFormat.MARKDOWN).contains("<br"), "single newline becomes br by default")
+        val joined = renderer.render(md, ContentFormat.MARKDOWN, RenderOptions(lineBreaks = false))
+        assertFalse(joined.contains("<br"), "lines join into one paragraph when off: $joined")
     }
 
     @Test

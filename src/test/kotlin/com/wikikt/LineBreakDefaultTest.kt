@@ -17,12 +17,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * A fresh install renders a single newline as a `<br>` rather than joining the lines into one paragraph:
- * the seeded value from `SeedService.seedSiteSettings`, not the CommonMark fallback in `RenderOptions`.
- * Guards both halves of that: the seeding, and the admin's ability to turn it back off (which is also
- * what proves the value is a real stored setting, not a hardcoded renderer change).
+ * A fresh install renders a single newline as a `<br>` rather than joining the lines into one paragraph
+ * (the default in `RenderOptions`, not CommonMark's joining behaviour). Guards both halves of that: the
+ * default, and the admin's ability to turn it back off (which is also what proves it is a real setting,
+ * not a hardcoded renderer change).
  */
-class LineBreakSeedTest {
+class LineBreakDefaultTest {
     @Test
     fun `a new install renders single newlines as line breaks, and the setting still wins`() = testApplication {
         environment {
@@ -31,7 +31,7 @@ class LineBreakSeedTest {
                 "wikikt.defaultAdmin.username" to "admin",
                 "wikikt.defaultAdmin.password" to "test",
                 "wikikt.database.type" to "h2",
-                "wikikt.database.h2.r2dbcUrl" to "r2dbc:h2:mem:///wikikt-linebreak-seed-${System.nanoTime()};DB_CLOSE_DELAY=-1",
+                "wikikt.database.h2.r2dbcUrl" to "r2dbc:h2:mem:///wikikt-linebreak-default-${System.nanoTime()};DB_CLOSE_DELAY=-1",
                 "wikikt.database.h2.username" to "sa",
                 "wikikt.database.h2.password" to "",
             )
@@ -49,8 +49,8 @@ class LineBreakSeedTest {
         }
         assertEquals(HttpStatusCode.Created, create.status, "page created: ${create.bodyAsText()}")
 
-        val seeded = articleOf(client.get("/en/breaks").bodyAsText())
-        assertTrue(seeded.contains("<br>"), "new install seeds line breaks on: $seeded")
+        val fresh = articleOf(client.get("/en/breaks").bodyAsText())
+        assertTrue(fresh.contains("<br>"), "new install renders line breaks by default: $fresh")
 
         // Unchecking the box in Administration > Settings > Rendering turns it off (and bumps the render
         // epoch, so the cached HTML is rebuilt on the next view).
@@ -61,7 +61,7 @@ class LineBreakSeedTest {
         assertEquals(HttpStatusCode.OK, off.status, "rendering settings saved")
 
         val plain = articleOf(client.get("/en/breaks").bodyAsText())
-        assertFalse(plain.contains("<br>"), "setting off wins over the seeded value: $plain")
+        assertFalse(plain.contains("<br>"), "setting off wins over the default: $plain")
     }
 
     /** Just the rendered page body — the surrounding shell has its own markup to not match against. */
