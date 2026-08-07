@@ -741,6 +741,68 @@ private suspend fun ApplicationCall.navAssetTargets(): List<Pair<String, AssetUs
     return out
 }
 
+/** Lowercased hostname → site id for every site that has one. Empty when no site is addressable. */
+private suspend fun ApplicationCall.siteHostMap(): Map<String, UInt> =
+    appContext.sites.all().mapNotNull { s -> s.hostname?.let { it.lowercase() to s.id } }.toMap()
+
+/**
+ * Every absolute-URL reference made by [source]'s content that targets a site in [hostToSite] — the
+ * same surfaces [assetScanSources] walks (page bodies + infobox values, scheduled drafts, fragments,
+ * the footer override, and navigation targets), each paired with the usage row naming its source.
+ * Unlike the local scan there is no relative-URL resolution (a directory-relative URL can never leave
+ * its site) and no fragment expansion (a fragment's own references stay attributed to the fragment).
+ *
+ * With [qualify] set (scanning a site other than the one being reported on), usage rows are
+ * site-labeled — "page on <site>" — and their links protocol-relative to the source's own hostname,
+ * or blank when the source site has none to build one from (the template then renders plain text).
+ */
+private suspend fun ApplicationCall.crossSiteRefsFrom(
+    source: com.wikikt.model.SiteRecord,
+    hostToSite: Map<String, UInt>,
+    qualify: Boolean,
+): List<Pair<AssetService.CrossSiteRef, AssetUsage>> {
+    val ctx = appContext
+    val default = ctx.config.defaultLocale
+    val out = mutableListOf<Pair<AssetService.CrossSiteRef, AssetUsage>>()
+    fun usage(type: String, label: String, locale: String, localUrl: String): AssetUsage = if (!qualify) {
+        AssetUsage(type, label, locale, localUrl)
+    } else {
+        AssetUsage("$type on ${source.name}", label, locale, source.hostname?.let { "//$it$localUrl" }.orEmpty())
+    }
+    fun scanText(content: String?, usage: AssetUsage, html: Boolean = false) {
+        if (content.isNullOrBlank()) return
+        for (cr in ctx.assets.referencedCrossSiteUrls(content, default, hostToSite, html)) out.add(cr to usage)
+    }
+    val pages = ctx.pages.list(source.id)
+    for (page in pages) {
+        val u = usage("page", page.path, page.locale, wikiViewUrl(page.locale, page.path))
+        scanText(page.content, u, page.contentFormat == ContentFormat.HTML)
+        scanText(page.infobox, u)
+    }
+    val pagesById = pages.associateBy { it.id }
+    for (staged in ctx.pages.listStaged(pages.map { it.id })) {
+        val page = pagesById[staged.pageId] ?: continue
+        val u = usage("scheduled draft", page.path, page.locale, wikiViewUrl(page.locale, page.path))
+        scanText(staged.content, u, staged.contentFormat == ContentFormat.HTML)
+        scanText(staged.infobox, u)
+    }
+    for (fragment in ctx.fragments.list(source.id)) {
+        scanText(fragment.content, usage("fragment", fragment.key, fragment.locale, "/a/fragments/${fragment.id}/edit"))
+    }
+    scanText(
+        ctx.settings.get(source.id, SettingsService.SITE_FOOTER_OVERRIDE),
+        usage("setting", "Footer override", "", "/a/settings"),
+    )
+    for (menu in ctx.nav.listMenus(source.id)) {
+        for (item in ctx.nav.items(menu.id)) {
+            val target = item.target?.takeIf { it.isNotBlank() } ?: continue
+            ctx.assets.crossSiteRef(target, AssetService.RefKind.LINK, default, hostToSite)
+                ?.let { out.add(it to usage("navigation", item.label, "", "/a/navigation")) }
+        }
+    }
+    return out
+}
+
 /**
  * Every reference to every asset on this site, keyed by the asset's (locale, path). One index feeds
  * the manager's "Used by" count, the detail page's usage list, and `/f/unused`, so those three can't
@@ -802,6 +864,23 @@ private suspend fun ApplicationCall.assetUsageIndex(): Map<AssetRef, List<AssetU
             if (fallback) tally(AssetRef(default, it.path), usage)
         }
     }
+    // Absolute-URL references to this site's hostname, wherever on the instance they are written —
+    // the other sites' content AND this site's own (the local scan drops every scheme'd URL, so a page
+    // absolutely referencing its own host is only ever seen here). Nothing can absolutely reference a
+    // site that has no hostname, so the instance walk is skipped entirely then. Absolute URLs are
+    // never locale-rewritten at render, so the parsed ref is the serve-time binding; the fallback
+    // tally mirrors serve-time resolution like every other reference kind here.
+    val site = currentSite()
+    if (site.hostname != null) {
+        val hostToSite = siteHostMap()
+        for (s in ctx.sites.all()) {
+            for ((cr, usage) in crossSiteRefsFrom(s, hostToSite, qualify = s.id != site.id)) {
+                if (cr.siteId != site.id) continue
+                tally(cr.ref.ref, usage)
+                if (fallback) tally(AssetRef(default, cr.ref.ref.path), usage)
+            }
+        }
+    }
     return out
 }
 
@@ -814,6 +893,8 @@ private fun Map<AssetRef, List<AssetUsage>>.usagesFor(asset: AssetRecord): List<
             "locale" to it.locale,
             "hasLocale" to it.locale.isNotBlank(),
             "url" to it.url,
+            // Blank for a cross-site source on a site with no hostname (no URL can reach it).
+            "hasUrl" to it.url.isNotBlank(),
         )
     }
 
@@ -1029,6 +1110,41 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
         if (AssetService.looksLikeFile(ref.path) && !resolves(ref)) record(ref, source)
     }
 
+    // Absolute-URL references FROM this site's content to the instance's own sites. Own-host
+    // references join the main table above: they serve through the same resolution as any local
+    // reference, just written absolutely (and never locale-rewritten, so they bind as parsed).
+    // References to a sibling site are existence-checked against that site with the CALLER's read
+    // access — a target the caller can't read is listed as unchecked, never probed. Extension-less
+    // links stay out entirely, exactly like local ones: a page not written yet is a normal wiki
+    // state, not a broken file.
+    val crossBroken = sortedMapOf<String, MutableList<AssetUsage>>()
+    val crossUnchecked = sortedSetOf<String>()
+    run {
+        val hostToSite = siteHostMap()
+        if (hostToSite.isEmpty()) return@run
+        val hostById = ctx.sites.all().associate { it.id to it.hostname }
+        val userId = currentUserId()
+        for ((cr, usage) in crossSiteRefsFrom(currentSite(), hostToSite, qualify = false)) {
+            if (!cr.ref.mustBeAsset) continue
+            val ref = cr.ref.ref
+            if (cr.siteId == siteId) {
+                if (!resolves(ref)) record(ref, usage)
+                continue
+            }
+            val host = hostById[cr.siteId] ?: continue
+            val display = "//$host" + (if (ref.locale == default) "/${ref.path}" else "/${ref.locale}/${ref.path}")
+            if (!ctx.permissions.check(userId, com.wikikt.service.AccessResolver.Perm.READ_ASSETS, cr.siteId, ref.locale, ref.path)) {
+                crossUnchecked += display
+            } else if (ctx.assets.resolve(cr.siteId, ref.locale, ref.path, fallback, default) == null) {
+                crossBroken.getOrPut(display) { mutableListOf() }.let { list ->
+                    if (list.none { it.type == usage.type && it.label == usage.label && it.locale == usage.locale }) {
+                        list.add(usage)
+                    }
+                }
+            }
+        }
+    }
+
     val q = request.queryParameters["q"]?.trim().orEmpty()
     val localeFilter = request.queryParameters["locale"]?.trim().orEmpty()
     val sort = BrokenSortColumn.fromKey(request.queryParameters["sort"]) ?: BrokenSortColumn.PATH
@@ -1153,6 +1269,27 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
         "unresolvable" to unresolvableRows,
         "hasUnresolvable" to unresolvableRows.isNotEmpty(),
         "unresolvableCount" to unresolvableRows.size,
+        // File references to the instance's OTHER sites with nothing at the target (own-host absolute
+        // refs are folded into the main table instead). Unfiltered/unpaged: short list by nature.
+        "crossBroken" to crossBroken.map { (url, sources) ->
+            mapOf(
+                "url" to url,
+                "refCount" to sources.size,
+                "sources" to sources.sortedWith(compareBy({ it.type }, { it.label })).map {
+                    mapOf(
+                        "type" to it.type,
+                        "label" to it.label,
+                        "locale" to it.locale,
+                        "hasLocale" to it.locale.isNotBlank(),
+                        "url" to it.url,
+                    )
+                },
+            )
+        },
+        "hasCrossBroken" to crossBroken.isNotEmpty(),
+        "crossBrokenCount" to crossBroken.size,
+        "crossUnchecked" to crossUnchecked.toList(),
+        "hasCrossUnchecked" to crossUnchecked.isNotEmpty(),
     )
 }
 

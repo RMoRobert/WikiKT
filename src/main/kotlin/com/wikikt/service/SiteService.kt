@@ -115,8 +115,10 @@ class SiteService(private val database: R2dbcDatabase) {
      * tags, search/render rows), assets (including on-disk bytes and revisions), fragments, nav menus,
      * and settings. Refuses only to delete the catch-all (the instance must always keep a fallback).
      *
-     * Cross-site references don't exist: a link from one site to a page on another is treated like an
-     * external link and isn't tracked, so nothing outside the site can be left dangling. The per-row
+     * Cross-site references (absolute URLs naming another site's hostname) hold no rows of their own —
+     * they are recomputed from content by the reports — so nothing here needs cascading for them.
+     * Sibling content that referenced the deleted site is simply left pointing at nothing, which the
+     * siblings' own /f/broken report and save-time warnings surface afterwards. The per-row
      * deletes are reused so this stays in step with single-page / single-asset deletion (file cleanup,
      * search/render invalidation) rather than re-implementing the child-table sweep. The site's git-sync
      * clone (whose config holds the push credential) is removed too, so no secret lingers on disk.

@@ -36,6 +36,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.lowerCase
@@ -257,18 +258,38 @@ class PageService(private val database: R2dbcDatabase) {
      * canonical `/{locale}/{path}` URL (the form every internal link uses). Computed on the fly by
      * scanning content; intended for the rare "what links here" / pre-move check, so it's not indexed.
      */
-    suspend fun backlinks(siteId: UInt, targetLocale: String, targetPath: String, defaultLocale: String): List<PageRecord> = suspendTransaction(database) {
+    suspend fun backlinks(
+        siteId: UInt,
+        targetLocale: String,
+        targetPath: String,
+        defaultLocale: String,
+        targetHost: String? = null,
+    ): List<PageRecord> = suspendTransaction(database) {
         // Internal links use the canonical "/{locale}/{path}". Links in the default locale are also often
         // written locale-less ("/{path}", which 301-redirects to the default), so match that form too.
         val targets = buildList {
             add("/$targetLocale/$targetPath")
             if (targetLocale == defaultLocale) add("/$targetPath")
         }
-        PagesTable.selectAll().where { PagesTable.siteId eq siteId }.map { it.toPageRecord() }.toList()
+        // With [targetHost] given, absolute spellings count too: "//host/…" is a substring of the
+        // https:, http:, and protocol-relative forms alike (a scheme's ':' is not a PATH_CONTINUATION
+        // char, so the boundary check still holds). Same-site content may self-reference absolutely;
+        // sibling sites can ONLY reference this page that way, so without a hostname they can't at all.
+        val absoluteTargets = targetHost?.takeIf { it.isNotBlank() }
+            ?.let { host -> targets.map { "//${host.lowercase()}$it" } }
+            .orEmpty()
+        val own = PagesTable.selectAll().where { PagesTable.siteId eq siteId }.map { it.toPageRecord() }.toList()
             .filter { p ->
-                !(p.locale == targetLocale && p.path == targetPath) && targets.any { contentLinksTo(p.content, it) }
+                !(p.locale == targetLocale && p.path == targetPath) &&
+                    (targets + absoluteTargets).any { contentLinksTo(p.content, it) }
             }
-            .sortedBy { it.title.lowercase() }
+        val siblings = if (absoluteTargets.isEmpty()) {
+            emptyList()
+        } else {
+            PagesTable.selectAll().where { PagesTable.siteId neq siteId }.map { it.toPageRecord() }.toList()
+                .filter { p -> absoluteTargets.any { contentLinksTo(p.content, it) } }
+        }
+        (own + siblings).sortedBy { it.title.lowercase() }
     }
 
     /**

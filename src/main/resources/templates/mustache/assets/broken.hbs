@@ -135,6 +135,49 @@
         <p class="text-secondary">No broken references found.</p>
     {{/hasBroken}}
 
+    {{! File references written as absolute URLs to another site hosted on this instance, where that
+        site has nothing at the path. Checked with the viewing user's read access on the target site —
+        crossUnchecked below names the ones that access didn't cover, which were NOT probed. Own-host
+        absolute references are folded into the main table above instead. Extension-less links are
+        skipped exactly like local ones (a page not written yet is not a broken file). }}
+    {{#hasCrossBroken}}
+    <h2 class="mt-4">On other sites of this instance <span class="text-secondary fs-6">({{crossBrokenCount}})</span></h2>
+    <p class="text-secondary">File references pointing at another site hosted here that has no asset at that path.</p>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead><tr>
+                <th scope="col">Reference</th>
+                <th scope="col">Refs</th>
+                <th scope="col">Referenced from</th>
+            </tr></thead>
+            <tbody>
+            {{#crossBroken}}
+                <tr>
+                    <td><code>{{url}}</code></td>
+                    <td>{{refCount}}</td>
+                    <td>
+                        <ul class="list-unstyled mb-0">
+                        {{#sources}}
+                            <li>
+                                <span class="badge text-bg-light">{{type}}</span>
+                                <a href="{{url}}">{{label}}</a>{{#hasLocale}} <span class="text-secondary">({{locale}})</span>{{/hasLocale}}
+                            </li>
+                        {{/sources}}
+                        </ul>
+                    </td>
+                </tr>
+            {{/crossBroken}}
+            </tbody>
+        </table>
+    </div>
+    {{/hasCrossBroken}}
+    {{#hasCrossUnchecked}}
+    <p class="text-secondary mt-2"><i class="mdi mdi-eye-off-outline" aria-hidden="true"></i>
+        Not checked (these reference another site of this instance, where your access may not extend):
+        {{#crossUnchecked}}<code>{{.}}</code> {{/crossUnchecked}}
+    </p>
+    {{/hasCrossUnchecked}}
+
     {{! Relative references written where nothing can resolve them. Not listed as "broken" because we
         can't say whether they resolve -- that's exactly the problem with them. Infobox values and
         fragments are the cases worth acting on: a fragment resolves against whichever page includes it,

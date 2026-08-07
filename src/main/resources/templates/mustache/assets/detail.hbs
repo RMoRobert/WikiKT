@@ -130,7 +130,7 @@
                     <ul>
                         {{! Site-wide sources (a setting, a nav entry) have no locale, so the suffix is
                             conditional rather than always rendering an empty "()". }}
-                        {{#usages}}<li>{{type}}: <a href="{{url}}">{{label}}</a>{{#hasLocale}} <small class="text-secondary">({{locale}})</small>{{/hasLocale}}</li>{{/usages}}
+                        {{#usages}}<li>{{type}}: {{#hasUrl}}<a href="{{url}}">{{label}}</a>{{/hasUrl}}{{^hasUrl}}{{label}}{{/hasUrl}}{{#hasLocale}} <small class="text-secondary">({{locale}})</small>{{/hasLocale}}</li>{{/usages}}
                     </ul>
                 {{/hasUsages}}
                 {{^hasUsages}}<p class="text-secondary">Not referenced by any page, fragment, scheduled draft, or site setting.</p>{{/hasUsages}}

@@ -83,11 +83,12 @@ class SaveRefWarningTest {
 
         // The editor who saved sees the banner: the missing file, the unwritten pages (as
         // comma-separated create links), and nothing about the existing page, app routes, or the
-        // external URL.
+        // external URL. Assertions anchor on the wk-refwarn-* class hooks and structural markup
+        // (hrefs, <code> contents) — never on display copy, so the banner can be reworded freely.
         val body = client.get(location).bodyAsText()
-        assertTrue(body.contains("Assets:"), "asset warning shown")
+        assertTrue(body.contains("wk-refwarn-assets"), "asset warning shown")
         assertTrue(body.contains("<code>/img/missing.png</code>"), "missing file listed")
-        assertTrue(body.contains("Pages:"), "page warning shown")
+        assertTrue(body.contains("wk-refwarn-pages"), "page warning shown")
         assertTrue(body.contains("href=\"/e/en/docs/unwritten\""), "missing page links to its create URL")
         assertTrue(body.contains("</a>, <a href=\"/e/en/docs/unwritten-two\""), "page links are comma-separated")
         assertFalse(body.contains("href=\"/e/en/docs/target\""), "existing page does not warn")
@@ -97,7 +98,7 @@ class SaveRefWarningTest {
         // A reader without edit rights sees no banner on the same URL.
         val anon = createClient { followRedirects = false }
         val anonBody = anon.get(location).let { assertEquals(HttpStatusCode.OK, it.status); it.bodyAsText() }
-        assertFalse(anonBody.contains("Assets not found:"), "banner is editor-only")
+        assertFalse(anonBody.contains("wk-refwarn"), "banner is editor-only")
 
         // Self-healing: once a linked page exists, a refresh drops it from the banner (the file and
         // the other page are still missing, so the banner itself stays).
@@ -163,13 +164,13 @@ class SaveRefWarningTest {
         assertTrue(location.endsWith("/e/en/guide/setup?refwarn"), "staged save flags the editor URL: $location")
 
         val editor = client.get(location).bodyAsText()
-        assertTrue(editor.contains("Assets not found:"), "editor shows the banner")
+        assertTrue(editor.contains("wk-refwarn-assets"), "editor shows the banner")
         assertTrue(editor.contains("<code>/guide/setup/shot.png</code>"), "relative embed resolved against the page path")
         assertTrue(editor.contains("href=\"/e/en/guide/setup/steps\""), "relative link resolved and offered as create URL")
 
         // The live view (no staged preview) was not made warning-free by the staged save: visiting
         // the plain view URL without the flag shows no banner at all.
         val plainView = client.get("/en/guide/setup").bodyAsText()
-        assertFalse(plainView.contains("Assets not found:"), "no banner without the flag")
+        assertFalse(plainView.contains("wk-refwarn"), "no banner without the flag")
     }
 }

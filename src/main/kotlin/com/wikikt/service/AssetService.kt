@@ -33,7 +33,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 /**
- * Metadata + on-disk storage for uploaded assets. Bytes live under [storageRoot] named by the DB id
+ * Metadata plus on-disk storage for uploaded assets. Bytes live under [storageRoot] named by the DB id
  * (sharded), never by the user-supplied path, so the virtual path can't escape the storage dir.
  */
 class AssetService(private val database: R2dbcDatabase, private val storageRoot: Path) {
@@ -483,6 +483,52 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
     }
 
     /**
+     * One reference from content to a site on this instance, matched by its absolute URL's hostname.
+     * [ref] parses with the same locale/path rules as a local URL. Unlike a root-relative embed, an
+     * absolute URL is never rewritten by the render-time asset pass, so the parsed (locale, path) IS
+     * the serve-time binding — callers never apply [ContentRef.effectiveRef] to these.
+     */
+    data class CrossSiteRef(val siteId: UInt, val ref: ContentRef)
+
+    // An absolute http(s) or protocol-relative URL: authority, then a rooted path (or nothing).
+    private val ABSOLUTE_URL = Regex("^(?:https?:)?//([^/?#]+)(/.*)?$", RegexOption.IGNORE_CASE)
+
+    /**
+     * The references in [content] written as absolute URLs (`https://…`, `http://…`, or
+     * protocol-relative `//…`) whose host names a site in [hostToSite] (lowercased hostname -> site id,
+     * from the sites table; a site with no hostname won't be matched, so docs suggest setting even for catchall).
+     * The current site belongs in the map too: a page absolutely referencing its own host is otherwise invisible to the
+     * local scan, which drops every scheme'd URL. Hosts are matched port-stripped, mirroring
+     * [SiteService.byHostname]; URLs whose host is in nobody's map entry are external and skipped, as
+     * are host-root URLs (`https://x/`) and directory-relative URLs (which can never be cross-site).
+     */
+    fun referencedCrossSiteUrls(
+        content: String,
+        defaultLocale: String,
+        hostToSite: Map<String, UInt>,
+        html: Boolean = false,
+    ): Set<CrossSiteRef> {
+        if (hostToSite.isEmpty() || content.isBlank()) return emptySet()
+        val refs = mutableSetOf<CrossSiteRef>()
+        for (scanned in MarkdownRefScanner.scan(content, html)) {
+            crossSiteRef(scanned.url, if (scanned.embed) RefKind.EMBED else RefKind.LINK, defaultLocale, hostToSite)
+                ?.let { refs.add(it) }
+        }
+        return refs
+    }
+
+    /** [referencedCrossSiteUrls] for one bare URL (nav targets, branding settings), or null. */
+    fun crossSiteRef(rawUrl: String, kind: RefKind, defaultLocale: String, hostToSite: Map<String, UInt>): CrossSiteRef? {
+        val m = ABSOLUTE_URL.matchEntire(rawUrl.trim()) ?: return null
+        // Strip a port (matched like the Host header is) and any userinfo (never legitimate here, but
+        // `user@host` must not make us read the wrong hostname).
+        val host = m.groupValues[1].substringAfterLast('@').substringBefore(':').lowercase()
+        val siteId = hostToSite[host] ?: return null
+        val (ref, explicit) = parseLocalUrl(m.groupValues[2], defaultLocale) ?: return null
+        return CrossSiteRef(siteId, ContentRef(ref, kind, explicit))
+    }
+
+    /**
      * Maps a same-origin asset URL (`/x.png` or `/<locale>/x.png`) to its (locale, path) identity using
      * the same locale parsing as the router. Returns null for external/protocol-relative/anchor URLs.
      */
@@ -503,10 +549,10 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
         val url = rawUrl.substringBefore('?').substringBefore('#').trim()
         if (!url.startsWith("/") || url.startsWith("//") || url.contains(":")) return null
         // Percent-decode each segment the way the router does (it splits the raw path on '/', then
-        // Ktor decodes each captured segment) — so `/caf%C3%A9.png`, which serves fine, matches the
+        // Ktor decodes each captured segment) -- so `/caf%C3%A9.png`, which serves fine, matches the
         // stored `café.png` here too instead of scanning as a different (broken/unused) path. A
         // segment that fails to decode is kept raw: a literal `%` can't appear in an asset path, so
-        // it matches nothing — same as at serve time.
+        // it matches nothing, same as at serve time.
         val segments = url.removePrefix("/").split("/").filter { it.isNotEmpty() }
             .map { seg -> runCatching { seg.decodeURLPart() }.getOrDefault(seg) }
         if (segments.isEmpty()) return null

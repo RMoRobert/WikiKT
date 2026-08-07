@@ -5,15 +5,21 @@
     (staged saves land back there); the whole block is gated by refWarn, and the model keys come from
     refWarningModel in WikiRouting. The sentence-and-lists live in ONE flex-item <div> beside the icon
     (see the view.hbs note on gap-2 inserting gaps between every loose child). }}
+{{! The wk-refwarn / wk-refwarn-assets / wk-refwarn-pages / wk-refwarn-unverified classes are stable
+    hooks: SaveRefWarningTest anchors on them (and on hrefs/<code> contents), NEVER on display copy —
+    so all prose here can be reworded freely without breaking tests. Keep the classes when editing. }}
 {{#refWarn}}
-<div class="alert alert-warning alert-dismissible d-flex align-items-start gap-2 py-2" role="alert">
+<div class="alert alert-warning alert-dismissible d-flex align-items-start gap-2 py-2 wk-refwarn" role="alert">
     <div>
         <p><span class="fw-bolder">Page saved, but note that some file or page references have nothing located at their destination.</span> Ignore if you plan to add or leave as-is, or fix if this is a mistake:</p>
         <ul class="mt-1 mb-0">
-            {{#refWarnHasAssets}}<li>Assets: {{#refWarnAssets}}<code>{{.}}</code> {{/refWarnAssets}}</li>{{/refWarnHasAssets}}
+            {{#refWarnHasAssets}}<li class="wk-refwarn-assets">Assets: {{#refWarnAssets}}<code>{{.}}</code> {{/refWarnAssets}}</li>{{/refWarnHasAssets}}
             {{! Comma-separated: each non-first item leads with ", " (the `first` flag comes from the
                 model), so no trailing separator to strip. }}
-            {{#refWarnHasPages}}<li>Pages: {{#refWarnPages}}{{^first}}, {{/first}}<a href="{{createUrl}}" title="Create this page"><code>{{label}}</code></a>{{/refWarnPages}}</li>{{/refWarnHasPages}}
+            {{#refWarnHasPages}}<li class="wk-refwarn-pages">Pages: {{#refWarnPages}}{{^first}}, {{/first}}<a href="{{createUrl}}" title="Create this page"><code>{{label}}</code></a>{{/refWarnPages}}</li>{{/refWarnHasPages}}
+            {{! References to another site of this instance whose target this editor has no read access
+                to. Existence there is deliberately not probed, so this can only say "not checked". }}
+            {{#refWarnHasUnverified}}<li class="wk-refwarn-unverified">Not checked (links to other site on this instance where destination either does not exist or your account does not have access): {{#refWarnUnverified}}<code>{{.}}</code> {{/refWarnUnverified}}</li>{{/refWarnHasUnverified}}
         </ul>
     </div>
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>

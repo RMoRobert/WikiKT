@@ -176,7 +176,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiRequest(
         // Post-save banner for staged saves, which land back here rather than on the view. Checked
         // against what the editor shows (the staged content when it exists); see refWarningsFor.
         val refWarnings = if (call.request.queryParameters.contains(REF_WARN_FLAG)) {
-            refWarningsFor(siteId, eContent, eFormat, wikiPath.locale, wikiPath.pagePath, staged?.infobox ?: page.infobox)
+            refWarningsFor(siteId, userId, eContent, eFormat, wikiPath.locale, wikiPath.pagePath, staged?.infobox ?: page.infobox)
         } else {
             null
         }
@@ -221,7 +221,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiRequest(
     // so it self-heals (can reload to eliminate warning if addressed). Gated on
     // canEdit like the infobox nudge (a reader given the URL sees nothing).
     val refWarnings = if (canEdit && call.request.queryParameters.contains(REF_WARN_FLAG)) {
-        refWarningsFor(siteId, page.content, page.contentFormat.name, page.locale, page.path, page.infobox)
+        refWarningsFor(siteId, userId, page.content, page.contentFormat.name, page.locale, page.path, page.infobox)
     } else {
         null
     }
@@ -397,7 +397,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
     // Computed *after* the write below (so a page linking to itself resolves) and folded into the
     // redirect as ?refwarn; the landing page recomputes and shows the banner. See refWarningsFor.
     suspend fun savedWithWarnings(locale: String, path: String): String =
-        refWarnQuery(refWarningsFor(siteId, content, contentFormat, locale, path, infoboxJson))
+        refWarnQuery(refWarningsFor(siteId, userId, content, contentFormat, locale, path, infoboxJson))
 
     when {
         existing == null -> {
@@ -881,13 +881,24 @@ private fun infoboxNudgeModel(missingNames: List<String>): Map<String, Any?> = m
 )
 
 /**
- * References in a just-saved page that nothing can serve yet: [missingAssets] are embeds/file-links
- * with no asset behind them, [missingPages] are extension-less local links to pages nobody has written.
- * Both lists reuse AssetRef as a plain (locale, path) pair — for [missingPages] it names a page.
+ * References in a just-saved page that nothing can serve yet, display-ready: [missingAssets] are
+ * embeds/file-links with no asset behind them and [missingPages] extension-less links to pages nobody
+ * has written — both shown as the URL that would serve them (protocol-relative `//host/…` when the
+ * target is another site of this instance). [unverifiable] are cross-site references whose target the
+ * saving editor has no read access to: existence there is deliberately not probed (and an existing
+ * page hidden by ACL is folded into the same bucket), so the banner can say "couldn't check" without
+ * ever confirming or denying what lives behind someone else's access rules.
  */
-private data class RefWarnings(val missingAssets: List<com.wikikt.model.AssetRef>, val missingPages: List<com.wikikt.model.AssetRef>) {
-    val isEmpty: Boolean get() = missingAssets.isEmpty() && missingPages.isEmpty()
+private data class RefWarnings(
+    val missingAssets: List<String>,
+    val missingPages: List<MissingPageRef>,
+    val unverifiable: List<String>,
+) {
+    val isEmpty: Boolean get() = missingAssets.isEmpty() && missingPages.isEmpty() && unverifiable.isEmpty()
 }
+
+/** One missing-page warning: the canonical URL as shown, and the create-page URL it links to. */
+private data class MissingPageRef(val label: String, val createUrl: String)
 
 /** The query flag the save handler appends to its redirect when the saved content had [RefWarnings]. */
 private const val REF_WARN_FLAG = "refwarn"
@@ -910,9 +921,18 @@ private fun refWarnQuery(warnings: RefWarnings): String = if (warnings.isEmpty) 
  * Unlike the site-wide scan, {{fragment:…}} includes are NOT expanded: a fragment's own references
  * are the fragment editor's business (and /f/broken's), not something to pin on whoever happens to
  * include it.
+ *
+ * Cross-site references — absolute URLs naming another of this instance's sites by hostname — are
+ * checked against that site with [userId]'s OWN read access: a target the editor can read is reported
+ * missing/fine exactly like a local one, while anything else (no read rule for the path, or a page
+ * hidden by ACL) lands in [RefWarnings.unverifiable] — see there for why the two are indistinguishable
+ * on purpose. Read access is all it takes; linking never requires any rights on the target site.
+ * An absolute URL naming THIS site's own hostname is checked like a local reference, except that
+ * absolute URLs are never locale-rewritten at render, so it binds as parsed (no [effectiveRef] pass).
  */
 private suspend fun io.ktor.server.routing.RoutingContext.refWarningsFor(
     siteId: UInt,
+    userId: UInt?,
     content: String,
     contentFormat: String,
     locale: String,
@@ -924,28 +944,82 @@ private suspend fun io.ktor.server.routing.RoutingContext.refWarningsFor(
     val fallback = ctx.config.assets.localeFallback
     val html = runCatching { ContentFormat.valueOf(contentFormat.uppercase()) }
         .getOrDefault(ContentFormat.MARKDOWN) == ContentFormat.HTML
-    // Body refs resolve directory-relative URLs against the page path, as render does. Infobox values
-    // render without that pass, so only their absolute refs have a checkable target (the editor already
-    // rejects relative ones outright — see the relativeRefError gate in handleWikiSave).
+    val missingAssets = sortedSetOf<String>()
+    val missingPages = mutableMapOf<String, MissingPageRef>() // keyed by label for dedup + sorting
+    val unverifiable = sortedSetOf<String>()
+
+    // Same-site references. Body refs resolve directory-relative URLs against the page path, as render
+    // does. Infobox values render without that pass, so only their absolute refs have a checkable
+    // target (the editor already rejects relative ones outright — see the relativeRefError gate in
+    // handleWikiSave).
     val refs = ctx.assets.referencedLocalUrls(content, default, path, locale, html).toMutableSet()
     infoboxJson?.takeIf { it.isNotBlank() }?.let { refs += ctx.assets.referencedLocalUrls(it, default) }
-    val missingAssets = mutableSetOf<com.wikikt.model.AssetRef>()
-    val missingPages = mutableSetOf<com.wikikt.model.AssetRef>()
+    fun displayAsset(ref: com.wikikt.model.AssetRef, host: String? = null) =
+        (host?.let { "//$it" } ?: "") + (if (ref.locale == default) "/${ref.path}" else "/${ref.locale}/${ref.path}")
     for (ref in refs) {
         if (ref.mustBeAsset) {
             val effective = ref.effectiveRef(locale)
             if (ctx.assets.resolve(siteId, effective.locale, effective.path, fallback, default) == null) {
-                missingAssets += effective
+                missingAssets += displayAsset(effective)
             }
         } else {
             val target = ref.ref
             if (ctx.pages.resolveByPath(siteId, target.locale, target.path) != null) continue
             if (runCatching { validateWikiPath(target.path, allowExtension = false) }.isFailure) continue
-            missingPages += target
+            val label = wikiViewUrl(target.locale, target.path)
+            missingPages[label] = MissingPageRef(label, wikiEditUrl(target.locale, target.path))
         }
     }
-    val order = compareBy<com.wikikt.model.AssetRef>({ it.path }, { it.locale })
-    return RefWarnings(missingAssets.sortedWith(order), missingPages.sortedWith(order))
+
+    // Cross-site (and own-host absolute) references.
+    val sites = ctx.sites.all()
+    val hostToSite = buildMap { for (s in sites) s.hostname?.let { put(it.lowercase(), s.id) } }
+    if (hostToSite.isNotEmpty()) {
+        val hostById = sites.associate { it.id to it.hostname }
+        var cross = ctx.assets.referencedCrossSiteUrls(content, default, hostToSite, html)
+        infoboxJson?.takeIf { it.isNotBlank() }?.let { cross = cross + ctx.assets.referencedCrossSiteUrls(it, default, hostToSite) }
+        for (cr in cross) {
+            val ref = cr.ref.ref
+            val own = cr.siteId == siteId
+            val host = hostById[cr.siteId] ?: continue
+            if (cr.ref.mustBeAsset) {
+                val display = displayAsset(ref, host)
+                if (!own && !ctx.permissions.check(userId, com.wikikt.service.AccessResolver.Perm.READ_ASSETS, cr.siteId, ref.locale, ref.path)) {
+                    unverifiable += display
+                } else if (ctx.assets.resolve(cr.siteId, ref.locale, ref.path, fallback, default) == null) {
+                    missingAssets += display
+                }
+            } else {
+                val label = "//$host" + wikiViewUrl(ref.locale, ref.path)
+                // Leak-proof by construction: without path-read access on the target site the resolver
+                // is never consulted, so whether a ref is "unverifiable" or silently skipped depends
+                // only on the path's SHAPE, never on what exists there. (A creatable-shaped path could
+                // hold a page, so it's worth naming; an app-route shape — /t/…, a bare locale, a
+                // reserved segment — could not, so there is nothing to say about it either way.)
+                val creatable = runCatching { validateWikiPath(ref.path, allowExtension = false) }.isSuccess
+                val canRead = own ||
+                    ctx.permissions.check(userId, com.wikikt.service.AccessResolver.Perm.READ_PAGES, cr.siteId, ref.locale, ref.path)
+                if (!canRead) {
+                    if (creatable) unverifiable += label
+                } else {
+                    val page = ctx.pages.resolveByPath(cr.siteId, ref.locale, ref.path)
+                    when {
+                        page == null && !creatable -> {}
+                        page == null -> missingPages[label] = MissingPageRef(label, "//$host" + wikiEditUrl(ref.locale, ref.path))
+                        // Own-site refs skip per-page ACL checks, same as the local branch above; a
+                        // sibling page hidden by ACL despite path-read is named but never confirmed.
+                        own || ctx.permissions.canViewPage(userId, page) -> {}
+                        else -> unverifiable += label
+                    }
+                }
+            }
+        }
+    }
+    return RefWarnings(
+        missingAssets.toList(),
+        missingPages.toSortedMap().values.toList(),
+        unverifiable.toList(),
+    )
 }
 
 /**
@@ -954,19 +1028,20 @@ private suspend fun io.ktor.server.routing.RoutingContext.refWarningsFor(
  * that would serve them (locale-prefixed only off the default locale, matching how they'd be written);
  * missing pages each link to their create-page URL.
  */
-private suspend fun io.ktor.server.routing.RoutingContext.refWarningModel(warnings: RefWarnings?): Map<String, Any?> {
+private fun refWarningModel(warnings: RefWarnings?): Map<String, Any?> {
     if (warnings == null || warnings.isEmpty) return mapOf("refWarn" to false)
-    val ctx = call.appContext
-    val default = ctx.config.defaultLocale
     return mapOf(
         "refWarn" to true,
-        "refWarnAssets" to warnings.missingAssets.map { if (it.locale == default) "/${it.path}" else "/${it.locale}/${it.path}" },
+        "refWarnAssets" to warnings.missingAssets,
         "refWarnHasAssets" to warnings.missingAssets.isNotEmpty(),
         // `first` lets the template comma-join the links: ", " leads every item but the first.
         "refWarnPages" to warnings.missingPages.mapIndexed { i, it ->
-            mapOf("label" to wikiViewUrl(it.locale, it.path), "createUrl" to wikiEditUrl(it.locale, it.path), "first" to (i == 0))
+            mapOf("label" to it.label, "createUrl" to it.createUrl, "first" to (i == 0))
         },
-        "refWarnHasPages" to warnings.missingPages.isNotEmpty()
+        "refWarnHasPages" to warnings.missingPages.isNotEmpty(),
+        // Cross-site references whose target the editor can't read — named, but never existence-checked.
+        "refWarnUnverified" to warnings.unverifiable,
+        "refWarnHasUnverified" to warnings.unverifiable.isNotEmpty(),
     )
 }
 
@@ -1065,12 +1140,22 @@ private suspend fun io.ktor.server.routing.RoutingContext.editModel(
     // "Linked from": other pages whose content references this page's canonical URL. Computed on the fly
     // (rare; only meaningful for an existing page) so an editor can see what a move/rename would break.
     val backlinks = if (!isNew && pageId != null) {
-        ctx.pages.backlinks(siteId, wikiPath.locale, wikiPath.pagePath, ctx.config.defaultLocale).map {
+        // Passing this site's hostname folds in absolute spellings — including pages on the instance's
+        // OTHER sites, which can only link here that way. A cross-site row is site-labeled and links
+        // via the source's own hostname (linkless when that site has none to build a URL from).
+        val sites = ctx.sites.all()
+        val siteById = sites.associateBy { it.id }
+        ctx.pages.backlinks(siteId, wikiPath.locale, wikiPath.pagePath, ctx.config.defaultLocale, siteById[siteId]?.hostname).map { p ->
+            val cross = p.siteId != siteId
+            val sourceHost = if (cross) siteById[p.siteId]?.hostname else null
             mapOf(
-                "title" to it.title,
-                "url" to wikiViewUrl(it.locale, it.path),
-                "locale" to it.locale,
-                "path" to it.path,
+                "title" to p.title,
+                "url" to if (cross) sourceHost?.let { "//$it" + wikiViewUrl(p.locale, p.path) }.orEmpty() else wikiViewUrl(p.locale, p.path),
+                "hasUrl" to (!cross || sourceHost != null),
+                "locale" to p.locale,
+                "path" to p.path,
+                "crossSite" to cross,
+                "siteName" to (if (cross) siteById[p.siteId]?.name.orEmpty() else ""),
             )
         }
     } else {
