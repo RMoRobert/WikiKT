@@ -41,6 +41,9 @@
     </header>
 
     {{#error}}<div class="alert alert-danger editor-error" role="alert">{{error}}</div>{{/error}}
+    {{! Post-save reference warning (staged saves land back here). The wrapper gives the alert the
+        same gutter as .editor-error — the editor below is full-bleed. }}
+    <div class="editor-refwarn">{{>partials/ref-warning.hbs}}</div>
 
     <div class="modal fade" id="pageInfo" tabindex="-1" aria-labelledby="pageInfoTitle" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">

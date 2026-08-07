@@ -358,7 +358,31 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
      * whether the URL named its locale explicitly. The last matters because a locale-relative URL binds
      * late — see `renderAssetRefs` in WikiRouting — so it can resolve to a different locale per source.
      */
-    data class ContentRef(val ref: AssetRef, val kind: RefKind, val explicitLocale: Boolean)
+    data class ContentRef(val ref: AssetRef, val kind: RefKind, val explicitLocale: Boolean) {
+        /**
+         * Whether this reference has to be satisfied by an asset. An embed always does — nothing but an
+         * asset renders inside an `<img>`. A link only does when its path couldn't be a page path: an
+         * extension-less link that resolves nowhere is a wiki "red link" (a page not written yet), which
+         * is a normal state, not a missing file.
+         */
+        val mustBeAsset: Boolean get() = kind == RefKind.EMBED || looksLikeFile(ref.path)
+
+        /**
+         * The (locale, path) this reference actually resolves to at serve time, which is what decides
+         * whether it is broken:
+         *  - an explicit `/<locale>/…` binds to that locale
+         *  - a locale-relative **embed** binds to its source's locale — `renderAssetRefs` rewrites
+         *    `<img src>` to the page's locale so each translation serves its own file
+         *  - a locale-relative **link** is never rewritten, so the router resolves it at the default
+         *    locale (which is already what [resolveLocalAssetUrl] returned)
+         */
+        fun effectiveRef(sourceLocale: String): AssetRef =
+            if (!explicitLocale && kind == RefKind.EMBED && sourceLocale.isNotBlank()) {
+                AssetRef(sourceLocale, ref.path)
+            } else {
+                ref
+            }
+    }
 
     /**
      * The set of assets (by locale+path) referenced from [content] — markdown images/links (including
@@ -464,6 +488,15 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
      */
     fun resolveLocalAssetUrl(rawUrl: String, defaultLocale: String): AssetRef? =
         parseLocalUrl(rawUrl, defaultLocale)?.first
+
+    companion object {
+        /**
+         * A page path can never contain a period ([com.wikikt.model.validateWikiPath] is called with
+         * `allowExtension = false` for pages and `true` for assets), so a dotted final segment can only
+         * ever name an asset. That's what lets a reference scan tell a dead file link from a link to a page.
+         */
+        fun looksLikeFile(path: String): Boolean = path.substringAfterLast('/').contains('.')
+    }
 
     /** [resolveLocalAssetUrl], also reporting whether the URL carried its own locale segment. */
     private fun parseLocalUrl(rawUrl: String, defaultLocale: String): Pair<AssetRef, Boolean>? {

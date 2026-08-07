@@ -278,6 +278,9 @@ h2 { margin-top: 2rem; }
 }
 .editor-bar .account-menu ul .wk-linklike:hover { background: var(--bs-secondary-bg); }
 .editor-error { margin: 0.75rem 1rem 0; }
+/* The post-save reference warning (partials/ref-warning.hbs) gets the same gutter as .editor-error
+   when it renders in the full-bleed editor; on the page view it sits in .wiki-main and needs none. */
+.editor-refwarn .alert { margin: 0.75rem 1rem 0; }
 /* Page Info is now a Bootstrap modal (page/edit.hbs); only the path+locale split row needs styling. */
 .page-info-row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .page-info-row > .mb-3 { flex: 1; min-width: 12rem; }

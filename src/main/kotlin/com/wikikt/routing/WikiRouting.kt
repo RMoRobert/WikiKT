@@ -173,6 +173,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiRequest(
         val eDescription = if (staged != null) staged.description else page.description
         val eContent = staged?.content ?: page.content
         val eFormat = (staged?.contentFormat ?: page.contentFormat).name
+        // Post-save banner for staged saves, which land back here rather than on the view. Checked
+        // against what the editor shows (the staged content when it exists); see refWarningsFor.
+        val refWarnings = if (call.request.queryParameters.contains(REF_WARN_FLAG)) {
+            refWarningsFor(siteId, eContent, eFormat, wikiPath.locale, wikiPath.pagePath, staged?.infobox ?: page.infobox)
+        } else {
+            null
+        }
         call.respond(
             MustacheContent(
                 "page/edit.hbs",
@@ -182,6 +189,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiRequest(
                     isLive = page.published, staged = staged, metaRobots = page.metaRobots,
                     infobox = staged?.infobox ?: page.infobox,
                     customCss = page.customCss, customJs = page.customJs,
+                    refWarnings = refWarnings,
                 ),
             ),
         )
@@ -208,6 +216,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiRequest(
     // Editor-only note: names of matched templates the page has no data for yet (a page can match more
     // than one). Every infobox is optional — this is purely informational. Resolved only for editors.
     val infoboxMissingNames = if (canEdit) ctx.infobox.unfilledTemplateNames(siteId, page.path, page.tags, page.infobox) else emptyList()
+    // Post-save banner: the save redirect carries ?refwarn when the just-saved content referenced
+    // missing files/pages. Recomputed against the live content rather than passed through the redirect,
+    // so it self-heals (can reload to eliminate warning if addressed). Gated on
+    // canEdit like the infobox nudge (a reader given the URL sees nothing).
+    val refWarnings = if (canEdit && call.request.queryParameters.contains(REF_WARN_FLAG)) {
+        refWarningsFor(siteId, page.content, page.contentFormat.name, page.locale, page.path, page.infobox)
+    } else {
+        null
+    }
     call.respond(
         MustacheContent(
             "page/view.hbs",
@@ -219,6 +236,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiRequest(
                 staged = staged, previewingStaged = previewStaged, infoboxHtml = infoboxHtml,
                 infoboxMissingNames = infoboxMissingNames,
                 customCss = page.customCss, customJs = page.customJs,
+                refWarnings = refWarnings,
             ),
         ),
     )
@@ -376,6 +394,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
     val publishAt = if (published) null else params["publishAt"]?.trim()?.ifBlank { null }?.let { parsePublishAt(it, zone) }
     val pathChanged = existing != null && (targetLocale != existing.locale || targetPath != existing.path)
 
+    // Computed *after* the write below (so a page linking to itself resolves) and folded into the
+    // redirect as ?refwarn; the landing page recomputes and shows the banner. See refWarningsFor.
+    suspend fun savedWithWarnings(locale: String, path: String): String =
+        refWarnQuery(refWarningsFor(siteId, content, contentFormat, locale, path, infoboxJson))
+
     when {
         existing == null -> {
             val pathError = runCatching { validateWikiPath(targetPath, allowExtension = false) }.exceptionOrNull()
@@ -397,7 +420,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                 ),
                 updatedBy = userId,
             )
-            call.respondRedirect(wikiViewUrl(targetLocale, targetPath))
+            call.respondRedirect(wikiViewUrl(targetLocale, targetPath) + savedWithWarnings(targetLocale, targetPath))
         }
         !existing.published -> {
             // Draft page: existing first-publish flow (+ move if path/locale changed).
@@ -409,7 +432,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                 UpdatePageRequest(title = title, description = description, metaRobots = metaRobots, content = content, contentFormat = contentFormat, published = published, publishAt = publishAt, tags = tags, infobox = infoboxJson, customCss = customCss, customJs = customJs),
                 updatedBy = userId,
             )
-            call.respondRedirect(wikiViewUrl(targetLocale, targetPath))
+            call.respondRedirect(wikiViewUrl(targetLocale, targetPath) + savedWithWarnings(targetLocale, targetPath))
         }
         else -> {
             // Live page: Update now, or stage (optionally scheduled). Tags/path apply only on Update now.
@@ -426,7 +449,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                         null
                     }
                     ctx.pages.upsertStaged(existing.id, title, description?.ifBlank { null }, content, fmt, stagedAt, userId, infobox = infoboxJson?.ifBlank { null })
-                    call.respondRedirect(editUrl)
+                    // A staged save can't move the page, so the staged content lives at the URL's own path.
+                    call.respondRedirect(editUrl + savedWithWarnings(wikiPath.locale, wikiPath.pagePath))
                 }
                 else -> {
                     if (pathChanged) {
@@ -438,7 +462,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                         updatedBy = userId,
                     )
                     ctx.pages.discardStaged(existing.id)
-                    call.respondRedirect(wikiViewUrl(targetLocale, targetPath))
+                    call.respondRedirect(wikiViewUrl(targetLocale, targetPath) + savedWithWarnings(targetLocale, targetPath))
                 }
             }
         }
@@ -723,6 +747,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.viewModel(
     infoboxMissingNames: List<String> = emptyList(),
     customCss: String? = null,
     customJs: String? = null,
+    refWarnings: RefWarnings? = null,
 ): Map<String, Any?> {
     val ctx = call.appContext
     val formats = call.displayFormats()
@@ -839,7 +864,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.viewModel(
         // <style> tag on render; JS is emitted verbatim (the author supplies their own <script> tags).
         "pageCustomCss" to customCss?.ifBlank { null },
         "pageCustomJs" to customJs?.ifBlank { null },
-    ) + infoboxNudgeModel(infoboxMissingNames) + call.navModel(wikiPath.pagePath, wikiPath.locale)
+    ) + infoboxNudgeModel(infoboxMissingNames) + refWarningModel(refWarnings) + call.navModel(wikiPath.pagePath, wikiPath.locale)
 }
 
 /**
@@ -854,6 +879,96 @@ private fun infoboxNudgeModel(missingNames: List<String>): Map<String, Any?> = m
     "infoboxMissingNoun" to if (missingNames.size <= 1) "an infobox" else "infoboxes",
     "infoboxMissingPronoun" to if (missingNames.size <= 1) "it" else "them",
 )
+
+/**
+ * References in a just-saved page that nothing can serve yet: [missingAssets] are embeds/file-links
+ * with no asset behind them, [missingPages] are extension-less local links to pages nobody has written.
+ * Both lists reuse AssetRef as a plain (locale, path) pair — for [missingPages] it names a page.
+ */
+private data class RefWarnings(val missingAssets: List<com.wikikt.model.AssetRef>, val missingPages: List<com.wikikt.model.AssetRef>) {
+    val isEmpty: Boolean get() = missingAssets.isEmpty() && missingPages.isEmpty()
+}
+
+/** The query flag the save handler appends to its redirect when the saved content had [RefWarnings]. */
+private const val REF_WARN_FLAG = "refwarn"
+
+private fun refWarnQuery(warnings: RefWarnings): String = if (warnings.isEmpty) "" else "?$REF_WARN_FLAG"
+
+/**
+ * Computes [RefWarnings] for content being saved. The save still goes through — a page that embeds a
+ * file uploaded five minutes later, or links a page written next, renders fine with no further edit
+ * here — so these surface only as a dismissable banner on the post-save page. That makes this
+ * **UI-layer** (editor save flow) only: imports, backup restores, Git sync, and the JSON API stay
+ * permissive, and the site-wide sweep lives at /f/broken.
+ *
+ * Asset resolution mirrors /f/broken exactly (shared ContentRef helpers): an embed binds to the
+ * page's locale, a link to the default, and the default-locale fallback counts when enabled — so the
+ * banner never flags an image a reader actually sees. Page links check the (locale, path) the router
+ * would serve; a path that could never be a page (app routes like /t/…, a bare locale, a reserved
+ * first segment) is skipped rather than nagged about, unless a page already exists there anyway.
+ *
+ * Unlike the site-wide scan, {{fragment:…}} includes are NOT expanded: a fragment's own references
+ * are the fragment editor's business (and /f/broken's), not something to pin on whoever happens to
+ * include it.
+ */
+private suspend fun io.ktor.server.routing.RoutingContext.refWarningsFor(
+    siteId: UInt,
+    content: String,
+    contentFormat: String,
+    locale: String,
+    path: String,
+    infoboxJson: String?,
+): RefWarnings {
+    val ctx = call.appContext
+    val default = ctx.config.defaultLocale
+    val fallback = ctx.config.assets.localeFallback
+    val html = runCatching { ContentFormat.valueOf(contentFormat.uppercase()) }
+        .getOrDefault(ContentFormat.MARKDOWN) == ContentFormat.HTML
+    // Body refs resolve directory-relative URLs against the page path, as render does. Infobox values
+    // render without that pass, so only their absolute refs have a checkable target (the editor already
+    // rejects relative ones outright — see the relativeRefError gate in handleWikiSave).
+    val refs = ctx.assets.referencedLocalUrls(content, default, path, locale, html).toMutableSet()
+    infoboxJson?.takeIf { it.isNotBlank() }?.let { refs += ctx.assets.referencedLocalUrls(it, default) }
+    val missingAssets = mutableSetOf<com.wikikt.model.AssetRef>()
+    val missingPages = mutableSetOf<com.wikikt.model.AssetRef>()
+    for (ref in refs) {
+        if (ref.mustBeAsset) {
+            val effective = ref.effectiveRef(locale)
+            if (ctx.assets.resolve(siteId, effective.locale, effective.path, fallback, default) == null) {
+                missingAssets += effective
+            }
+        } else {
+            val target = ref.ref
+            if (ctx.pages.resolveByPath(siteId, target.locale, target.path) != null) continue
+            if (runCatching { validateWikiPath(target.path, allowExtension = false) }.isFailure) continue
+            missingPages += target
+        }
+    }
+    val order = compareBy<com.wikikt.model.AssetRef>({ it.path }, { it.locale })
+    return RefWarnings(missingAssets.sortedWith(order), missingPages.sortedWith(order))
+}
+
+/**
+ * Model keys for the post-save "references something that doesn't exist yet" banner, shared by the
+ * page view and the editor (staged saves land back on the editor). Missing files are shown as the URL
+ * that would serve them (locale-prefixed only off the default locale, matching how they'd be written);
+ * missing pages each link to their create-page URL.
+ */
+private suspend fun io.ktor.server.routing.RoutingContext.refWarningModel(warnings: RefWarnings?): Map<String, Any?> {
+    if (warnings == null || warnings.isEmpty) return mapOf("refWarn" to false)
+    val ctx = call.appContext
+    val default = ctx.config.defaultLocale
+    return mapOf(
+        "refWarn" to true,
+        "refWarnAssets" to warnings.missingAssets.map { if (it.locale == default) "/${it.path}" else "/${it.locale}/${it.path}" },
+        "refWarnHasAssets" to warnings.missingAssets.isNotEmpty(),
+        // `first` lets the template comma-join the links: ", " leads every item but the first.
+        "refWarnPages" to warnings.missingPages.mapIndexed { i, it ->
+            mapOf("label" to wikiViewUrl(it.locale, it.path), "createUrl" to wikiEditUrl(it.locale, it.path), "first" to (i == 0))
+        },
+        "refWarnHasPages" to warnings.missingPages.isNotEmpty()
+    )
+}
 
 /**
  * Rebuilds the infobox JSON from the posted `infobox.<templateSlug>.<field>` form params, coercing each
@@ -925,6 +1040,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.editModel(
     infobox: String? = null,
     customCss: String? = null,
     customJs: String? = null,
+    refWarnings: RefWarnings? = null,
 ): Map<String, Any?> {
     val ctx = call.appContext
     val formats = call.displayFormats()
@@ -1039,7 +1155,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.editModel(
         "canManageCode" to canManageCode,
         "pageCustomCss" to (customCss ?: ""),
         "pageCustomJs" to (customJs ?: ""),
-    ) + infoboxNudgeModel(infoboxMissingTabNames)
+    ) + infoboxNudgeModel(infoboxMissingTabNames) + refWarningModel(refWarnings)
 }
 
 /**

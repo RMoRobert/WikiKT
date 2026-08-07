@@ -748,7 +748,7 @@ private suspend fun ApplicationCall.navAssetTargets(): List<Pair<String, AssetUs
  *
  * A reference is tallied against every asset serve-time resolution could pick for it — mirroring
  * `resolves` in [brokenAssetRefsModel], so the two reports agree by construction:
- *  - the locale it binds to at serve time (see [effectiveAssetRef]);
+ *  - the locale it binds to at serve time (see [AssetService.ContentRef.effectiveRef]);
  *  - the default locale too when `assets.localeFallback` is on, since [AssetService.resolve] falls
  *    back to it — without this, a `/de/x.png` reference served by the `en` fallback shows nothing on
  *    /f/broken while `en/x.png` sits on /f/unused as safe to delete;
@@ -783,7 +783,7 @@ private suspend fun ApplicationCall.assetUsageIndex(): Map<AssetRef, List<AssetU
         val locales = when {
             // Explicit locale in the URL, or a link (never locale-rewritten): serves as parsed.
             ref.explicitLocale || ref.kind == AssetService.RefKind.LINK -> listOf(ref.ref.locale)
-            // A page-scoped embed binds to its page's locale (matching effectiveAssetRef). These type
+            // A page-scoped embed binds to its page's locale (matching ContentRef.effectiveRef). These type
             // strings are the ones assetScanSources creates for page-resolved content.
             usage.type == "page" || usage.type == "scheduled draft" -> listOf(usage.locale)
             // A render-anywhere embed (fragment, footer override) binds per rendering page.
@@ -889,37 +889,8 @@ private suspend fun ApplicationCall.brandingUsageByRef(): Map<AssetRef, List<Str
     return out
 }
 
-/**
- * A page path can never contain a period ([com.wikikt.model.validateWikiPath] is called with
- * `allowExtension = false` for pages and `true` for assets), so a dotted final segment can only ever
- * name an asset. That's what lets the broken scan tell a dead file link from a link to a page.
- */
-private fun looksLikeFile(path: String): Boolean = path.substringAfterLast('/').contains('.')
-
-/**
- * Whether [ref] has to be satisfied by an asset. An embed always does — nothing but an asset renders
- * inside an `<img>`. A link only does when its path couldn't be a page path: an extension-less link
- * that resolves nowhere is a wiki "red link" (a page not written yet), which is a normal state and not
- * this tool's business.
- */
-private fun isAssetReference(ref: AssetService.ContentRef): Boolean =
-    ref.kind == AssetService.RefKind.EMBED || looksLikeFile(ref.ref.path)
-
-/**
- * The (locale, path) a reference actually resolves to at serve time, which is what decides whether it
- * is broken:
- *  - an explicit `/<locale>/…` binds to that locale
- *  - a locale-relative **embed** binds to its source's locale — `renderAssetRefs` rewrites `<img src>`
- *    to the page's locale so each translation serves its own file
- *  - a locale-relative **link** is never rewritten, so the router resolves it at the default locale
- *    (which is already what [com.wikikt.service.AssetService.resolveLocalAssetUrl] returned)
- */
-private fun effectiveAssetRef(ref: AssetService.ContentRef, sourceLocale: String): AssetRef =
-    if (!ref.explicitLocale && ref.kind == AssetService.RefKind.EMBED && sourceLocale.isNotBlank()) {
-        AssetRef(sourceLocale, ref.ref.path)
-    } else {
-        ref.ref
-    }
+// Ref-classification helpers (looksLikeFile / mustBeAsset / effectiveRef) live on
+// AssetService.ContentRef — shared with the page editor's save-time warning so the two can't drift.
 
 // --- /f/broken list state: text/locale filter, server-side sorting, pagination. Same URL scheme
 //     and template pattern as /a/pages, but cut from the in-memory scan result rather than SQL —
@@ -1033,8 +1004,8 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
 
     for (scan in assetScanSources()) {
         for (ref in scan.refs) {
-            if (!isAssetReference(ref)) continue
-            val effective = effectiveAssetRef(ref, scan.usage.locale)
+            if (!ref.mustBeAsset) continue
+            val effective = ref.effectiveRef(scan.usage.locale)
             if (!resolves(effective)) record(effective, scan.usage)
         }
         for (url in scan.unresolvable) {
@@ -1055,7 +1026,7 @@ private suspend fun ApplicationCall.brokenAssetRefsModel(): Map<String, Any?> {
             }
             continue
         }
-        if (looksLikeFile(ref.path) && !resolves(ref)) record(ref, source)
+        if (AssetService.looksLikeFile(ref.path) && !resolves(ref)) record(ref, source)
     }
 
     val q = request.queryParameters["q"]?.trim().orEmpty()

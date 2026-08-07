@@ -48,6 +48,7 @@
             EVERY direct child of the flex container, including between "Integration" and the following
             period and between "Add it" and its period, showing as unwanted extra spaces before both. }}
         {{#infoboxMissing}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-card-text-outline" aria-hidden="true"></i><span>This page is specified for but missing {{infoboxMissingNoun}}: <strong>{{infoboxMissingNames}}</strong>. <a href="{{editUrl}}" class="alert-link">Add {{infoboxMissingPronoun}}</a>.</span></div>{{/infoboxMissing}}
+        {{>partials/ref-warning.hbs}}
         {{! The article body is the one region in a locale that can differ from the English chrome, so it
             carries lang here (not on <html>). The value is the URL's locale segment, which today always
             equals the served page's locale; if you add cross-locale content fallback later, bind it to the
