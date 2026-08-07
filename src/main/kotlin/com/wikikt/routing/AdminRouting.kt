@@ -324,6 +324,10 @@ fun Route.configureAdminRouting() {
             // Table of contents: must be a known value (else clear/fall back to the default).
             val tocMode = params["tocMode"].orEmpty().trim()
             ctx.settings.set(siteId, s.SITE_TOC_MODE, if (tocMode in s.TOC_MODE_OPTIONS) tocMode else "")
+            // Content width: a known value (else clear/fall back to capped) + the user-override toggle.
+            val contentWidth = params["contentWidth"].orEmpty().trim()
+            ctx.settings.set(siteId, s.APPEARANCE_CONTENT_WIDTH, if (contentWidth in s.CONTENT_WIDTH_OPTIONS) contentWidth else "")
+            ctx.settings.setBool(siteId, s.APPEARANCE_CONTENT_WIDTH_USER_CHOICE, params["contentWidthUserChoice"] != null)
             // Typography: font is a known preset key (else fall back to the default); the custom family
             // and Custom CSS are sanitized on output (SettingsService), so store the trimmed input here.
             val fontKeys = s.FONT_PRESETS.map { it.key }.toSet()
@@ -846,6 +850,8 @@ fun Route.configureAdminRouting() {
                 username.isBlank() || password.isBlank() -> "Username and password are required"
                 !REGISTER_USERNAME_PATTERN.matches(username) ->
                     "Choose a username of 3-100 characters: letters, numbers, and . _ - (starting with a letter or number)."
+                ctx.users.findByUsername(username) != null ->
+                    "This username cannot be registered. Please choose a different username."
                 else -> PasswordPolicy.validate(password, ctx.config.minPasswordLength)
             }
             if (validationError != null) {
@@ -864,7 +870,7 @@ fun Route.configureAdminRouting() {
                 return@post
             }
 
-            try {
+            val created = try {
                 ctx.users.create(
                     CreateUserRequest(username, password, email, groupIds),
                     actorIsRoot = ctx.permissions.isRoot(call.currentUserId()),
@@ -885,8 +891,8 @@ fun Route.configureAdminRouting() {
                             templateKey = com.wikikt.service.EmailTemplateService.WELCOME,
                             context = mapOf(
                                 "siteName" to (ctx.settings.get(siteId, com.wikikt.service.SettingsService.SITE_NAME)?.ifBlank { null } ?: com.wikikt.service.SettingsService.DEFAULT_SITE_NAME),
-                                "username" to username,
-                                "displayName" to username,
+                                "username" to created.username,
+                                "displayName" to created.username,
                                 "loginUrl" to call.outboundUrl("/login"),
                             ),
                         )
@@ -955,7 +961,15 @@ fun Route.configureAdminRouting() {
             val groupIds = params.getAll("groupIds") ?: emptyList()
 
             val passwordError = password?.let { PasswordPolicy.validate(it, ctx.config.minPasswordLength) }
-            if (passwordError != null) {
+            // Renaming onto a name any *other* account holds (findByUsername matches
+            // case-insensitively) would hit the unique index inside update() — same friendly
+            // message as the create form, with the index backstopping the race.
+            val usernameError = username
+                ?.let { ctx.users.findByUsername(it) }
+                ?.takeIf { it.id != id }
+                ?.let { "This username cannot be registered. Please choose a different username." }
+            val validationError = passwordError ?: usernameError
+            if (validationError != null) {
                 val existing = ctx.users.findById(id)
                 val groups = ctx.groups.list().map { it.toDto() }
                 call.respond(
@@ -970,7 +984,7 @@ fun Route.configureAdminRouting() {
                                 "displayName" to displayName,
                             ),
                             "groups" to groups.map { mapOf("id" to it.id, "name" to it.name, "selected" to (it.id in groupIds)) },
-                            "error" to passwordError,
+                            "error" to validationError,
                         ),
                     ),
                 )
@@ -2634,6 +2648,15 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
     val tocModeLabels = mapOf("left" to "Left", "right" to "Right", "off" to "Disabled")
     val currentTocMode = settings.get(siteId, s.SITE_TOC_MODE)?.ifBlank { null } ?: s.DEFAULT_TOC_MODE
     val tocModeOptions = s.TOC_MODE_OPTIONS.map { mapOf("value" to it, "label" to tocModeLabels[it], "selected" to (it == currentTocMode)) }
+    // Content width: default column behavior for wiki pages, plus whether readers may override it.
+    val contentWidthLabels = mapOf(
+        s.CONTENT_WIDTH_CAPPED to "Capped (readable width, centered)",
+        s.CONTENT_WIDTH_FULL to "Full width",
+    )
+    val currentContentWidth = settings.get(siteId, s.APPEARANCE_CONTENT_WIDTH)?.ifBlank { null } ?: s.DEFAULT_CONTENT_WIDTH
+    val contentWidthOptions = s.CONTENT_WIDTH_OPTIONS.map {
+        mapOf("value" to it, "label" to contentWidthLabels[it], "selected" to (it == currentContentWidth))
+    }
     // Theme: site default color mode.
     val themeLabels = mapOf("light" to "Light", "dark" to "Dark", "auto" to "Auto (match user's device)")
     val currentTheme = settings.get(siteId, s.APPEARANCE_THEME)?.ifBlank { null } ?: s.DEFAULT_THEME
@@ -2735,6 +2758,8 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         "siteRobotsOptions" to siteRobotsOptions,
         "searchBoxOptions" to searchBoxOptions,
         "tocModeOptions" to tocModeOptions,
+        "contentWidthOptions" to contentWidthOptions,
+        "contentWidthUserChoice" to settings.getBool(siteId, s.APPEARANCE_CONTENT_WIDTH_USER_CHOICE),
         "themeOptions" to themeOptions,
         "showThemePicker" to settings.getBool(siteId, s.APPEARANCE_SHOW_THEME_PICKER, true),
         "headHtmlValue" to settings.get(siteId, s.APPEARANCE_HEAD_HTML).orEmpty(),

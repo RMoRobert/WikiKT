@@ -102,7 +102,20 @@ fun Application.module() {
             val currentUser = call.currentUserId()?.let { ctx.users.findById(it) }
             // A logged-in user's saved theme overrides the site default (from brandingModel); merged
             // after it so it wins. Guests fall through to the site default (+ their localStorage choice).
-            val userTheme = currentUser?.theme?.takeIf { it in com.wikikt.service.SettingsService.THEME_OPTIONS }
+            val s = com.wikikt.service.SettingsService
+            val userTheme = currentUser?.theme?.takeIf { it in s.THEME_OPTIONS }
+            val chromeSiteId = call.chromeSiteId()
+            // Content width: like the theme, a per-account override of the site default, plus a
+            // per-request `?fullWidth=true|false` (the only override available to guests), which wins
+            // over the saved preference. Either/both ignored when the admin has allowed user choice on the
+            // Appearance page; otherwise the site default from brandingModel stands untouched.
+            val widthOverride = if (ctx.settings.getBool(chromeSiteId, s.APPEARANCE_CONTENT_WIDTH_USER_CHOICE)) {
+                call.request.queryParameters["fullWidth"]?.toBooleanStrictOrNull()
+                    ?: currentUser?.contentWidth?.takeIf { it in s.CONTENT_WIDTH_OPTIONS }
+                        ?.let { it == s.CONTENT_WIDTH_FULL }
+            } else {
+                null
+            }
             val merged = mapOf(
                 "assetsCdn" to ctx.config.ui.useCdnAssets,
                 // Webfont hosts, each independent of assetsCdn (see UiConfig.useCdnEmojiFont / useCdnIconFont).
@@ -122,8 +135,9 @@ fun Application.module() {
                 // long-lived Cache-Control on the /static route below.
                 "assetVersion" to BuildInfo.assetVersion,
             ) +
-                ctx.settings.brandingModel(call.chromeSiteId(), ctx.markdown, year) +
+                ctx.settings.brandingModel(chromeSiteId, ctx.markdown, year) +
                 (userTheme?.let { mapOf("themeMode" to it) } ?: emptyMap()) +
+                (widthOverride?.let { mapOf("contentWidthFull" to it) } ?: emptyMap()) +
                 (message.model as Map<String, Any?>)
             proceedWith(MustacheContent(message.template, merged, message.etag, message.contentType))
         }

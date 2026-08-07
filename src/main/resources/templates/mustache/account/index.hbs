@@ -96,6 +96,15 @@
                 </select>
                 <div class="form-text" id="userThemeHelp">Applies to your account on every device. Can also change with theme switcher on top bar if enabled on site.</div>
             </div>
+            {{#showContentWidthChoice}}
+            <div class="mb-3">
+                <label class="form-label" for="userContentWidth">Page width</label>
+                <select class="form-select" id="userContentWidth" name="contentWidth" aria-describedby="userContentWidthHelp">
+                    {{#contentWidthOptions}}<option value="{{value}}" {{#selected}}selected{{/selected}}>{{label}}</option>{{/contentWidthOptions}}
+                </select>
+                <div class="form-text" id="userContentWidthHelp">How wide wiki page content displays on large screens for your account: capped at a comfortable reading width (default/recommended), or spanning the full window width (allows more width but may be more difficult to read on wide screens).</div>
+            </div>
+            {{/showContentWidthChoice}}
             <button type="submit" class="btn btn-primary">Save</button>
         </form>
 

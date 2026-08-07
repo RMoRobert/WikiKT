@@ -81,6 +81,15 @@ fun Route.configureAccountRouting() {
             // Color theme: a known mode, or blank to follow the site default.
             val theme = params["theme"]?.trim().orEmpty()
             call.appContext.users.updateTheme(userId, theme.takeIf { it in com.wikikt.service.SettingsService.THEME_OPTIONS })
+            // Page width: a known value, or blank to follow the site default. Only touched when the
+            // form actually carried the field — it's rendered only while the site allows user choice,
+            // and a save from the hidden state must not silently clear a previously saved preference.
+            params["contentWidth"]?.let { raw ->
+                call.appContext.users.updateContentWidth(
+                    userId,
+                    raw.trim().takeIf { it in com.wikikt.service.SettingsService.CONTENT_WIDTH_OPTIONS },
+                )
+            }
             // Date/time display preferences: each a known catalog key, or blank to follow the defaults.
             fun choice(name: String, options: List<DateDisplay.Option>) =
                 params[name]?.trim()?.takeIf { v -> options.any { it.key == v } }
@@ -350,6 +359,18 @@ private suspend fun io.ktor.server.application.ApplicationCall.accountPageModel(
     val themeChoices = listOf("", "light", "dark", "auto").map {
         mapOf("value" to it, "label" to themeLabels[it], "selected" to (it == userTheme))
     }
+    // Page-width override: offered only while the site allows user choice (Appearance > Content width).
+    val sKeys = com.wikikt.service.SettingsService
+    val contentWidthAllowed = ctx.settings.getBool(siteId(), sKeys.APPEARANCE_CONTENT_WIDTH_USER_CHOICE)
+    val userContentWidth = user?.contentWidth.orEmpty()
+    val contentWidthLabels = mapOf(
+        "" to "Site default",
+        sKeys.CONTENT_WIDTH_CAPPED to "Capped (readable width, centered)",
+        sKeys.CONTENT_WIDTH_FULL to "Full width",
+    )
+    val contentWidthChoices = (listOf("") + sKeys.CONTENT_WIDTH_OPTIONS).map {
+        mapOf("value" to it, "label" to contentWidthLabels[it], "selected" to (it == userContentWidth))
+    }
     // Date/time format prefs: a "Site default" row (blank = follow the code defaults) plus each catalog
     // option, labelled with a live example rendered in the site locale so the choice is self-explanatory.
     val locale = java.util.Locale.forLanguageTag(ctx.config.defaultLocale)
@@ -387,6 +408,8 @@ private suspend fun io.ktor.server.application.ApplicationCall.accountPageModel(
         "usingServerDefault" to currentZone.isEmpty(),
         "serverZone" to java.time.ZoneId.systemDefault().id,
         "userThemeOptions" to themeChoices,
+        "showContentWidthChoice" to contentWidthAllowed,
+        "contentWidthOptions" to contentWidthChoices,
         "shortDateOptions" to shortDateChoices,
         "longDateOptions" to longDateChoices,
         "timeFormatOptions" to timeChoices,

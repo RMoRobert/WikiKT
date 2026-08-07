@@ -164,6 +164,7 @@ data class UserRecord(
     val jobTitle: String? = null,
     val location: String? = null,
     val theme: String? = null,
+    val contentWidth: String? = null,
     val status: UserStatus = UserStatus.ACTIVE,
 )
 

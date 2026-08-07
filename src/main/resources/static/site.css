@@ -1661,13 +1661,34 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
         /* Above page content, below the sticky header (Bootstrap sticky-top is 1020). */
         z-index: 1015;
     }
-    /* Shift the (otherwise centered) layout, breadcrumb band content, and footer out from under the
-       fixed column. width:auto (not .container's 100%) so the box fills exactly the space right of
-       the sidebar. The band shifts its inner .container (not itself) so its bg stays full-width. */
-    .wiki-layout:has(> .wiki-sidebar) { width: auto; margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
-    body:has(.wiki-layout > .wiki-sidebar) .wk-crumbbar > .container { width: auto; margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
-    body:has(.wiki-layout > .wiki-sidebar) .site-footer { margin-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
+    /* Make room for the fixed column by padding the body rather than margin-shifting each block: the
+       layout, the breadcrumb band's inner .container, and the footer's .container are all Bootstrap
+       containers, so inside the padded body their auto margins center them (same cap, same left
+       edge) in the space right of the sidebar, instead of pinning left and piling all the slack on
+       the right (which looks odd on wide screens). Fixed elements (the header, the sidebar
+       itself, modals) are viewport-anchored and don't move. */
+    body:has(.wiki-layout > .wiki-sidebar) { padding-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap)); }
+    /* The crumb band's gray strip must stay full-bleed: the body padding alone would start its
+       background at the padded edge, leaving a body-colored sliver the width of --wk-sidebar-gap
+       between the sidebar and the band. Pull the band back under the (opaque, full-height) column and
+       re-pad its content box by the same amount, so the background meets the sidebar's edge while the
+       inner .container still centers in the remaining space exactly as above. Safe to override
+       padding-left: the band's base padding is vertical-only (see .wk-crumbbar). */
+    body:has(.wiki-layout > .wiki-sidebar) .wk-crumbbar {
+        margin-left: calc(-1 * (var(--wk-sidebar-w) + var(--wk-sidebar-gap)));
+        padding-left: calc(var(--wk-sidebar-w) + var(--wk-sidebar-gap));
+    }
 }
+
+/* Full-width content (Appearance > Content width "Full width", a signed-in user's account preference,
+   or ?fullWidth=true when the site allows overrides; the template puts the class on the layout). Lift
+   the container cap so the article uses everything right of the sidebar; the breadcrumb
+   band's and footer's containers follow so their edges keep aligning with the article's. The header is
+   .container-fluid already and the admin console has its own shell; neither is affected. Outside any
+   media query: the cap this lifts applies at every Bootstrap breakpoint, not just beside the sidebar. */
+.wiki-layout.wiki-layout--full { max-width: none; }
+body:has(.wiki-layout--full) .wk-crumbbar > .container,
+body:has(.wiki-layout--full) .site-footer > .container { max-width: none; }
 /* The "Home" shortcut is listed alongside the menu's own links rather than styled separately: it sits
    above the <nav> panes, but it's meant to be indistinguishable from a hand-added first menu item.
    Both its placements are here — .wk-nav-home-link standing alone, .wk-nav-home-btn sharing the control
@@ -2076,13 +2097,10 @@ body:has(.wk-navbar) { padding-top: var(--wikikt-header-h); }
     .wk-navbar, .wiki-sidebar, .wk-nav-toggle, .page-toc, .skip-link,
     .page-aside .page-card:has(#printPage) { display: none !important; }
 
-    /* Desktop keeps the article clear of the fixed nav column by pushing the layout, the crumb band's
-       inner container and the footer right by the column's width. A sheet lays out wider than the
-       768.02px breakpoint (Letter/A4 at the usual margins is ~780-800 CSS px), so those offsets apply
-       on paper too even though the column itself is hidden — that was the empty gutter down the left
-       of every printed page. Drop the offsets and .container's centering so the article gets the
-       whole sheet. */
+    /* Removes desktop-style gutter down left side of page: */
+    body { padding-left: 0 !important; }
     .wiki-layout,
+    .wk-crumbbar,
     .wk-crumbbar > .container,
     .site-footer,
     .site-footer > .container {

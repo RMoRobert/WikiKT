@@ -55,6 +55,9 @@ object UsersTable : UIntIdTable("users") {
     // Per-user color-theme override: light | dark | auto. Null/blank = follow the site default. Applied
     // across the user's devices (distinct from the per-browser localStorage choice used for guests).
     val theme = varchar("theme", 10).nullable()
+    // Per-user content-width override: capped | full. Null/blank = follow the site default. Only
+    // honoured when the site allows user choice (appearance.contentWidthUserChoice).
+    val contentWidth = varchar("content_width", 10).nullable()
     // Account lifecycle (see [UserStatus]), stored as the enum name. Defaults to ACTIVE so admin-created
     // and seeded accounts are immediately usable — self-registration is the only path that sets it
     // non-ACTIVE (PENDING_EMAIL until confirmed, then PENDING_APPROVAL if the site requires approval).

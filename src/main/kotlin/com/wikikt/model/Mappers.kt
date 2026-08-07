@@ -79,6 +79,7 @@ fun org.jetbrains.exposed.v1.core.ResultRow.toUserRecord(): UserRecord = UserRec
     jobTitle = this[UsersTable.jobTitle],
     location = this[UsersTable.location],
     theme = this[UsersTable.theme],
+    contentWidth = this[UsersTable.contentWidth],
     status = runCatching { com.wikikt.db.UserStatus.valueOf(this[UsersTable.status]) }
         .getOrDefault(com.wikikt.db.UserStatus.ACTIVE),
 )

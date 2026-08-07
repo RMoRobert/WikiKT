@@ -9,7 +9,7 @@
 </head>
 <body>
 {{>partials/header.hbs}}
-<div class="container wiki-layout">
+<div class="container wiki-layout{{#contentWidthFull}} wiki-layout--full{{/contentWidthFull}}">
 {{>partials/sidebar.hbs}}
 <main id="main" tabindex="-1" class="wiki-main">
     <h1>Search</h1>

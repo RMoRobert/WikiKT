@@ -35,7 +35,7 @@
     </div>
 </nav>
 {{/showBreadcrumbs}}
-<div class="container wiki-layout">
+<div class="container wiki-layout{{#contentWidthFull}} wiki-layout--full{{/contentWidthFull}}">
     {{>partials/sidebar.hbs}}
     <main id="main" tabindex="-1" class="wiki-main page-view">
         {{^published}}<div class="alert alert-warning d-flex align-items-center gap-2 py-2"><i class="mdi mdi-eye-off-outline" aria-hidden="true"></i>DRAFT: Page is not published</div>{{/published}}

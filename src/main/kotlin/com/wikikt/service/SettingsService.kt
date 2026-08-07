@@ -143,6 +143,21 @@ class SettingsService(private val database: R2dbcDatabase) {
          *  account theme with no in-page switch. Default on. */
         const val APPEARANCE_SHOW_THEME_PICKER = "appearance.showThemePicker"
 
+        /**
+         * Width of the wiki content column: [CONTENT_WIDTH_CAPPED] (a readable measure, centered in
+         * the space right of the sidebar; the default) or [CONTENT_WIDTH_FULL] (span the whole
+         * viewport, Wiki.js-style). [APPEARANCE_CONTENT_WIDTH_USER_CHOICE] (default off) additionally
+         * lets readers override the site default — logged-in users persistently from their account
+         * page, anyone per-request via `?fullWidth=true|false`. The override resolution lives in the
+         * branding interceptor (Application.module); the CSS lives on `.wiki-layout--full` in site.css.
+         */
+        const val APPEARANCE_CONTENT_WIDTH = "appearance.contentWidth"
+        const val CONTENT_WIDTH_CAPPED = "capped"
+        const val CONTENT_WIDTH_FULL = "full"
+        const val DEFAULT_CONTENT_WIDTH = CONTENT_WIDTH_CAPPED
+        val CONTENT_WIDTH_OPTIONS = listOf(CONTENT_WIDTH_CAPPED, CONTENT_WIDTH_FULL)
+        const val APPEARANCE_CONTENT_WIDTH_USER_CHOICE = "appearance.contentWidthUserChoice"
+
         /** Raw HTML injected into every page's <head> / end of <body> (admin-only; analytics, meta tags,
          *  verification snippets). Not sanitized — that's the point — but the CSP still limits external
          *  script/style hosts. See [APPEARANCE_CUSTOM_CSS] for the CSS-only, safer sibling. */
@@ -739,6 +754,10 @@ class SettingsService(private val database: R2dbcDatabase) {
             // overrides it for guests.
             "themeMode" to (s[APPEARANCE_THEME]?.ifBlank { null }?.takeIf { it in THEME_OPTIONS } ?: DEFAULT_THEME),
             "showThemePicker" to (s[APPEARANCE_SHOW_THEME_PICKER]?.toBooleanStrictOrNull() ?: true),
+            // Content width: the site default. When user choice is allowed, a per-account or per-request
+            // override is merged over this in the branding interceptor (Application.module).
+            "contentWidthFull" to
+                ((s[APPEARANCE_CONTENT_WIDTH]?.ifBlank { null } ?: DEFAULT_CONTENT_WIDTH) == CONTENT_WIDTH_FULL),
             // Raw admin HTML injected verbatim into <head> / end of <body> (null when unset).
             "headHtml" to s[APPEARANCE_HEAD_HTML]?.ifBlank { null },
             "bodyHtml" to s[APPEARANCE_BODY_HTML]?.ifBlank { null },

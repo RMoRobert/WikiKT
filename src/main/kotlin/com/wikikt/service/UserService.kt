@@ -61,7 +61,7 @@ class UserService(private val database: R2dbcDatabase) {
 
     suspend fun findByUsername(username: String): UserRecord? = suspendTransaction(database) {
         UsersTable.selectAll()
-            .where { UsersTable.username eq username }
+            .where { UsersTable.username eq normalizeUsername(username) }
             .map { it.toUserRecord() }
             .singleOrNull()
     }
@@ -125,7 +125,7 @@ class UserService(private val database: R2dbcDatabase) {
         }
         val now = nowMillis()
         val id = UsersTable.insert {
-            it[username] = request.username
+            it[username] = normalizeUsername(request.username)
             it[passwordHash] = PasswordHasher.hash(request.password)
             it[email] = request.email
             it[createdAt] = now
@@ -156,8 +156,9 @@ class UserService(private val database: R2dbcDatabase) {
         password: String,
         defaultGroupId: UInt?,
     ): UserRecord = suspendTransaction(database) {
+        val normalized = normalizeUsername(username)
         val stale = UsersTable.selectAll()
-            .where { (UsersTable.username eq username) and (UsersTable.status eq UserStatus.PENDING_EMAIL.name) }
+            .where { (UsersTable.username eq normalized) and (UsersTable.status eq UserStatus.PENDING_EMAIL.name) }
             .map { it[UsersTable.id].value }
             .toList()
         for (uid in stale) {
@@ -167,7 +168,7 @@ class UserService(private val database: R2dbcDatabase) {
         }
         val now = nowMillis()
         val id = UsersTable.insert {
-            it[UsersTable.username] = username
+            it[UsersTable.username] = normalized
             it[passwordHash] = PasswordHasher.hash(password)
             it[UsersTable.email] = email
             it[createdAt] = now
@@ -249,7 +250,7 @@ class UserService(private val database: R2dbcDatabase) {
         }
 
         UsersTable.update({ UsersTable.id eq id }) {
-            request.username?.let { value -> it[username] = value }
+            request.username?.let { value -> it[username] = normalizeUsername(value) }
             request.password?.let { value -> it[passwordHash] = PasswordHasher.hash(value) }
             if (request.email != null) {
                 it[email] = request.email
@@ -343,6 +344,11 @@ class UserService(private val database: R2dbcDatabase) {
         UsersTable.update({ UsersTable.id eq id }) { it[UsersTable.theme] = theme } > 0
     }
 
+    /** Sets the per-user content-width override (capped|full, or null to follow the site default). */
+    suspend fun updateContentWidth(id: UInt, contentWidth: String?): Boolean = suspendTransaction(database) {
+        UsersTable.update({ UsersTable.id eq id }) { it[UsersTable.contentWidth] = contentWidth } > 0
+    }
+
     /**
      * Sets the per-user date/time display preferences (keys into DateDisplay's catalogs, or null to
      * follow the code defaults). Display-only, saved alongside the timezone on the account form.
@@ -425,4 +431,17 @@ class UserService(private val database: R2dbcDatabase) {
             .map { it[GroupPermissionsTable.groupId].value }
             .toList()
             .toSet()
+
+    companion object {
+        /**
+         * Canonical form of a username: trimmed and lowercased. Usernames are case-insensitive
+         * identifiers, so every write and every lookup funnels through this — stored values are
+         * always lowercase, and "Bob" at the login or registration form resolves to the account
+         * "bob" instead of a second account one case-swap away from impersonation. Lives at the
+         * service layer so the admin console, the JSON API, self-registration, and [SeedService]
+         * all agree on what "the same username" means. Usernames are ASCII-only (the routes
+         * enforce REGISTER_USERNAME_PATTERN), so lowercasing has no locale pitfalls.
+         */
+        fun normalizeUsername(username: String): String = username.trim().lowercase()
+    }
 }

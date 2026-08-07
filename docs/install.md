@@ -32,7 +32,7 @@ consumed. See [Building elsewhere](#building-elsewhere) below for the options.
 - **Amazon EC2**: Launch an instance with Ubuntu LTS, `t3.small` to `c5.large` suggested (although
   `t3.micro` may work for small deployments). In the security group, allow 
    inbound **22 (your IP), 80, 443 (anywhere)**.
-- **Google Compute Engine**: Create a VM with Ubuntu LTS, `e2-small` or higher recommended. 
+- **Google Compute Engine**: Create a VM with Ubuntu LTS or Debian, `e2-small` or higher recommended. 
    Check *Allow HTTP/HTTPS traffic* (or add firewall rules for 80/443).
 
 The commands in this guide assume a **Debian-family image (Ubuntu LTS or Debian)**, which every
@@ -58,11 +58,15 @@ Do this before first start, as Caddy needs the name to resolve to obtain the HTT
 
 ### 3. Install Docker
 
-SSH into your VM and run Docker's official convenience script to install (or install manually if preferred):
+SSH into your VM and run Docker's official convenience script to install:
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 ```
+
+or use the repository for your distro (Docker's official recommendation for production) or an alternative method at:
+
+https://docs.docker.com/engine/install
 
 ### 4. Download WikiKT and configure
 

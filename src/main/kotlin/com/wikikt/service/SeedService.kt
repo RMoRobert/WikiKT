@@ -100,8 +100,9 @@ class SeedService(
 
     private suspend fun seedAdminUser() {
         suspendTransaction(database) {
+            val adminUsername = UserService.normalizeUsername(config.defaultAdmin.username)
             val existing = UsersTable.selectAll()
-                .where { UsersTable.username eq config.defaultAdmin.username }
+                .where { UsersTable.username eq adminUsername }
                 .singleOrNull()
             if (existing != null) return@suspendTransaction
 
@@ -110,7 +111,7 @@ class SeedService(
                 .singleOrNull() ?: return@suspendTransaction
 
             val userId = UsersTable.insert {
-                it[username] = config.defaultAdmin.username
+                it[username] = adminUsername
                 it[passwordHash] = PasswordHasher.hash(config.defaultAdmin.password)
                 it[email] = null
                 it[createdAt] = System.currentTimeMillis()

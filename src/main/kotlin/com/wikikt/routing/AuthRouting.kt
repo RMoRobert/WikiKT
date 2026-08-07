@@ -479,7 +479,8 @@ fun Route.configureAuthRouting() {
                         templateKey = EmailTemplateService.REGISTRATION_CONFIRM,
                         context = mapOf(
                             "siteName" to siteName,
-                            "username" to username,
+                            // The stored (normalized) name, not the raw form input -- to match DB exactly:
+                            "username" to user.username,
                             "confirmLink" to "$urlBase/verify-email?token=$token",
                         ),
                     )

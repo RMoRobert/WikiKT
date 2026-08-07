@@ -125,6 +125,13 @@ val MIGRATIONS: List<Migration> = listOf(
             )
         }
     },
+
+    // V2: per-user content-width preference (Account > Preferences > Page width), beside the existing
+    // per-user theme column. IF NOT EXISTS makes it a no-op on fresh databases, where the V1 baseline
+    // already created the column from the current Exposed definition. Valid on both H2 and Postgres.
+    Migration(2, "user-content-width") {
+        exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS content_width VARCHAR(10)")
+    },
 )
 
 /** R2DBC-native migration runner: applies any [migrations] not yet recorded, in version order. */

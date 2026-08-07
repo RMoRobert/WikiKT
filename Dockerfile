@@ -30,7 +30,7 @@ ARG WIKIKT_VERSION
 #                        ("blocked") when the pulled image's revision is higher than the running one.
 #   min-upgrade-from   - Oldest running version this image upgrades cleanly from.
 #   updater-protocol   - The request/status file contract version (SelfUpdateService.PROTOCOL).
-ARG WIKIKT_SCHEMA_VERSION=1
+ARG WIKIKT_SCHEMA_VERSION=2
 ARG WIKIKT_COMPOSE_REVISION=1
 ARG WIKIKT_MIN_UPGRADE_FROM=0.0.0
 LABEL org.opencontainers.image.source="https://github.com/RMoRobert/WikiKT" \
