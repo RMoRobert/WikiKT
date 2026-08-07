@@ -85,9 +85,9 @@ class SaveRefWarningTest {
         // comma-separated create links), and nothing about the existing page, app routes, or the
         // external URL.
         val body = client.get(location).bodyAsText()
-        assertTrue(body.contains("Assets not found:"), "asset warning shown")
+        assertTrue(body.contains("Assets:"), "asset warning shown")
         assertTrue(body.contains("<code>/img/missing.png</code>"), "missing file listed")
-        assertTrue(body.contains("Pages not found:"), "page warning shown")
+        assertTrue(body.contains("Pages:"), "page warning shown")
         assertTrue(body.contains("href=\"/e/en/docs/unwritten\""), "missing page links to its create URL")
         assertTrue(body.contains("</a>, <a href=\"/e/en/docs/unwritten-two\""), "page links are comma-separated")
         assertFalse(body.contains("href=\"/e/en/docs/target\""), "existing page does not warn")
