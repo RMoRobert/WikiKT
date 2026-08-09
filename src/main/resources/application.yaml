@@ -41,7 +41,7 @@ wikikt:
     # install (but minnd fonts also); see docs/install.md. Administration > Appearance shows the
     # effective values, read-only.
     #
-    # Bootstrap + highlight.js (~440KB). Override via WIKIKT_UI_ASSET_SOURCE.
+    # Bootstrap + highlight.js + EasyMDE page editor (~780KB). Override via WIKIKT_UI_ASSET_SOURCE.
     assetSource: cdn
     # Emoji webfont, used when Appearance > "Enable standardized emoji font" is on: Google Fonts, or
     # static/vendor/noto-emoji/ (~2MB, unicode-range sliced so a page fetches only what it uses).

@@ -361,7 +361,7 @@ each works in any deployment style: Docker `.env`, a systemd `EnvironmentFile`, 
 | `WIKIKT_DATABASE_POOL_MAX_ACQUIRE_TIME` | Seconds to wait for a free connection when the pool is saturated before failing the request (default `10` -- to fail fast rather than hang).                                                                                                      |
 | `WIKIKT_ASSET_STORAGE_DIR` | Upload storage dir (default `./data/uploads`).                                                                                                                                                                                                    |
 | `WIKIKT_GIT_SYNC_DIR` | Git-sync working clone dir (default `./data/git-sync`) for Git Sync feature in Wiki admin settings for content/assets                                                                                                                             |
-| `WIKIKT_UI_ASSET_SOURCE` | `cdn` (default) or `local`; sources for Bootstrap and highlight.js. See [Asset delivery](#asset-delivery).                                                                                                                                        |
+| `WIKIKT_UI_ASSET_SOURCE` | `cdn` (default) or `local`; sources for Bootstrap, highlight.js, and the EasyMDE page editor. See [Asset delivery](#asset-delivery).                                                                                                                                        |
 | `WIKIKT_UI_ICON_FONT_SOURCE` | `cdn` (default) or `local`; sources for Material Design Icons webfont.                                                                                                                                                                        |
 | `WIKIKT_UI_EMOJI_FONT_SOURCE` | `cdn` (default) or `local`; source for emoji webfont.                                                                                                                                                                                          |
 | `WIKIKT_UI_MERMAID_SOURCE` | `cdn` (default) or `local`; source for the Mermaid diagram library (```mermaid fences).                                                                                                                                                          |
@@ -396,7 +396,7 @@ or `local`; the default (none or invalid value specified) results in `cdn`.
 
 | Setting (yaml) | Environment variable | Covers | Size | CDN host | Bundled at |
 |---|---|---|---|---|---|
-| `wikikt.ui.assetSource` | `WIKIKT_UI_ASSET_SOURCE` | Bootstrap, highlight.js | ~440 KB | `cdn.jsdelivr.net` | `/static/vendor/` |
+| `wikikt.ui.assetSource` | `WIKIKT_UI_ASSET_SOURCE` | Bootstrap, highlight.js, EasyMDE (editor) | ~780 KB | `cdn.jsdelivr.net` | `/static/vendor/` |
 | `wikikt.ui.iconFontSource` | `WIKIKT_UI_ICON_FONT_SOURCE` | Material Design Icons | ~750 KB | `cdn.jsdelivr.net` | `/static/vendor/mdi/` |
 | `wikikt.ui.emojiFontSource` | `WIKIKT_UI_EMOJI_FONT_SOURCE` | Noto Color Emoji | ~2 MB | `fonts.googleapis.com` | `/static/vendor/noto-emoji/` |
 | `wikikt.ui.mermaidSource` | `WIKIKT_UI_MERMAID_SOURCE` | Mermaid (diagrams) | ~3.5 MB | `cdn.jsdelivr.net` | `/static/vendor/mermaid/` |

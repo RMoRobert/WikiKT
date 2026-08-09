@@ -2777,7 +2777,7 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         // show where each front-end asset actually comes from and which env var changes it.
         "assetSources" to listOf(
             mapOf(
-                "label" to "Bootstrap, highlight.js", "size" to "~440 KB", "env" to "WIKIKT_UI_ASSET_SOURCE",
+                "label" to "Bootstrap, highlight.js, EasyMDE (editor)", "size" to "~780 KB", "env" to "WIKIKT_UI_ASSET_SOURCE",
                 "cdn" to ui.useCdnAssets, "host" to "cdn.jsdelivr.net", "path" to "/static/vendor/",
             ),
             mapOf(
