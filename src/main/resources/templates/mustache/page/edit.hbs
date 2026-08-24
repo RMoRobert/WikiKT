@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit: {{title}} | {{siteName}}</title>
     {{>partials/head-deps.hbs}}
-    {{#assetsCdn}}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css" integrity="sha384-uqD/OYCNfagd1EgXMgl5QedTD5K+B3e9b8GYo/41t7+Serf7CBxvl+tU1gHd+qd1" crossorigin="anonymous">{{/assetsCdn}}{{^assetsCdn}}<link rel="stylesheet" href="/static/vendor/easymde/easymde.min.css?v={{assetVersion}}">{{/assetsCdn}}
+    {{#assetsCdn}}<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.css" integrity="sha384-ZoLYv3S+AsZX+zhbN1D1+WPpc8f+DmLfxfgw+qn0Nq8wJPOYQQXEW5ZrRhcGozlG" crossorigin="anonymous">{{/assetsCdn}}{{^assetsCdn}}<link rel="stylesheet" href="/static/vendor/easymde/easymde.min.css?v={{assetVersion}}">{{/assetsCdn}}
     {{>partials/head-styles.hbs}}
     {{>partials/brand-style.hbs}}
 </head>
@@ -251,10 +251,10 @@
 {{! Target of the account menu's Logout button (via form="logoutForm"); must not nest in the editor form. }}
 <form method="post" action="/logout" id="logoutForm" class="m-0">{{{csrfField}}}</form>
 {{/loggedIn}}
-{{#assetsCdn}}<script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js" integrity="sha384-KtB38COewxfrhJxoN2d+olxJAeT08LF8cVZ6DQ8Poqu89zIptqO6zAXoIxpGNWYE" crossorigin="anonymous"></script>{{/assetsCdn}}{{^assetsCdn}}<script src="/static/vendor/easymde/easymde.min.js?v={{assetVersion}}"></script>{{/assetsCdn}}
+{{#assetsCdn}}<script src="https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.js" integrity="sha384-mTM6vzy+/UiHrMBClNGViM9qEv0/26iCGqpJKhSzdnjrxbKjO3vkT62ujXQ8B5iv" crossorigin="anonymous"></script>{{/assetsCdn}}{{^assetsCdn}}<script src="/static/vendor/easymde/easymde.min.js?v={{assetVersion}}"></script>{{/assetsCdn}}
 {{! Bootstrap JS — the editor omits the standard footer partial, so load the bundle here too. This
     powers the asset detail modal + tabs (Bootstrap Modal/Tab plugins) used from Insert Image. }}
-{{#assetsCdn}}<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>{{/assetsCdn}}{{^assetsCdn}}<script src="/static/vendor/bootstrap/bootstrap.bundle.min.js?v={{assetVersion}}"></script>{{/assetsCdn}}
+{{#assetsCdn}}<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>{{/assetsCdn}}{{^assetsCdn}}<script src="/static/vendor/bootstrap/bootstrap.bundle.min.js?v={{assetVersion}}"></script>{{/assetsCdn}}
 <script src="/static/wk-browser.js?v={{assetVersion}}"></script>
 {{! Diagrams in the live preview: page-edit.js calls window.wkRenderMermaid on each rendered pane. }}
 {{>partials/mermaid-js.hbs}}

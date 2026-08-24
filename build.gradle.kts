@@ -18,9 +18,7 @@ buildscript {
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    // Pinned one patch behind the ktorLibs catalog (3.5.2): the Gradle plugin's 3.5.2 publication is
-    // lagging the library release. Restore `alias(ktorLibs.plugins.ktor)` once it reaches the portal.
-    id("io.ktor.plugin") version "3.5.1"
+    alias(ktorLibs.plugins.ktor)
     alias(libs.plugins.kotlin.serialization)
 }
 

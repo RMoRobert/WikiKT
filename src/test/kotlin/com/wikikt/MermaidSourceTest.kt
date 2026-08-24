@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * that 404s there has no diagrams at all.
  */
 class MermaidSourceTest {
-    private val cdnSrc = "https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"
+    private val cdnSrc = "https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"
     private val localSrc = "/static/vendor/mermaid/mermaid.min.js"
 
     @Test
@@ -33,7 +33,7 @@ class MermaidSourceTest {
         assertTrue(html.contains("/static/page-mermaid.js"), "the diagram loader is on the page")
         assertTrue(html.contains("""data-mermaid-src="$cdnSrc""""), "jsDelivr copy configured")
         assertTrue(
-            html.contains("""data-mermaid-integrity="sha384-T/0lMUdJpd2S1ZHtRiofG3htU3xPCrFVeAQ1UUE2TJwlEJSV5NUwn30kP28n238E""""),
+            html.contains("""data-mermaid-integrity="sha384-aBQXj4hK6Jm05i7aQAsUV3bLdSUrHX1BGYfMB0166TtWt/RRaw+h0Eelme9OCOvy""""),
             "SRI hash kept — page-mermaid.js only sets crossOrigin when it has one",
         )
         assertFalse(html.contains(localSrc), "the bundled copy is not also referenced")

@@ -20,8 +20,8 @@ import kotlin.test.assertTrue
  * honored in two places, and the other asset-source tests (which load `/`) can't see this one.
  */
 class EditorAssetSourceTest {
-    private val cdnCss = "https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css"
-    private val cdnJs = "https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"
+    private val cdnCss = "https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.css"
+    private val cdnJs = "https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.js"
     private val localCss = "/static/vendor/easymde/easymde.min.css"
     private val localJs = "/static/vendor/easymde/easymde.min.js"
 
@@ -37,8 +37,8 @@ class EditorAssetSourceTest {
         assertTrue(html.contains(cdnCss), "editor stylesheet from jsDelivr")
         assertTrue(html.contains(cdnJs), "editor script from jsDelivr")
         assertTrue(
-            html.contains("""integrity="sha384-uqD/OYCNfagd1EgXMgl5QedTD5K+B3e9b8GYo/41t7+Serf7CBxvl+tU1gHd+qd1"""") &&
-                html.contains("""integrity="sha384-KtB38COewxfrhJxoN2d+olxJAeT08LF8cVZ6DQ8Poqu89zIptqO6zAXoIxpGNWYE""""),
+            html.contains("""integrity="sha384-ZoLYv3S+AsZX+zhbN1D1+WPpc8f+DmLfxfgw+qn0Nq8wJPOYQQXEW5ZrRhcGozlG"""") &&
+                html.contains("""integrity="sha384-mTM6vzy+/UiHrMBClNGViM9qEv0/26iCGqpJKhSzdnjrxbKjO3vkT62ujXQ8B5iv""""),
             "SRI hashes kept on both tags",
         )
         assertFalse(html.contains("/static/vendor/easymde/"), "the bundled copies are not also referenced")
