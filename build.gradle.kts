@@ -12,7 +12,7 @@ buildscript {
         // Build-only (never in the app's runtime classpath): real JS parser used to minify first-party
         // static/*.js for the production jar. A parser, not regex, is required for JS — `/` is ambiguous
         // (division vs regex literal) and newlines are semantic (automatic semicolon insertion).
-        classpath("com.google.javascript:closure-compiler:v20260726")
+        classpath("com.google.javascript:closure-compiler:v20260826")
     }
 }
 
@@ -29,7 +29,7 @@ group = "com.wikikt"
 // workflow passes the tag through the Dockerfile's WIKIKT_VERSION build arg, which becomes
 // -PwikiktVersion here. Untagged and local builds fall back to the value below, so `./gradlew run`
 // keeps reporting -SNAPSHOT.
-// BUMP THIS VERSION WHEN CREATING A NEW REELASE so source builds match the GitHub version tag.
+// BUMP THIS VERSION WHEN CREATING A NEW RELEASE so source builds match the GitHub version tag.
 version = providers.gradleProperty("wikiktVersion")
     .orElse(providers.environmentVariable("WIKIKT_VERSION"))
     .getOrElse("0.9.11-SNAPSHOT")

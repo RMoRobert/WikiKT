@@ -38,10 +38,11 @@ wikikt:
     # jar under static/vendor/ -- no Internet request, at the cost of your own bandwidth. They are
     # separate knobs because the two webfonts and Mermaid are far larger than everything
     # else, so you may want them handled differently. Set all four to "local" for completely offline
-    # install (but minnd fonts also); see docs/install.md. Administration > Appearance shows the
-    # effective values, read-only.
+    # install (but mind the Appearance body/heading font too); see docs/install.md. Administration >
+    # Appearance shows the effective values, read-only.
     #
-    # Bootstrap + highlight.js + EasyMDE page editor (~780KB). Override via WIKIKT_UI_ASSET_SOURCE.
+    # Bootstrap + EasyMDE page editor (~640KB). Override via WIKIKT_UI_ASSET_SOURCE. Note that
+    # highlight.js is always served from static/vendor/ and is not affected by this setting.
     assetSource: cdn
     # Emoji webfont, used when Appearance > "Enable standardized emoji font" is on: Google Fonts, or
     # static/vendor/noto-emoji/ (~2MB, unicode-range sliced so a page fetches only what it uses).

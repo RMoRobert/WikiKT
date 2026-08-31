@@ -184,7 +184,8 @@ class SettingsService(private val database: R2dbcDatabase) {
          * expansions and literal pasted emoji are covered, and nothing about the *rendered HTML* changes
          * (so flipping this needs no render-cache bump). Off = the previous OS-dependent behavior.
          * The stylesheet is loaded in partials/head-styles.hbs, from Google Fonts or the vendored copy
-         * at /static/vendor/noto-emoji/ depending on `wikikt.ui.useCdnAssets`.
+         * at /static/vendor/noto-emoji/ depending on `wikikt.ui.emojiFontSource` (NOT the general
+         * `assetSource` — this font is big enough to warrant its own switch).
          */
         const val APPEARANCE_EMOJI_FONT = "appearance.emojiFont"
         const val DEFAULT_EMOJI_FONT = true
