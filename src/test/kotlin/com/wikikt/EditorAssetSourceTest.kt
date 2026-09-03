@@ -13,15 +13,15 @@ import kotlin.test.assertTrue
 
 /**
  * Where the editor screen's front-end libraries come from. EasyMDE rides on the general
- * `wikikt.ui.assetSource` (like Bootstrap and highlight.js) setting.
+ * `wikikt.ui.assetSource` (like Bootstrap) setting.
  *
  * Asserted on the editor page specifically, because page/edit.hbs skips the shared head/footer
  * partials and carries its own copies of the Bootstrap and EasyMDE tags, so the switch has to be
  * honored in two places, and the other asset-source tests (which load `/`) can't see this one.
  */
 class EditorAssetSourceTest {
-    private val cdnCss = "https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.css"
-    private val cdnJs = "https://cdn.jsdelivr.net/npm/easymde@2.21.0/dist/easymde.min.js"
+    private val cdnCss = Regex("""https://cdn\.jsdelivr\.net/npm/easymde@\d+\.\d+\.\d+/dist/easymde\.min\.css""")
+    private val cdnJs = Regex("""https://cdn\.jsdelivr\.net/npm/easymde@\d+\.\d+\.\d+/dist/easymde\.min\.js""")
     private val localCss = "/static/vendor/easymde/easymde.min.css"
     private val localJs = "/static/vendor/easymde/easymde.min.js"
 
@@ -34,12 +34,11 @@ class EditorAssetSourceTest {
         client.createSamplePage(csrf)
 
         val html = client.get("/e/en/$SAMPLE_PAGE_PATH").bodyAsText()
-        assertTrue(html.contains(cdnCss), "editor stylesheet from jsDelivr")
-        assertTrue(html.contains(cdnJs), "editor script from jsDelivr")
+        assertTrue(cdnCss.containsMatchIn(html), "editor stylesheet from jsDelivr")
+        assertTrue(cdnJs.containsMatchIn(html), "editor script from jsDelivr")
         assertTrue(
-            html.contains("""integrity="sha384-ZoLYv3S+AsZX+zhbN1D1+WPpc8f+DmLfxfgw+qn0Nq8wJPOYQQXEW5ZrRhcGozlG"""") &&
-                html.contains("""integrity="sha384-mTM6vzy+/UiHrMBClNGViM9qEv0/26iCGqpJKhSzdnjrxbKjO3vkT62ujXQ8B5iv""""),
-            "SRI hashes kept on both tags",
+            sriOn("easymde.min.css").containsMatchIn(html) && sriOn("easymde.min.js").containsMatchIn(html),
+            "SRI hashes kept on both tags (VendoredAssetIntegrityTest checks the values)",
         )
         assertFalse(html.contains("/static/vendor/easymde/"), "the bundled copies are not also referenced")
     }
@@ -56,6 +55,7 @@ class EditorAssetSourceTest {
         assertTrue(html.contains("$localCss?v="), "bundled stylesheet linked (with the cache-busting token)")
         assertTrue(html.contains("$localJs?v="), "bundled script linked (with the cache-busting token)")
         assertFalse(html.contains("cdn.jsdelivr.net/npm/easymde"), "no jsDelivr request for the editor")
+        assertFalse(html.contains("cdn.jsdelivr.net/npm/bootstrap"), "nor for Bootstrap on this page (Mermaid keeps its own knob, so a blanket CDN check would be wrong)")
         assertTrue(
             html.contains("/static/vendor/bootstrap/bootstrap.bundle.min.js"),
             "the editor's own Bootstrap tag follows the same setting",

@@ -360,6 +360,11 @@ each works in any deployment style: Docker `.env`, a systemd `EnvironmentFile`, 
 | `WIKIKT_DATABASE_POOL_MAX_LIFE_TIME` | Seconds before a connection is recycled regardless of use (default `3600`).                                                                                                                                                                       |
 | `WIKIKT_DATABASE_POOL_MAX_ACQUIRE_TIME` | Seconds to wait for a free connection when the pool is saturated before failing the request (default `10` -- to fail fast rather than hang).                                                                                                      |
 | `WIKIKT_ASSET_STORAGE_DIR` | Upload storage dir (default `./data/uploads`).                                                                                                                                                                                                    |
+| `WIKIKT_MAX_UPLOAD_SIZE_BYTES` | Per-file upload cap in bytes (default `5242880` = 5 MB).                                                                                                                                                                                      |
+| `WIKIKT_MAX_FILES_PER_UPLOAD` | Max files in one upload (default `10`; accepted range 1-1000).                                                                                                                                                                                 |
+| `WIKIKT_ALLOWED_MIME_TYPES` | Comma-separated allowed upload types (default `image/png,image/jpeg,image/gif,image/webp`; only those four are supported, anything else is ignored with a warning).                                                                              |
+| `WIKIKT_ASSET_LOCALE_FALLBACK` | `true` (default) serves the default-locale copy of an asset when the requested locale has none.                                                                                                                                               |
+| `WIKIKT_MAX_ASSET_VERSIONS` | Default for the per-site asset-history setting: prior versions kept per asset (default `3`, range 1-50; Admin > Storage overrides it per site).                                                                                                  |
 | `WIKIKT_GIT_SYNC_DIR` | Git-sync working clone dir (default `./data/git-sync`) for Git Sync feature in Wiki admin settings for content/assets                                                                                                                             |
 | `WIKIKT_UI_ASSET_SOURCE` | `cdn` (default) or `local`; sources for Bootstrap and the EasyMDE page editor. See [Asset delivery](#asset-delivery).                                                                                                                                        |
 | `WIKIKT_UI_ICON_FONT_SOURCE` | `cdn` (default) or `local`; sources for Material Design Icons webfont.                                                                                                                                                                        |
@@ -397,22 +402,20 @@ or `local`; the default (none or invalid value specified) results in `cdn`.
 | Setting (yaml) | Environment variable | Covers | Size | CDN host | Bundled at |
 |---|---|---|---|---|---|
 | `wikikt.ui.assetSource` | `WIKIKT_UI_ASSET_SOURCE` | Bootstrap, EasyMDE (editor) | ~640 KB | `cdn.jsdelivr.net` | `/static/vendor/` |
-| `wikikt.ui.iconFontSource` | `WIKIKT_UI_ICON_FONT_SOURCE` | Material Design Icons | ~750 KB | `cdn.jsdelivr.net` | `/static/vendor/mdi/` |
-| `wikikt.ui.emojiFontSource` | `WIKIKT_UI_EMOJI_FONT_SOURCE` | Noto Color Emoji | ~2 MB | `fonts.googleapis.com` | `/static/vendor/noto-emoji/` |
+| `wikikt.ui.iconFontSource` | `WIKIKT_UI_ICON_FONT_SOURCE` | Icon font (Material Design Icons) | ~750 KB | `cdn.jsdelivr.net` | `/static/vendor/mdi/` |
+| `wikikt.ui.emojiFontSource` | `WIKIKT_UI_EMOJI_FONT_SOURCE` | Emoji font (Noto Color Emoji) | ~2 MB | `fonts.googleapis.com` | `/static/vendor/noto-emoji/` |
 | `wikikt.ui.mermaidSource` | `WIKIKT_UI_MERMAID_SOURCE` | Mermaid (diagrams) | ~3.5 MB | `cdn.jsdelivr.net` | `/static/vendor/mermaid/` |
 
-They are separate settings rather than one overarching setting because the sizes differ by an order
-of magnitude, and so do the consequences of a blocked CDN: missing *icons* might leave unexpected gaps
-in the UI (though otherwise functioning), while a missing emoji font degrades gracefully to the OS defaults.
-Mermaid is the largest of the lot but also the only one fetched *lazily* -- a page without a
-```mermaid diagram on it never requests it, and a blocked CDN just leaves the diagram showing as its
-source code block.
+They are separate settings rather than one overarching setting because the sizes differ (the emoji
+font and Mermaid are several times larger than the rest), and so do the consequences of a blocked CDN:
+missing *icons* might leave unexpected gaps in the UI (though otherwise functioning), while a missing
+emoji font degrades gracefully to the OS defaults. Mermaid is the largest of the lot but also the only
+one fetched *lazily* -- a page without a `mermaid` code fence on it never requests it, and a blocked
+CDN just leaves the diagram showing as its source code block.
 
 Not everything front-end is covered by these four. **highlight.js** (code-block syntax highlighting,
 ~130 KB) is always served from `/static/vendor/highlight/` and is never fetched from a CDN, so no
-setting is needed for it. The body/heading font picked in **Administration | Settings | Appearance**
-is the reverse case: it loads from Google Fonts regardless of these settings unless you choose the
-"System UI" preset.
+setting is needed for it. The body and heading fonts are the reverse case -- see the note below.
 
 The current state of all four is shown read-only under **Administration | Settings | Appearance |
 Asset delivery**. (Read-only because it can only be configured at deployment for instance, not per

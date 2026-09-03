@@ -35,3 +35,11 @@ suspend fun HttpClient.createSamplePage(
         header("X-CSRF-Token", csrf)
         setBody("""{"locale":"en","path":"$path","title":"$title","content":"Sample content for the $title page, created by the test fixture.","published":true}""")
     }
+
+/**
+ * Matches an SRI attribute carrying any well-formed sha384 on the tag whose URL ends in [fileName].
+ * Page-level tests use this instead of pinning the hash literal: VendoredAssetIntegrityTest derives
+ * and verifies the actual value, so a vendor refresh never has to touch a test.
+ */
+internal fun sriOn(fileName: String, attr: String = "integrity"): Regex =
+    Regex("""${Regex.escape(fileName)}"[^>]*\b$attr="sha384-[A-Za-z0-9+/=]{64}"""")

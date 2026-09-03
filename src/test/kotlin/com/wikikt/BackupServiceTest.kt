@@ -6,6 +6,7 @@ import com.wikikt.config.DatabaseType
 import com.wikikt.db.DatabaseFactory
 import com.wikikt.model.CreatePageRequest
 import com.wikikt.model.NavItemInput
+import com.wikikt.service.RESTORE_BATCH_SIZE
 import com.wikikt.service.AssetService
 import com.wikikt.service.BackupService
 import com.wikikt.service.ContentImporter
@@ -27,6 +28,44 @@ import kotlin.test.assertTrue
 
 class BackupServiceTest {
     private val pngBytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+
+    @Test
+    fun `full restore batches rows and still remaps ids across chunk boundaries`() = runBlocking<Unit> {
+        val source = Env("full-batch-src")
+        val count = RESTORE_BATCH_SIZE + 37 // more than one INSERT chunk, for the pages and for their revisions
+        repeat(count) { i ->
+            val created = source.pages.create(
+                source.siteId,
+                CreatePageRequest(locale = "en", path = "bulk/p$i", title = "Page $i", content = "body $i", contentFormat = "MARKDOWN"),
+                updatedBy = null,
+            )
+            // Revisions are written on update, not create: give every page one so page_revisions is also
+            // restored in more than one chunk, each row's page_id needing the remap.
+            source.pages.update(created.id, com.wikikt.model.UpdatePageRequest(title = "Page $i", content = "body $i v2"), updatedBy = null)
+        }
+        val zip = Files.createTempFile("wikikt-full-batch", ".zip")
+        Files.newOutputStream(zip).use { source.backup.writeFullBackup(source.siteId, it) }
+
+        // A pre-existing row shifts the target's auto-increment, so every restored id differs from the
+        // dumped one: a revision whose page_id was not remapped would point at nothing.
+        val target = Env("full-batch-dst")
+        target.pages.create(
+            target.siteId,
+            CreatePageRequest(locale = "en", path = "stale", title = "Stale", content = "old", contentFormat = "MARKDOWN"),
+            updatedBy = null,
+        )
+        target.backup.restore(target.siteId, zip, allowFull = true)
+        target.sites.invalidateCache()
+        val rId = target.sites.catchAll()!!.id
+
+        // First and last of the first chunk, first of the second, and the final row.
+        for (i in listOf(0, RESTORE_BATCH_SIZE - 1, RESTORE_BATCH_SIZE, count - 1)) {
+            val page = target.pages.findByLocaleAndPath(rId, "en", "bulk/p$i") ?: error("page $i was not restored")
+            assertEquals("body $i v2", page.content)
+            assertTrue(target.pages.revisions(page.id).isNotEmpty(), "the revision of page $i followed it to its new id")
+        }
+        assertEquals(null, target.pages.findByLocaleAndPath(rId, "en", "stale"), "pre-existing rows replaced")
+    }
 
     private class Env(name: String) {
         val database = DatabaseFactory.connect(

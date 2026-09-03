@@ -11,12 +11,23 @@ import org.commonmark.parser.IncludeSourceSpans
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.AttributeProvider
 import org.commonmark.renderer.html.HtmlRenderer
+import org.slf4j.LoggerFactory
 
-class MarkdownRenderer {
+class MarkdownRenderer(
+    /**
+     * Upper bound on the cells of one GFM table, enforced by commonmark's tables extension, which
+     * aborts the parse past it as a guard against pathological input (0.30.0+; the default is its
+     * one million). Past the bound [render] shows the page source instead of failing the request —
+     * see [unrenderable]. A parameter so tests can exercise that path with a small table.
+     */
+    private val maxTableCells: Int = TablesExtension.DEFAULT_MAX_CELLS,
+) {
+    private val logger = LoggerFactory.getLogger(MarkdownRenderer::class.java)
+
     // Shared (stateless) extensions used by both the parser and the renderer.
     // Strikethrough requires TWO tildes so a single `~` is free for subscript (see SubSupPostProcessor).
     private val extensions = listOf(
-        TablesExtension.create(),
+        TablesExtension.builder().maxCells(maxTableCells).build(),
         StrikethroughExtension.builder().requireTwoTildes(true).build(),
         TaskListItemsExtension.create(),
         FootnotesExtension.create(),
@@ -78,7 +89,17 @@ class MarkdownRenderer {
             ContentFormat.MARKDOWN -> {
                 val p = if (options.autoLink) autolinkParser else parser
                 val r = renderers.getValue(options.lineBreaks to sourceLines)
-                r.render(p.parse(liftImageSizes(normalizeHeadings(content))))
+                val document = try {
+                    p.parse(liftImageSizes(normalizeHeadings(content)))
+                } catch (e: IllegalArgumentException) {
+                    // commonmark refuses pathological input by aborting the parse (a table past
+                    // maxTableCells). Left alone that would surface as a 400 for every reader of the
+                    // page; show the source with the reason instead. Deterministic for the content,
+                    // so the render cache may keep it like any other result.
+                    logger.warn("Markdown could not be parsed; showing its source instead: {}", e.message)
+                    return HtmlSanitizer.sanitize(unrenderable(content, e.message ?: "the parser rejected the content"), options)
+                }
+                r.render(document)
             }
             ContentFormat.HTML -> content
         }
@@ -95,6 +116,14 @@ class MarkdownRenderer {
                 line
             }
         }
+
+    /** Fallback body when the parser refuses the content: a notice with the reason, then the source in a code block. */
+    private fun unrenderable(content: String, reason: String): String =
+        "<div class=\"alert alert-warning\">This page could not be rendered (${escapeHtml(reason)}), so its source is shown instead.</div>\n" +
+            "<pre><code>${escapeHtml(content)}</code></pre>"
+
+    private fun escapeHtml(s: String): String =
+        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
     companion object {
         // Image sizing: `![alt](url =WIDTHxHEIGHT)` (either dimension optional, e.g.

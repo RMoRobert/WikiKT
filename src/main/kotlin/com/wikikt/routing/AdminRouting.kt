@@ -1,5 +1,7 @@
 package com.wikikt.routing
 
+import com.wikikt.config.AssetSource
+
 import com.wikikt.appContext
 import com.wikikt.siteId
 import com.wikikt.adminSiteId
@@ -2775,24 +2777,12 @@ internal suspend fun io.ktor.server.application.ApplicationCall.settingsModel(
         "emojiFontValue" to settings.getBool(siteId, s.APPEARANCE_EMOJI_FONT, s.DEFAULT_EMOJI_FONT),
         // Read-only view of the instance-wide asset-delivery config (UiConfig), so the Appearance page can
         // show where each front-end asset actually comes from and which env var changes it.
-        "assetSources" to listOf(
+        "assetSources" to AssetSource.entries.map { source ->
             mapOf(
-                "label" to "Bootstrap, EasyMDE (editor)", "size" to "~640 KB", "env" to "WIKIKT_UI_ASSET_SOURCE",
-                "cdn" to ui.useCdnAssets, "host" to "cdn.jsdelivr.net", "path" to "/static/vendor/",
-            ),
-            mapOf(
-                "label" to "Icon font (Material Design Icons)", "size" to "~750 KB", "env" to "WIKIKT_UI_ICON_FONT_SOURCE",
-                "cdn" to ui.useCdnIconFont, "host" to "cdn.jsdelivr.net", "path" to "/static/vendor/mdi/",
-            ),
-            mapOf(
-                "label" to "Emoji font (Noto Color Emoji)", "size" to "~2 MB", "env" to "WIKIKT_UI_EMOJI_FONT_SOURCE",
-                "cdn" to ui.useCdnEmojiFont, "host" to "fonts.googleapis.com", "path" to "/static/vendor/noto-emoji/",
-            ),
-            mapOf(
-                "label" to "Mermaid (diagrams)", "size" to "~3.5 MB", "env" to "WIKIKT_UI_MERMAID_SOURCE",
-                "cdn" to ui.useCdnMermaid, "host" to "cdn.jsdelivr.net", "path" to "/static/vendor/mermaid/",
-            ),
-        ),
+                "label" to source.label, "size" to source.size, "env" to source.envVar,
+                "cdn" to ui.useCdn(source), "host" to source.cdnHost, "path" to source.localPath,
+            )
+        },
         "customCssValue" to settings.get(siteId, s.APPEARANCE_CUSTOM_CSS).orEmpty(),
         "currentYear" to java.time.Year.now(java.time.ZoneId.systemDefault()).value,
     )

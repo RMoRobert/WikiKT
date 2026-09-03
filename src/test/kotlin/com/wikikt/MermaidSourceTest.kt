@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * that 404s there has no diagrams at all.
  */
 class MermaidSourceTest {
-    private val cdnSrc = "https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"
+    private val cdnSrc = Regex("""https://cdn\.jsdelivr\.net/npm/mermaid@\d+\.\d+\.\d+/dist/mermaid\.min\.js""")
     private val localSrc = "/static/vendor/mermaid/mermaid.min.js"
 
     @Test
@@ -31,10 +31,10 @@ class MermaidSourceTest {
 
         val html = createClient { followRedirects = true }.get("/").bodyAsText()
         assertTrue(html.contains("/static/page-mermaid.js"), "the diagram loader is on the page")
-        assertTrue(html.contains("""data-mermaid-src="$cdnSrc""""), "jsDelivr copy configured")
+        assertTrue(Regex("""data-mermaid-src="${cdnSrc.pattern}"""").containsMatchIn(html), "jsDelivr copy configured")
         assertTrue(
-            html.contains("""data-mermaid-integrity="sha384-aBQXj4hK6Jm05i7aQAsUV3bLdSUrHX1BGYfMB0166TtWt/RRaw+h0Eelme9OCOvy""""),
-            "SRI hash kept — page-mermaid.js only sets crossOrigin when it has one",
+            sriOn("mermaid.min.js", attr = "data-mermaid-integrity").containsMatchIn(html),
+            "SRI hash kept — page-mermaid.js only sets crossOrigin when it has one (VendoredAssetIntegrityTest checks the value)",
         )
         assertFalse(html.contains(localSrc), "the bundled copy is not also referenced")
     }
@@ -64,7 +64,7 @@ class MermaidSourceTest {
 
         val html = createClient { followRedirects = true }.get("/").bodyAsText()
         assertTrue(html.contains("/static/vendor/bootstrap/"), "Bootstrap is served locally, as configured")
-        assertTrue(html.contains(cdnSrc), "Mermaid still comes from the CDN")
+        assertTrue(cdnSrc.containsMatchIn(html), "Mermaid still comes from the CDN")
     }
 
     @Test
@@ -73,7 +73,7 @@ class MermaidSourceTest {
         application { configure() }
 
         val html = createClient { followRedirects = true }.get("/").bodyAsText()
-        assertTrue(html.contains(cdnSrc), "a typo'd source is treated as cdn, the safe default")
+        assertTrue(cdnSrc.containsMatchIn(html), "a typo'd source is treated as cdn, the safe default")
     }
 
     private fun testConfig(dbName: String) = MapApplicationConfig(

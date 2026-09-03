@@ -456,4 +456,30 @@ class MarkdownRendererTest {
         assertTrue(html.contains("--&gt; B{Choice};"), "edges and labels kept, HTML-escaped: $html")
         assertTrue(html.contains("A[&quot;Start&quot;]") || html.contains("A[\"Start\"]"), "quoted label kept: $html")
     }
+
+    private val smallTable = "| a | b | c |\n|---|---|---|\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |\n"
+
+    @Test
+    fun `tables render normally under the cell cap`() {
+        val html = renderer.render(smallTable, ContentFormat.MARKDOWN)
+        assertTrue(html.contains("<table"), "a nine-cell table is far under the default cap: $html")
+        assertFalse(html.contains("could not be rendered"))
+    }
+
+    @Test
+    fun `a table past the cell cap shows the page source instead of failing the request`() {
+        // commonmark 0.30+ aborts the parse with IllegalArgumentException past maxCells; that must not
+        // become a 400 for every reader. Nine cells against a cap of four takes the fallback path.
+        val html = MarkdownRenderer(maxTableCells = 4).render(smallTable, ContentFormat.MARKDOWN)
+        assertFalse(html.contains("<table"), "the table is not rendered: $html")
+        assertTrue(html.contains("could not be rendered"), "the reader is told why: $html")
+        assertTrue(html.contains("<pre>") && html.contains("| 4 | 5 | 6 |"), "the source is shown verbatim: $html")
+    }
+
+    @Test
+    fun `the shown source is escaped, not live markup`() {
+        val html = MarkdownRenderer(maxTableCells = 4).render("<script>x()</script>\n\n$smallTable", ContentFormat.MARKDOWN)
+        assertFalse(html.contains("<script"), "author HTML in the source must not execute: $html")
+        assertTrue(html.contains("&lt;script&gt;"), "it is displayed as text: $html")
+    }
 }

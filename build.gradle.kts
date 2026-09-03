@@ -27,9 +27,8 @@ group = "com.wikikt"
 // The version baked into wikikt.properties and shown in the admin console (and recorded in backups).
 // Overridable so release builds can be stamped with the git tag rather than this literal: the publish
 // workflow passes the tag through the Dockerfile's WIKIKT_VERSION build arg, which becomes
-// -PwikiktVersion here. Untagged and local builds fall back to the value below, so `./gradlew run`
-// keeps reporting -SNAPSHOT.
-// BUMP THIS VERSION WHEN CREATING A NEW RELEASE so source builds match the GitHub version tag.
+// -PwikiktVersion here. Untagged and local builds fall back to the literal below (so `./gradlew run`
+// keeps reporting -SNAPSHOT) -- BUMP IT WHEN CUTTING A RELEASE so source builds match the GitHub tag.
 version = providers.gradleProperty("wikiktVersion")
     .orElse(providers.environmentVariable("WIKIKT_VERSION"))
     .getOrElse("0.9.11-SNAPSHOT")

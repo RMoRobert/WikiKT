@@ -105,15 +105,42 @@ data class GitSyncDirConfig(
 )
 
 /**
- * Front-end asset delivery — where Bootstrap, the icon font, the emoji font and Mermaid are fetched
- * from.
+ * The four front-end asset-delivery knobs, described once: the yaml key and env var that set each,
+ * what it covers, and where the two modes fetch from. [loadUiConfig] reads the knobs from this list,
+ * Administration > Appearance renders it, and `DeploymentFilesDriftTest` pins the hand-maintained
+ * deployment files (`.env.example`, `.env.home.example`, both compose files, `docs/install.md`) to it,
+ * so adding a knob here and forgetting one of those files fails the build instead of leaving a silent
+ * gap (which is how `WIKIKT_UI_MERMAID_SOURCE` went missing from `.env.home.example` for a month).
+ * Declaration order is display order.
+ */
+enum class AssetSource(
+    val yamlKey: String,
+    val envVar: String,
+    /** What the knob covers — the wording shown in Administration > Appearance and docs/install.md. */
+    val label: String,
+    /** Approximate size of the bundled copy, shown alongside the label. */
+    val size: String,
+    val cdnHost: String,
+    /** Where the `local` copy is served from. */
+    val localPath: String,
+) {
+    ASSETS("wikikt.ui.assetSource", "WIKIKT_UI_ASSET_SOURCE", "Bootstrap, EasyMDE (editor)", "~640 KB", "cdn.jsdelivr.net", "/static/vendor/"),
+    ICON_FONT("wikikt.ui.iconFontSource", "WIKIKT_UI_ICON_FONT_SOURCE", "Icon font (Material Design Icons)", "~750 KB", "cdn.jsdelivr.net", "/static/vendor/mdi/"),
+    EMOJI_FONT("wikikt.ui.emojiFontSource", "WIKIKT_UI_EMOJI_FONT_SOURCE", "Emoji font (Noto Color Emoji)", "~2 MB", "fonts.googleapis.com", "/static/vendor/noto-emoji/"),
+    MERMAID("wikikt.ui.mermaidSource", "WIKIKT_UI_MERMAID_SOURCE", "Mermaid (diagrams)", "~3.5 MB", "cdn.jsdelivr.net", "/static/vendor/mermaid/"),
+}
+
+/**
+ * Front-end asset delivery — where Bootstrap + the EasyMDE page editor, the icon font, the emoji font
+ * and Mermaid are fetched from. (highlight.js is always served from `static/vendor/`; it has no knob.)
  *
  * All four default to the CDN, and each has a bundled counterpart under `static/vendor/` that a
- * matching `local` setting serves instead. They are *separate* knobs rather than one because the two
- * webfonts and Mermaid dwarf everything else (3.5 MB, 2 MB and 750 KB against a few hundred KB), so an
- * operator may reasonably want the big ones off their own bandwidth while keeping the small ones
- * in-house, or the reverse. An install with no guaranteed outbound access sets all four to `local`;
- * see the air-gapped note in `docs/install.md`.
+ * matching `local` setting serves instead. They are *separate* knobs rather than one because the
+ * sizes and the consequences of a blocked CDN differ (Mermaid 3.5 MB and the emoji font 2 MB against
+ * ~750 KB for the icon font and ~640 KB for Bootstrap + EasyMDE), so an operator may reasonably want
+ * the big ones off their own bandwidth while keeping the small ones in-house, or the reverse. An
+ * install with no guaranteed outbound access sets all four to `local`; see the air-gapped note in
+ * `docs/install.md`.
  *
  * This is deployment config (yaml/env), not a per-site admin setting, because it answers "does this
  * *network* allow outbound requests" — an instance-wide, operator-level question. Every site on an
@@ -152,7 +179,15 @@ data class UiConfig(
      * to the diagram's source shown as a code block (see `static/page-mermaid.js`).
      */
     val useCdnMermaid: Boolean,
-)
+) {
+    /** The same four flags looked up by catalog entry. Exhaustive: a new [AssetSource] must be wired here. */
+    fun useCdn(source: AssetSource): Boolean = when (source) {
+        AssetSource.ASSETS -> useCdnAssets
+        AssetSource.EMOJI_FONT -> useCdnEmojiFont
+        AssetSource.ICON_FONT -> useCdnIconFont
+        AssetSource.MERMAID -> useCdnMermaid
+    }
+}
 
 /** Supported (decodable + validatable) asset MIME types. The effective allowlist is this ∩ config. */
 val SUPPORTED_ASSET_MIME_TYPES = setOf("image/png", "image/jpeg", "image/gif", "image/webp")
@@ -268,13 +303,13 @@ internal fun ApplicationConfig.loadGitSyncDirConfig(): GitSyncDirConfig {
  * icons), while guessing "cdn" wrong is just an outbound request the operator may not have wanted.
  */
 internal fun ApplicationConfig.loadUiConfig(getEnv: (String) -> String? = System::getenv): UiConfig {
-    fun source(key: String, env: String) =
-        (envOrConfig(key, env, getEnv) ?: "cdn").trim().lowercase() != "local"
+    fun cdn(source: AssetSource) =
+        (envOrConfig(source.yamlKey, source.envVar, getEnv) ?: "cdn").trim().lowercase() != "local"
     return UiConfig(
-        useCdnAssets = source("wikikt.ui.assetSource", "WIKIKT_UI_ASSET_SOURCE"),
-        useCdnEmojiFont = source("wikikt.ui.emojiFontSource", "WIKIKT_UI_EMOJI_FONT_SOURCE"),
-        useCdnIconFont = source("wikikt.ui.iconFontSource", "WIKIKT_UI_ICON_FONT_SOURCE"),
-        useCdnMermaid = source("wikikt.ui.mermaidSource", "WIKIKT_UI_MERMAID_SOURCE"),
+        useCdnAssets = cdn(AssetSource.ASSETS),
+        useCdnEmojiFont = cdn(AssetSource.EMOJI_FONT),
+        useCdnIconFont = cdn(AssetSource.ICON_FONT),
+        useCdnMermaid = cdn(AssetSource.MERMAID),
     )
 }
 

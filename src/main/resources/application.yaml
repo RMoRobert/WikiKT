@@ -36,10 +36,11 @@ wikikt:
     # --- Front-end asset delivery -------------------------------------------------------------
     # Each of the four is "cdn" (the default) or "local". "local" serves the copy bundled in the
     # jar under static/vendor/ -- no Internet request, at the cost of your own bandwidth. They are
-    # separate knobs because the two webfonts and Mermaid are far larger than everything
-    # else, so you may want them handled differently. Set all four to "local" for completely offline
-    # install (but mind the Appearance body/heading font too); see docs/install.md. Administration >
-    # Appearance shows the effective values, read-only.
+    # separate knobs because the sizes differ (Mermaid 3.5 MB and the emoji font 2 MB vs ~750 KB and
+    # ~640 KB for the rest), so you may want them handled differently. Set all four to "local" for a
+    # completely offline install; the Appearance body/heading fonts still load from Google Fonts
+    # unless the "System UI" preset or a custom, locally available font is chosen for BOTH. See
+    # docs/install.md. Administration > Appearance shows the effective values, read-only.
     #
     # Bootstrap + EasyMDE page editor (~640KB). Override via WIKIKT_UI_ASSET_SOURCE. Note that
     # highlight.js is always served from static/vendor/ and is not affected by this setting.

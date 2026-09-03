@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
  * template, and the icons are chrome that unauthenticated visitors see too.
  */
 class IconFontSourceTest {
-    private val cdnHref = "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css"
+    private val cdnHref = Regex("""https://cdn\.jsdelivr\.net/npm/@mdi/font@\d+\.\d+\.\d+/css/materialdesignicons\.min\.css""")
     private val localHref = "/static/vendor/mdi/materialdesignicons.min.css"
 
     @Test
@@ -29,8 +29,8 @@ class IconFontSourceTest {
         application { configure() }
 
         val html = createClient { followRedirects = true }.get("/").bodyAsText()
-        assertTrue(html.contains("""href="$cdnHref""""), "jsDelivr copy linked")
-        assertTrue(html.contains("integrity=\"sha384-HphS8cQyN+eYiJ5PMbzShG6qZdRtvHPVLPkYb8JwMkmNgaIxrFVDhQe3jIbq3EZ2\""), "SRI hash kept")
+        assertTrue(Regex("""href="${cdnHref.pattern}"""").containsMatchIn(html), "jsDelivr copy linked")
+        assertTrue(sriOn("materialdesignicons.min.css").containsMatchIn(html), "SRI hash kept (VendoredAssetIntegrityTest checks the value)")
         assertFalse(html.contains(localHref), "the bundled copy is not also linked")
     }
 
@@ -49,7 +49,7 @@ class IconFontSourceTest {
         assertEquals(HttpStatusCode.OK, css.status, "vendored CSS is served")
         val cssText = css.bodyAsText()
         assertTrue(
-            cssText.contains("""src:url("materialdesignicons-webfont.woff2?v=7.4.47") format("woff2")"""),
+            Regex("""src:url\("materialdesignicons-webfont\.woff2\?v=[\d.]+"\) format\("woff2"\)""").containsMatchIn(cssText),
             "@font-face was rewritten to the same-directory woff2, not upstream's ../fonts/ eot+woff+ttf list",
         )
         assertFalse(cssText.contains("../fonts/"), "no leftover reference to the un-vendored sibling formats")
@@ -70,7 +70,7 @@ class IconFontSourceTest {
 
         val html = createClient { followRedirects = true }.get("/").bodyAsText()
         assertTrue(html.contains("/static/vendor/bootstrap/"), "Bootstrap is served locally, as configured")
-        assertTrue(html.contains(cdnHref), "the icon font still comes from the CDN")
+        assertTrue(cdnHref.containsMatchIn(html), "the icon font still comes from the CDN")
     }
 
     @Test
@@ -79,7 +79,7 @@ class IconFontSourceTest {
         application { configure() }
 
         val html = createClient { followRedirects = true }.get("/").bodyAsText()
-        assertTrue(html.contains(cdnHref), "a typo'd source is treated as cdn, the safe default")
+        assertTrue(cdnHref.containsMatchIn(html), "a typo'd source is treated as cdn, the safe default")
     }
 
     private fun testConfig(dbName: String) = MapApplicationConfig(

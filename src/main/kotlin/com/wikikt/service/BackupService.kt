@@ -56,8 +56,8 @@ import org.jetbrains.exposed.v1.core.UIntegerColumnType
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.UIntIdTable
 import org.jetbrains.exposed.v1.r2dbc.R2dbcDatabase
+import org.jetbrains.exposed.v1.r2dbc.batchInsert
 import org.jetbrains.exposed.v1.r2dbc.deleteAll
-import org.jetbrains.exposed.v1.r2dbc.insert
 import org.jetbrains.exposed.v1.r2dbc.selectAll
 import org.jetbrains.exposed.v1.r2dbc.transactions.suspendTransaction
 import java.io.InputStream
@@ -604,22 +604,37 @@ class BackupService(
         }
     }
 
-    /** Inserts dumped rows with fresh ids, recording old→new in [idMaps] for FK remapping. */
+    /**
+     * Inserts dumped rows with fresh ids, recording old→new in [idMaps] for FK remapping.
+     *
+     * Rows go in chunks of [RESTORE_BATCH_SIZE] as single multi-row INSERTs (Exposed 1.5 emits one
+     * VALUES list on both H2 and PostgreSQL) rather than one round trip per row — a mature wiki's
+     * revisions alone are thousands of rows, and over a remote database each round trip is a network
+     * hop. Batching a whole table at once is safe because no table references itself: every FK a row
+     * carries points at a table restored earlier in [BACKUP_TABLES], whose id map is complete by then.
+     */
     private suspend fun insertRows(table: Table, rows: JsonArray, idMaps: MutableMap<Table, MutableMap<Long, UInt>>) {
         val idTable = table as? UIntIdTable
         val map = idTable?.let { idMaps.getOrPut(table) { mutableMapOf() } }
-        for (element in rows) {
-            val obj = element.jsonObject
-            val oldId = idTable?.let { (obj[it.id.name] as? JsonPrimitive)?.long }
-            val inserted = table.insert { stmt ->
+        for (chunk in rows.map { it.jsonObject }.chunked(RESTORE_BATCH_SIZE)) {
+            val inserted = table.batchInsert(chunk, shouldReturnGeneratedValues = idTable != null) { obj ->
                 for (col in table.columns) {
                     if (idTable != null && col == idTable.id) continue // fresh id from auto-increment
                     val el = obj[col.name] ?: continue // absent column: leave to default
                     @Suppress("UNCHECKED_CAST")
-                    stmt[col as Column<Any?>] = decodeColumn(col, el, idMaps)
+                    this[col as Column<Any?>] = decodeColumn(col, el, idMaps)
                 }
             }
-            if (map != null && oldId != null) map[oldId] = inserted[idTable.id].value
+            if (map == null || idTable == null) continue
+            // The generated ids come back in insertion order (Exposed 1.5 returns exactly the inserted
+            // rows); pairing by position is what makes the old→new map right, so the count must match.
+            check(inserted.size == chunk.size) {
+                "Restore of ${table.tableName}: inserted ${chunk.size} rows but got ${inserted.size} generated ids back"
+            }
+            for ((obj, row) in chunk.zip(inserted)) {
+                val oldId = (obj[idTable.id.name] as? JsonPrimitive)?.long ?: continue
+                map[oldId] = row[idTable.id].value
+            }
         }
     }
 
@@ -734,3 +749,10 @@ internal class BudgetedInputStream(
 
     override fun close() = delegate.close()
 }
+
+/**
+ * Rows per multi-row INSERT during a full restore. Bounded so a chunk of page revisions (each carrying a
+ * whole page body) stays a modest statement, and well under PostgreSQL's parameter limit for the widest
+ * table. Internal so BackupServiceTest can restore across a chunk boundary.
+ */
+internal const val RESTORE_BATCH_SIZE = 250

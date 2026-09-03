@@ -26,8 +26,10 @@ data class SessionConfig(
 // the row — on logout, user deletion, or a password change — logs the user out on their next request,
 // and permissions/groups are re-read from the DB every request. This bound only matters for a session
 // nobody explicitly revokes: an idle login eventually expires, and a stolen-but-unrevoked cookie stops
-// working after at most this long.
-private const val DEFAULT_MAX_AGE_SECONDS = 15L * 24 * 60 * 60
+// working after at most this long. The shipped application*.yaml files repeat the value (a config file
+// should read as complete) and docs/install.md documents it; DeploymentFilesDriftTest pins all three to
+// this constant, so the number changes in one place or the build fails.
+internal const val DEFAULT_SESSION_MAX_AGE_SECONDS = 15L * 24 * 60 * 60
 
 // Deterministic dev-only keys so sessions survive a restart in local development.
 private val DEV_ENCRYPTION_KEY = "00112233445566778899aabbccddeeff".decodeHex()
@@ -72,7 +74,7 @@ fun ApplicationConfig.loadSessionConfig(): SessionConfig {
     }
 
     val maxAgeSeconds = envOrConfig("wikikt.session.maxAgeSeconds", "WIKIKT_SESSION_MAX_AGE_SECONDS")
-        ?.toLongOrNull() ?: DEFAULT_MAX_AGE_SECONDS
+        ?.toLongOrNull() ?: DEFAULT_SESSION_MAX_AGE_SECONDS
 
     return SessionConfig(
         encryptionKey = encryptionKey,
