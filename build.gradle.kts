@@ -31,7 +31,7 @@ group = "com.wikikt"
 // keeps reporting -SNAPSHOT) -- BUMP IT WHEN CUTTING A RELEASE so source builds match the GitHub tag.
 version = providers.gradleProperty("wikiktVersion")
     .orElse(providers.environmentVariable("WIKIKT_VERSION"))
-    .getOrElse("0.9.11-SNAPSHOT")
+    .getOrElse("0.9.12-SNAPSHOT")
 
 // The commit the build was made from, kept separate from `version` (BuildInfo.assetVersion embeds the
 // version in `?v=` URL query strings, so the version must stay a clean X.Y.Z[-suffix]). Same override
