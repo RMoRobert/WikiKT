@@ -2009,8 +2009,8 @@ body:has(.wiki-layout--full) .site-footer > .container { max-width: none; }
 @media (hover: none) { .wiki-content .wk-heading-anchor { opacity: 0.5; } }
 
 /* Section headings get full-width underlines (mapped one level down since content
-   headings are demoted on render: our h2 = a source h1, our h3 = a source h2). h2 gets a 2px line
-   that fades out to the right; h3 gets a plain hairline. Both draw in --wk-heading-line-color
+   headings are demoted on render: our h2 = a source h1, our h3 = a source h2). Both fade out to the
+   right; h2 gets a 2px line, h3 a hairline. Both draw in --wk-heading-line-color
    (Admin > Appearance "Heading underline color", emitted by partials/brand-style.hbs), falling
    back to the neutral border color when unset. */
 .wiki-content h2 {
@@ -2020,7 +2020,7 @@ body:has(.wiki-layout--full) .site-footer > .container { max-width: none; }
 }
 .wiki-content h3 {
     padding-bottom: 0.2rem;
-    border-bottom: var(--bs-border-width) solid var(--wk-heading-line-color, var(--bs-border-color));
+    background: linear-gradient(90deg, var(--wk-heading-line-color, var(--bs-border-color)), transparent) left bottom / 100% var(--bs-border-width) no-repeat;
 }
 
 /* Below 1200px the side column leaves the row — with it in place, mid-width screens squeezed the
