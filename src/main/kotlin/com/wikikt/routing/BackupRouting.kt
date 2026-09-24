@@ -125,7 +125,7 @@ fun Route.configureBackupRouting() {
                             else -> {}
                         }
                     } finally {
-                        part.dispose()
+                        part.release()
                     }
                 }
                 when {

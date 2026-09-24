@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 /**
  * Where the Mermaid diagram library comes from (`wikikt.ui.mermaidSource`), and that the loader is
  * wired into the page at all. Like the two webfonts this is deliberately *not* tied to
- * `wikikt.ui.assetSource`: at ~3.5 MB it is the largest thing WikiKT can ask a browser for.
+ * `wikikt.ui.assetSource`: at ~5.5 MB it is the largest thing WikiKT can ask a browser for.
  *
  * What is asserted here is only the *loader* — page-mermaid.js and the URL handed to it. Mermaid
  * itself is fetched by that script, at which point there is a diagram on the page, so no test here can

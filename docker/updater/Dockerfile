@@ -3,8 +3,11 @@
 # `docker compose pull` + `up -d --no-deps` of the app service, with a pre-update pg_dump, a health
 # gate, and digest rollback. See updater.sh for the full contract and docker/README.md for the
 # trust model and the compose `selfupdate` profile that runs this.
-FROM docker:27-cli
-RUN apk add --no-cache docker-cli-compose bash jq curl
+FROM docker:29-cli
+# The base image already bundles the Docker CLI and its Compose plugin (/usr/local/libexec/docker/
+# cli-plugins), which take precedence over Alpine's -- so installing docker-cli-compose here would only
+# add a second, older, never-used copy of both.
+RUN apk add --no-cache bash jq curl
 COPY updater.sh /usr/local/bin/updater.sh
 RUN chmod +x /usr/local/bin/updater.sh
 # The file-protocol version this updater speaks (SelfUpdateService.PROTOCOL on the app side).

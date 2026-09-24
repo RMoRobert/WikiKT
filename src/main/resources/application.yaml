@@ -36,7 +36,7 @@ wikikt:
     # --- Front-end asset delivery -------------------------------------------------------------
     # Each of the four is "cdn" (the default) or "local". "local" serves the copy bundled in the
     # jar under static/vendor/ -- no Internet request, at the cost of your own bandwidth. They are
-    # separate knobs because the sizes differ (Mermaid 3.5 MB and the emoji font 2 MB vs ~750 KB and
+    # separate knobs because the sizes differ (Mermaid 5.5 MB and the emoji font 2 MB vs ~750 KB and
     # ~640 KB for the rest), so you may want them handled differently. Set all four to "local" for a
     # completely offline install; the Appearance body/heading fonts still load from Google Fonts
     # unless the "System UI" preset or a custom, locally available font is chosen for BOTH. See
@@ -55,7 +55,7 @@ wikikt:
     # gracefully. Prefer "local" if outbound requests aren't possible/guaranteed.
     # Override via WIKIKT_UI_ICON_FONT_SOURCE.
     iconFontSource: cdn
-    # Mermaid, for ```mermaid diagrams: jsdelivr, or static/vendor/mermaid/ (~3.5MB). Loaded lazily and
+    # Mermaid, for ```mermaid diagrams: jsdelivr, or static/vendor/mermaid/ (~5.5MB). Loaded lazily and
     # only by a page that has a diagram on it, so most page views never fetch it either way; a blocked
     # CDN leaves the diagram's source showing as a code block.
     # Override via WIKIKT_UI_MERMAID_SOURCE.

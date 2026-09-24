@@ -404,7 +404,7 @@ or `local`; the default (none or invalid value specified) results in `cdn`.
 | `wikikt.ui.assetSource` | `WIKIKT_UI_ASSET_SOURCE` | Bootstrap, EasyMDE (editor) | ~640 KB | `cdn.jsdelivr.net` | `/static/vendor/` |
 | `wikikt.ui.iconFontSource` | `WIKIKT_UI_ICON_FONT_SOURCE` | Icon font (Material Design Icons) | ~750 KB | `cdn.jsdelivr.net` | `/static/vendor/mdi/` |
 | `wikikt.ui.emojiFontSource` | `WIKIKT_UI_EMOJI_FONT_SOURCE` | Emoji font (Noto Color Emoji) | ~2 MB | `fonts.googleapis.com` | `/static/vendor/noto-emoji/` |
-| `wikikt.ui.mermaidSource` | `WIKIKT_UI_MERMAID_SOURCE` | Mermaid (diagrams) | ~3.5 MB | `cdn.jsdelivr.net` | `/static/vendor/mermaid/` |
+| `wikikt.ui.mermaidSource` | `WIKIKT_UI_MERMAID_SOURCE` | Mermaid (diagrams) | ~5.5 MB | `cdn.jsdelivr.net` | `/static/vendor/mermaid/` |
 
 They are separate settings rather than one overarching setting because the sizes differ (the emoji
 font and Mermaid are several times larger than the rest), and so do the consequences of a blocked CDN:

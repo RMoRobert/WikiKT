@@ -369,7 +369,7 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                     else -> {}
                 }
             } finally {
-                part.dispose()
+                part.release()
             }
         }
     } finally {
@@ -587,7 +587,7 @@ private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
                     else -> {}
                 }
             } finally {
-                part.dispose()
+                part.release()
             }
         }
     } finally {

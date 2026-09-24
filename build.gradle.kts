@@ -12,7 +12,7 @@ buildscript {
         // Build-only (never in the app's runtime classpath): real JS parser used to minify first-party
         // static/*.js for the production jar. A parser, not regex, is required for JS — `/` is ambiguous
         // (division vs regex literal) and newlines are semantic (automatic semicolon insertion).
-        classpath("com.google.javascript:closure-compiler:v20260826")
+        classpath("com.google.javascript:closure-compiler:v20260921")
     }
 }
 
@@ -58,7 +58,6 @@ kotlin {
 }
 dependencies {
     implementation(ktorLibs.serialization.kotlinx.json)
-    implementation(ktorLibs.server.auth)
     implementation(ktorLibs.server.compression)
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.contentNegotiation)
@@ -93,6 +92,25 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
+
+    components.all<NettyAlignmentRule>()
+}
+
+// Keeps every io.netty 4.x module on ONE version -- whichever the highest requester resolves to, which
+// is Ktor. Nothing is pinned here, so a Ktor bump still moves Netty. Without it, reactor-netty-core 1.1.x
+// (via r2dbc-postgresql) holds netty-resolver-dns, -codec-dns, -handler-proxy and -codec-socks back at
+// 4.1.x while the rest of Netty runs 4.2.x. That was dormant until r2dbc-postgresql 1.1.3, which resolves
+// the database host through Netty's DNS resolver -- making the stale 4.1.x resolver live code, with the
+// 2026 DNS cache-poisoning advisories that 4.2.15+ fixes.
+@CacheableRule
+abstract class NettyAlignmentRule : ComponentMetadataRule {
+    override fun execute(ctx: ComponentMetadataContext) {
+        ctx.details.run {
+            if (id.group == "io.netty" && id.version.startsWith("4.")) {
+                belongsTo("io.netty:netty-virtual-platform:${id.version}")
+            }
+        }
+    }
 }
 
 // R2DBC drivers (H2 + Postgres) each register via META-INF/services/io.r2dbc.spi.ConnectionFactoryProvider.

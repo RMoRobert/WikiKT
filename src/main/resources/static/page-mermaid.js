@@ -4,7 +4,7 @@
 //
 // Load order matters: this runs BEFORE highlight.js. The wrapping below is synchronous, so by the time
 // hljs.highlightAll() runs every diagram source is marked `nohighlight` and left alone. Mermaid itself
-// (~3.5 MB) is fetched lazily, and only on a page that actually has a diagram on it.
+// (~5.5 MB) is fetched lazily, and only on a page that actually has a diagram on it.
 //
 // The source <pre> stays in the DOM inside the wrapper and is only hidden once its SVG is in, so no JS,
 // a blocked CDN, or a syntax error all degrade to the code the author wrote rather than to a blank.

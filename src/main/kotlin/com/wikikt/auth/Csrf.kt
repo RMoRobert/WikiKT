@@ -5,9 +5,9 @@ import io.ktor.server.request.header
 import io.ktor.server.sessions.get
 import io.ktor.server.sessions.sessions
 import io.ktor.server.sessions.set
-import io.ktor.util.encodeBase64
 import java.security.MessageDigest
 import java.security.SecureRandom
+import kotlin.io.encoding.Base64
 
 /** Name of the hidden form field and the session-stored token for CSRF protection. */
 const val CSRF_FIELD = "_csrf"
@@ -21,7 +21,7 @@ private val secureRandom = SecureRandom()
 fun generateCsrfToken(): String {
     val bytes = ByteArray(32)
     secureRandom.nextBytes(bytes)
-    return bytes.encodeBase64()
+    return Base64.Default.encode(bytes)
 }
 
 /** The CSRF token bound to the current session, or null if there is no session. */

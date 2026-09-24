@@ -127,7 +127,7 @@ enum class AssetSource(
     ASSETS("wikikt.ui.assetSource", "WIKIKT_UI_ASSET_SOURCE", "Bootstrap, EasyMDE (editor)", "~640 KB", "cdn.jsdelivr.net", "/static/vendor/"),
     ICON_FONT("wikikt.ui.iconFontSource", "WIKIKT_UI_ICON_FONT_SOURCE", "Icon font (Material Design Icons)", "~750 KB", "cdn.jsdelivr.net", "/static/vendor/mdi/"),
     EMOJI_FONT("wikikt.ui.emojiFontSource", "WIKIKT_UI_EMOJI_FONT_SOURCE", "Emoji font (Noto Color Emoji)", "~2 MB", "fonts.googleapis.com", "/static/vendor/noto-emoji/"),
-    MERMAID("wikikt.ui.mermaidSource", "WIKIKT_UI_MERMAID_SOURCE", "Mermaid (diagrams)", "~3.5 MB", "cdn.jsdelivr.net", "/static/vendor/mermaid/"),
+    MERMAID("wikikt.ui.mermaidSource", "WIKIKT_UI_MERMAID_SOURCE", "Mermaid (diagrams)", "~5.5 MB", "cdn.jsdelivr.net", "/static/vendor/mermaid/"),
 }
 
 /**
@@ -136,7 +136,7 @@ enum class AssetSource(
  *
  * All four default to the CDN, and each has a bundled counterpart under `static/vendor/` that a
  * matching `local` setting serves instead. They are *separate* knobs rather than one because the
- * sizes and the consequences of a blocked CDN differ (Mermaid 3.5 MB and the emoji font 2 MB against
+ * sizes and the consequences of a blocked CDN differ (Mermaid 5.5 MB and the emoji font 2 MB against
  * ~750 KB for the icon font and ~640 KB for Bootstrap + EasyMDE), so an operator may reasonably want
  * the big ones off their own bandwidth while keeping the small ones in-house, or the reverse. An
  * install with no guaranteed outbound access sets all four to `local`; see the air-gapped note in
@@ -173,7 +173,7 @@ data class UiConfig(
      */
     val useCdnIconFont: Boolean,
     /**
-     * Where the Mermaid diagram library loads from (~3.5 MB of JS); `local` serves
+     * Where the Mermaid diagram library loads from (~5.5 MB of JS); `local` serves
      * `static/vendor/mermaid/mermaid.min.js`. It is fetched lazily and only by a page that actually
      * contains a ```mermaid fence, so most page views never touch it either way. A blocked CDN degrades
      * to the diagram's source shown as a code block (see `static/page-mermaid.js`).
