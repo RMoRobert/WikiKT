@@ -6,12 +6,14 @@ import com.wikikt.config.DatabaseType
 import com.wikikt.db.DatabaseFactory
 import com.wikikt.markdown.MarkdownRenderer
 import com.wikikt.model.CreatePageRequest
+import com.wikikt.model.nowMillis
 import com.wikikt.service.FragmentService
 import com.wikikt.service.InfoboxService
 import com.wikikt.service.MigrationService
 import com.wikikt.service.PageRenderService
 import com.wikikt.service.PageService
 import com.wikikt.service.SettingsService
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,6 +75,11 @@ class PageRenderCacheTest {
             null,
         )
         assertTrue(f.renderCache.getOrRender(f.pages.findById(page.id)!!).body.contains("original"))
+
+        // updatedAt is wall-clock milliseconds, and a warm JVM can create, render and update within one
+        // millisecond -- the stale row would then still match and be served. Wait for the clock to tick so
+        // the update below is guaranteed a new updatedAt.
+        while (nowMillis() <= page.updatedAt) delay(1)
 
         // Update content (no onContentChanged wired here → no write-through); getOrRender must notice the
         // changed updatedAt and re-render rather than serving the stale row.

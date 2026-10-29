@@ -12,7 +12,7 @@ buildscript {
         // Build-only (never in the app's runtime classpath): real JS parser used to minify first-party
         // static/*.js for the production jar. A parser, not regex, is required for JS — `/` is ambiguous
         // (division vs regex literal) and newlines are semantic (automatic semicolon insertion).
-        classpath("com.google.javascript:closure-compiler:v20260921")
+        classpath("com.google.javascript:closure-compiler:v20261015")
     }
 }
 
@@ -89,6 +89,12 @@ dependencies {
     implementation(libs.postgres.r2dbc)
     implementation(libs.qrcode.kotlin)
     implementation(libs.r2dbc.pool)
+    // Netty floor -- DELETE once Ktor ships Netty >= 4.2.19. Ktor 3.6.0 brings 4.2.17, whose HTTP/1.1
+    // request parser has published smuggling bugs (malformed chunk-size lines and Transfer-Encoding
+    // values; GHSA-rq4j-fc47-9698, GHSA-j4mg-hqgv-34qc, GHSA-hcvj-94mj-jp5c, GHSA-3jrc-fchc-59pw, fixed in
+    // 4.2.18), with more HTTP/1.1 fixes in 4.2.19. A floor, not a pin: the platform is not enforced, so a
+    // Ktor that brings a newer Netty still wins.
+    implementation(platform("io.netty:netty-bom:4.2.19.Final"))
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
