@@ -19,6 +19,7 @@ import com.wikikt.config.isProductionEnvironment
 import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -26,7 +27,9 @@ import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
 import io.ktor.server.http.content.staticResources
 import io.ktor.server.mustache.MustacheContent
+import io.ktor.server.plugins.autohead.AutoHeadResponse
 import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.condition
 import io.ktor.server.plugins.compression.gzip
 import io.ktor.server.plugins.compression.matchContentType
 import io.ktor.server.plugins.compression.minimumSize
@@ -49,6 +52,12 @@ fun Application.module() {
     configureMustache()
     configureSecurity()
 
+    // Answer HEAD on every GET route, so link checkers and uptime monitors see a page's real status
+    // instead of a 404. A HEAD runs the full GET handler (same permission checks, status and headers) and
+    // only drops the body -- so it also spends whatever a GET would, which is why emailed links stay
+    // two-step GET -> POST.
+    install(AutoHeadResponse)
+
     // Compress text responses for deployments where clients reach the app directly (bare jar, or a
     // proxy/LB that doesn't compress). The bundled Caddy stack instead strips Accept-Encoding toward
     // the app (docker/Caddyfile) and compresses at the edge, where zstd is also on offer. Only
@@ -57,6 +66,9 @@ fun Application.module() {
         gzip {
             matchContentType(ContentType.Text.Any, ContentType.Application.Json, ContentType.Application.JavaScript, ContentType.Image.SVG)
             minimumSize(1024)
+            // A HEAD has no body to compress, and with no compressed length to report the engine would
+            // send Content-Length: 0, claiming an empty page, rather than the real size.
+            condition { request.local.method != HttpMethod.Head }
         }
     }
 
