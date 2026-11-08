@@ -138,7 +138,7 @@ class AssetServiceTest {
         assertFailsWith<IllegalArgumentException> { normalizeAssetPath("a\\b") }
         assertFailsWith<IllegalArgumentException> { normalizeAssetPath("   ") }
         assertEquals("images/logo.png", normalizeAssetPath("/images//logo.png/"))
-        assertEquals("my-file.png", slugFilename("My File!.PNG"))
-        assertEquals("logo.jpeg", slugFilename("../../logo.jpeg"))
+        assertEquals("my-file.png", slugFilename("My File!.PNG", "image/png"))
+        assertEquals("logo.jpeg", slugFilename("../../logo.jpeg", "image/jpeg"))
     }
 }

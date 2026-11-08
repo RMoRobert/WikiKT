@@ -552,9 +552,11 @@ class AssetService(private val database: R2dbcDatabase, private val storageRoot:
         // Ktor decodes each captured segment) -- so `/caf%C3%A9.png`, which serves fine, matches the
         // stored `café.png` here too instead of scanning as a different (broken/unused) path. A
         // segment that fails to decode is kept raw: a literal `%` can't appear in an asset path, so
-        // it matches nothing, same as at serve time.
+        // it matches nothing, same as at serve time. So is one that decodes to a NUL (`%00`): the
+        // request guard (NulByteGuard.kt) refuses that URL at serve time, and the save-time reference
+        // check looks these paths up in the database, where PostgreSQL rejects a NUL outright.
         val segments = url.removePrefix("/").split("/").filter { it.isNotEmpty() }
-            .map { seg -> runCatching { seg.decodeURLPart() }.getOrDefault(seg) }
+            .map { seg -> runCatching { seg.decodeURLPart() }.getOrNull()?.takeUnless { '\u0000' in it } ?: seg }
         if (segments.isEmpty()) return null
         val explicitLocale = isLocaleSegment(segments.first()) && segments.size > 1
         val locale = if (explicitLocale) segments.first() else defaultLocale

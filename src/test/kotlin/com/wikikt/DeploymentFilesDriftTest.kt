@@ -1,6 +1,7 @@
 package com.wikikt
 
 import com.wikikt.config.AssetSource
+import com.wikikt.config.DEFAULT_MAX_REQUEST_BODY_BYTES
 import com.wikikt.config.DEFAULT_SESSION_MAX_AGE_SECONDS
 import java.nio.file.Files
 import java.nio.file.Path
@@ -72,6 +73,25 @@ class DeploymentFilesDriftTest {
         assertTrue(
             "default $default" in row && "$days days" in row,
             "docs/install.md must state the real default ($default = $days days); the row reads: $row",
+        )
+    }
+
+    @Test
+    fun `request body cap default agrees across code, shipped yaml and docs`() {
+        val default = DEFAULT_MAX_REQUEST_BODY_BYTES
+        assertTrue(
+            Regex("""^\s*maxRequestBodyBytes:\s*$default\s*$""", RegexOption.MULTILINE).containsMatchIn(read("src/main/resources/application.yaml")),
+            "application.yaml must ship maxRequestBodyBytes: $default — the literal there shadows DEFAULT_MAX_REQUEST_BODY_BYTES on " +
+                "every real run, so the two must agree",
+        )
+        val row = assertNotNull(
+            read("docs/install.md").lines().firstOrNull { "WIKIKT_MAX_REQUEST_BODY_BYTES" in it },
+            "docs/install.md must document WIKIKT_MAX_REQUEST_BODY_BYTES",
+        )
+        val mib = default / (1024 * 1024)
+        assertTrue(
+            "default `$default`" in row && "$mib MiB" in row,
+            "docs/install.md must state the real default ($default = $mib MiB); the row reads: $row",
         )
     }
 }

@@ -15,6 +15,11 @@ wikikt:
     # headers are honored for the client address (login throttling keys on it). Enabling this while
     # directly exposed lets clients spoof their address. Override via WIKIKT_TRUST_PROXY.
     trustProxy: false
+    # Largest request body read into memory (form posts and the JSON API), in bytes; anything bigger
+    # gets a 413. Default 2097152 (2 MiB): far above any real page, small enough that an anonymous POST
+    # can't make the server buffer much. File uploads and backup restores stream to disk under the
+    # assets.* caps and the restore ceiling instead. Override via WIKIKT_MAX_REQUEST_BODY_BYTES.
+    maxRequestBodyBytes: 2097152
   defaultLocale: en
   defaultAdmin:
     username: admin

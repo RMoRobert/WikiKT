@@ -318,6 +318,17 @@ fun validateWikiPath(path: String, allowExtension: Boolean) {
         require(!UNSAFE_SEGMENT.containsMatchIn(seg)) {
             "'$seg' contains spaces or unsafe characters — use dashes and letters/numbers only."
         }
+        // `\s` above is ASCII-only: also catch Unicode spaces (NBSP, U+3000) and invisible characters
+        // (zero-width space, bidi overrides, BOM), which would make two different paths look the same.
+        require(seg.codePoints().noneMatch { isSpaceCodePoint(it) || isInvisibleCodePoint(it) }) {
+            "'$seg' contains spaces or invisible characters — use dashes and letters/numbers only."
+        }
+        // ZWNJ/ZWJ pass the check above because some scripts need them. They're allowed only where they
+        // change the rendering (between Arabic or Indic letters, inside an emoji sequence), not as an
+        // invisible way to make a second `adminguide`.
+        require(!hasStrayJoiner(seg)) {
+            "'$seg' contains invisible characters — use dashes and letters/numbers only."
+        }
         if (allowExtension && index == segments.lastIndex) {
             require(seg.count { it == '.' } <= 1 && !seg.startsWith(".") && !seg.endsWith(".")) {
                 "'$seg' is not a valid file name."
@@ -334,11 +345,13 @@ fun validateWikiPath(path: String, allowExtension: Boolean) {
 
 /**
  * Strict normalizer for an asset's virtual path (which becomes part of a served URL). Unlike
- * [normalizePagePath] this rejects path-traversal and control characters. Does NOT check reserved
- * first segments — that's the routing layer's job (it owns the reserved set).
+ * [normalizePagePath] this rejects path-traversal and control characters. NFC, so a path typed or
+ * uploaded in decomposed form (`e` + U+0301) is stored like the composed one browsers send. Does NOT check
+ * reserved first segments — that's the routing layer's job (it owns the reserved set).
  */
 fun normalizeAssetPath(raw: String): String {
-    val segments = raw.split('/').map { it.trim() }.filter { it.isNotEmpty() }
+    val segments = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFC)
+        .split('/').map { it.trim() }.filter { it.isNotEmpty() }
     require(segments.isNotEmpty()) { "Asset path cannot be empty" }
     for (s in segments) {
         require(s != "." && s != "..") { "Asset path may not contain '.' or '..' segments" }
@@ -346,17 +359,6 @@ fun normalizeAssetPath(raw: String): String {
         require(s.none { it.isISOControl() }) { "Asset path may not contain control characters" }
     }
     return segments.joinToString("/")
-}
-
-/** Turns an uploaded filename into a safe, lowercased path segment, preserving a sane extension. */
-fun slugFilename(name: String): String {
-    val bare = name.substringAfterLast('/').substringAfterLast('\\')
-    val dot = bare.lastIndexOf('.')
-    val base = (if (dot > 0) bare.substring(0, dot) else bare)
-        .lowercase().replace(Regex("[^a-z0-9._-]+"), "-").trim('-', '.').ifEmpty { "file" }
-    val ext = (if (dot > 0) bare.substring(dot + 1) else "")
-        .lowercase().replace(Regex("[^a-z0-9]+"), "")
-    return if (ext.isNotEmpty()) "$base.$ext" else base
 }
 
 fun nowMillis(): Long = System.currentTimeMillis()

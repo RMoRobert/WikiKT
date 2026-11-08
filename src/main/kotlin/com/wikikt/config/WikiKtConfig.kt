@@ -9,6 +9,13 @@ private val logger = LoggerFactory.getLogger("com.wikikt.config")
 
 const val DEFAULT_ADMIN_PASSWORD = "changeme"
 
+// Default cap on a request body read into memory: 2 MiB. Page content is text and the editor's save is
+// the largest form the app takes, so this sits an order of magnitude above any real page while keeping
+// what one anonymous POST can make the server hold small. The shipped application.yaml repeats the value
+// (a config file should read as complete) and docs/install.md documents it; DeploymentFilesDriftTest pins
+// both to this constant, so the number changes in one place or the build fails.
+internal const val DEFAULT_MAX_REQUEST_BODY_BYTES = 2L * 1024 * 1024
+
 /**
  * Read a setting with env-var precedence: an explicitly set `WIKIKT_*` env var wins over the value
  * shipped in application.yaml, which in turn wins over the caller-supplied default. A blank string
@@ -64,6 +71,14 @@ data class WikiKtConfig(
      * ever falling back to the request host.
      */
     val publicUrl: String?,
+    /**
+     * Cap on a request body read into memory (form posts, the JSON API), in bytes, from
+     * `wikikt.server.maxRequestBodyBytes` / `WIKIKT_MAX_REQUEST_BODY_BYTES`; default
+     * [DEFAULT_MAX_REQUEST_BODY_BYTES]. Enforced by RequestBodyLimit.kt, which exempts the multipart
+     * upload and restore routes: those stream to disk under [AssetConfig.maxUploadSizeBytes] and the
+     * restore ceiling instead.
+     */
+    val maxRequestBodyBytes: Long,
     /**
      * Minimum length for user-chosen passwords (self-registration, reset, self-service change, and
      * admin-set), configurable via `wikikt.security.minPasswordLength` / `WIKIKT_MIN_PASSWORD_LENGTH`.
@@ -242,6 +257,8 @@ fun Application.loadWikiKtConfig(): WikiKtConfig {
         ui = environment.config.loadUiConfig(),
         gitSync = environment.config.loadGitSyncDirConfig(),
         publicUrl = environment.config.envOrConfig("wikikt.server.publicUrl", "WIKIKT_PUBLIC_URL")?.trim()?.ifBlank { null },
+        maxRequestBodyBytes = environment.config.envOrConfig("wikikt.server.maxRequestBodyBytes", "WIKIKT_MAX_REQUEST_BODY_BYTES")
+            ?.toLongOrNull()?.takeIf { it > 0 } ?: DEFAULT_MAX_REQUEST_BODY_BYTES,
         minPasswordLength = environment.config.envOrConfig("wikikt.security.minPasswordLength", "WIKIKT_MIN_PASSWORD_LENGTH")
             ?.toIntOrNull()?.coerceIn(1, PasswordPolicy.MAX_BYTES) ?: PasswordPolicy.DEFAULT_MIN_LENGTH,
         mfaEncryptionKey = environment.config.loadMfaKey(),

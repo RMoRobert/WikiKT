@@ -4,11 +4,14 @@ import com.wikikt.adminSiteId
 import com.wikikt.appContext
 import com.wikikt.currentSite
 import com.wikikt.siteId
+import com.wikikt.uploadBodyLimit
 import com.wikikt.auth.CSRF_FIELD
 import com.wikikt.auth.isCsrfValid
 import com.wikikt.db.ContentFormat
 import com.wikikt.model.AssetRecord
 import com.wikikt.model.AssetRef
+import com.wikikt.model.assetFilename
+import com.wikikt.model.cleanFilename
 import com.wikikt.model.normalizeAssetPath
 import com.wikikt.model.slugFilename
 import com.wikikt.model.toIsoString
@@ -42,6 +45,7 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import java.nio.file.Files
 import java.nio.file.Path
+import java.text.Normalizer
 
 /** Whether the caller has any write:assets grant (coarse gate for the manager; per-file paths are re-checked). */
 private suspend fun ApplicationCall.canUploadAssetsHere(): Boolean =
@@ -229,7 +233,7 @@ fun Route.configureAssetRouting() {
             }
             call.response.headers.append(
                 HttpHeaders.ContentDisposition,
-                ContentDisposition.Inline.withParameter(ContentDisposition.Parameters.FileName, rev.originalFilename).toString(),
+                ContentDisposition.Inline.withFilename(assetFilename(rev.originalFilename, rev.mime)).toString(),
             )
             call.response.headers.append(HttpHeaders.CacheControl, "private, no-cache")
             call.respond(LocalFileContent(file, contentType = ContentType.parse(rev.mime)))
@@ -268,16 +272,45 @@ internal suspend fun ApplicationCall.serveAssetIfPresent(locale: String, path: S
         return true
     }
     // X-Content-Type-Options: nosniff is set globally by the SecurityHeaders plugin.
-    // Structured header: Ktor quotes/escapes the filename and rejects control chars, so a hostile
-    // uploaded filename can't inject extra header content or break out of the parameter.
+    // Structured header: see withFilename — a hostile uploaded filename can't inject extra header
+    // content or break out of the parameter. assetFilename re-cleans names that predate upload
+    // cleaning or came in by import, and makes the extension match the bytes.
     response.headers.append(
         HttpHeaders.ContentDisposition,
-        ContentDisposition.Inline.withParameter(ContentDisposition.Parameters.FileName, asset.originalFilename).toString(),
+        ContentDisposition.Inline.withFilename(assetFilename(asset.originalFilename, asset.mime)).toString(),
     )
     response.headers.append(HttpHeaders.ETag, etag)
     response.headers.append(HttpHeaders.CacheControl, "private, max-age=300")
     respond(LocalFileContent(file, contentType = ContentType.parse(asset.mime)))
     return true
+}
+
+/**
+ * Adds [name] as the save-as filename (RFC 6266). A printable-ASCII name goes out as a plain `filename`
+ * parameter, which Ktor quotes/escapes as needed. Any other name gets an ASCII-only `filename` fallback
+ * followed by `filename*=UTF-8''<percent-encoded>` (RFC 5987), which browsers prefer when present. The
+ * header value is then always ASCII: Netty writes header chars as single bytes, so a raw `ï` went out
+ * as a lone 0xEF (not valid UTF-8) and anything above U+00FF as '?'. Control chars are covered the same
+ * way: replaced in the fallback, percent-encoded in `filename*`.
+ *
+ * The ext-value is built here (encodeValue = false) rather than by Ktor's `FileNameAsterisk` encoding,
+ * which passes any value that already starts with `utf-8''` through unencoded.
+ */
+internal fun ContentDisposition.withFilename(name: String): ContentDisposition {
+    if (name.all { it in ' '..'~' }) return withParameter(ContentDisposition.Parameters.FileName, name)
+    return withParameter(ContentDisposition.Parameters.FileName, asciiFilenameFallback(name))
+        .withParameter(ContentDisposition.Parameters.FileNameAsterisk, "UTF-8''${name.encodeURLParameter()}", encodeValue = false)
+}
+
+/**
+ * One printable-ASCII char per code point of [name] (after NFC, so a decomposed `i` + U+0308 counts once):
+ * the base letter of an accented one (`ï` → `i`), else `_`.
+ */
+private fun asciiFilenameFallback(name: String): String = buildString {
+    Normalizer.normalize(name, Normalizer.Form.NFC).codePoints().forEach { cp ->
+        val base = Normalizer.normalize(String(Character.toChars(cp)), Normalizer.Form.NFD)[0]
+        append(if (base in ' '..'~') base else '_')
+    }
 }
 
 private suspend fun ApplicationCall.handleAssetUpload() {
@@ -288,7 +321,7 @@ private suspend fun ApplicationCall.handleAssetUpload() {
     val maxFiles = ctx.settings.uploadFileLimit(siteId, cfg.maxFilesPerUpload)
     val stripMeta = ctx.settings.getBool(siteId, SettingsService.ASSETS_STRIP_METADATA, SettingsService.DEFAULT_STRIP_METADATA)
     val contentLength = request.contentLength()
-    if (contentLength != null && contentLength > maxFiles.toLong() * cfg.maxUploadSizeBytes + 1_048_576L) {
+    if (contentLength != null && contentLength > cfg.uploadBodyLimit(maxFiles)) {
         respond(HttpStatusCode.PayloadTooLarge, MustacheContent("error.hbs", errorModel("Upload too large", 413)))
         return
     }
@@ -316,7 +349,8 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                         }
                         if (csrfFailed) return@forEachPart
                         fileCount++
-                        val original = part.originalFileName?.takeIf { it.isNotBlank() } ?: "file"
+                        // Cleaned for display + save-as; its extension is fixed to the detected type once known.
+                        var original = cleanFilename(part.originalFileName.orEmpty()).ifEmpty { "file" }
                         if (fileCount > maxFiles) {
                             errors.add("$original: too many files (max $maxFiles)")
                             return@forEachPart
@@ -333,11 +367,13 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                             errors.add("$original: unsupported file type")
                             return@forEachPart
                         }
+                        original = assetFilename(original, mime)
                         // Strip EXIF/XMP/IPTC metadata before the bytes are stored (privacy). No-op when disabled.
                         val finalSize = stripMetadataIfEnabled(temp, mime, stripMeta)
                         val folder = fields["folder"]?.trim()?.trim('/').orEmpty()
                         val locale = fields["locale"]?.trim()?.ifBlank { null } ?: ctx.config.defaultLocale
-                        val candidate = if (folder.isEmpty()) slugFilename(original) else "$folder/${slugFilename(original)}"
+                        val slug = slugFilename(original, mime)
+                        val candidate = if (folder.isEmpty()) slug else "$folder/$slug"
                         val path = try {
                             normalizeAssetPath(candidate).also { validateWikiPath(it, allowExtension = true) }
                         } catch (e: IllegalArgumentException) {
@@ -354,7 +390,7 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                             // Same path: overwrite (archives the old as a revision) only when asked; otherwise
                             // report it as a conflict so the client can confirm before replacing.
                             if (fields["overwrite"]?.trim() == "1") {
-                                ctx.assets.replace(existing.id, mime, finalSize, original.take(500), temp, userId, assetHistoryLimit(siteId))
+                                ctx.assets.replace(existing.id, mime, finalSize, original, temp, userId, assetHistoryLimit(siteId))
                                 temps.remove(temp)
                                 ok++
                             } else {
@@ -362,7 +398,7 @@ private suspend fun ApplicationCall.handleAssetUpload() {
                             }
                             return@forEachPart
                         }
-                        ctx.assets.create(siteId, locale, path, original.take(500), mime, finalSize, temp, userId)
+                        ctx.assets.create(siteId, locale, path, original, mime, finalSize, temp, userId)
                         temps.remove(temp) // moved into place by create()
                         ok++
                     }
@@ -489,7 +525,8 @@ private suspend fun ApplicationCall.assetDetailModel(asset: AssetRecord, message
         "locale" to asset.locale,
         "path" to asset.path,
         "url" to url,
-        "markdown" to "![${asset.originalFilename}]($url)",
+        // `\`, `[` and `]` escaped so a name can't end the alt text early.
+        "markdown" to "![${asset.originalFilename.replace(Regex("""[\\\[\]]"""), "\\\\$0")}]($url)",
         "altText" to asset.altText.orEmpty(),
         "description" to asset.description.orEmpty(),
         "mime" to asset.mime,
@@ -540,7 +577,7 @@ private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
     val cfg = ctx.config.assets
     val stripMeta = ctx.settings.getBool(asset.siteId, SettingsService.ASSETS_STRIP_METADATA, SettingsService.DEFAULT_STRIP_METADATA)
     val contentLength = request.contentLength()
-    if (contentLength != null && contentLength > cfg.maxUploadSizeBytes + 1_048_576L) {
+    if (contentLength != null && contentLength > cfg.uploadBodyLimit(1)) {
         respond(HttpStatusCode.PayloadTooLarge, MustacheContent("error.hbs", errorModel("Upload too large", 413)))
         return
     }
@@ -582,7 +619,7 @@ private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
                         temp = t
                         mime = detected
                         size = stripMetadataIfEnabled(t, detected, stripMeta) // strip EXIF/XMP/IPTC before storing
-                        originalName = orig
+                        originalName = assetFilename(orig, detected)
                     }
                     else -> {}
                 }
@@ -614,9 +651,9 @@ private suspend fun ApplicationCall.handleAssetReplace(asset: AssetRecord) {
             respond(MustacheContent("assets/detail.hbs", assetDetailModel(asset, message = "Choose a valid schedule time.")))
             return
         }
-        ctx.assets.schedule(asset.id, detectedMime, size, originalName.take(500), ready, at, userId)
+        ctx.assets.schedule(asset.id, detectedMime, size, originalName, ready, at, userId)
     } else {
-        ctx.assets.replace(asset.id, detectedMime, size, originalName.take(500), ready, userId, assetHistoryLimit(asset.siteId))
+        ctx.assets.replace(asset.id, detectedMime, size, originalName, ready, userId, assetHistoryLimit(asset.siteId))
     }
     respondRedirect("/f/${asset.id}")
 }

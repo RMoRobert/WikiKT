@@ -59,6 +59,7 @@ kotlin {
 dependencies {
     implementation(ktorLibs.serialization.kotlinx.json)
     implementation(ktorLibs.server.autoHeadResponse)
+    implementation(ktorLibs.server.bodyLimit)
     implementation(ktorLibs.server.compression)
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.contentNegotiation)
@@ -90,12 +91,14 @@ dependencies {
     implementation(libs.postgres.r2dbc)
     implementation(libs.qrcode.kotlin)
     implementation(libs.r2dbc.pool)
-    // Netty floor -- DELETE once Ktor ships Netty >= 4.2.19. Ktor 3.6.1 brings 4.2.17, whose HTTP/1.1
+    // Netty floor -- DELETE once Ktor ships Netty >= 4.2.20. Ktor 3.6.1 brings 4.2.17, whose HTTP/1.1
     // request parser has published smuggling bugs (malformed chunk-size lines and Transfer-Encoding
     // values; GHSA-rq4j-fc47-9698, GHSA-j4mg-hqgv-34qc, GHSA-hcvj-94mj-jp5c, GHSA-3jrc-fchc-59pw, fixed in
-    // 4.2.18), with more HTTP/1.1 fixes in 4.2.19. A floor, not a pin: the platform is not enforced, so a
-    // Ktor that brings a newer Netty still wins.
-    implementation(platform("io.netty:netty-bom:4.2.19.Final"))
+    // 4.2.18), with more HTTP/1.1 fixes in 4.2.19. 4.2.20 is another security release touching modules
+    // WikiKT runs: out-of-bounds reads in netty-buffer, control characters in netty-codec-http headers,
+    // and weak entropy in netty-resolver-dns. A floor, not a pin: the platform is not enforced, so a Ktor
+    // that brings a newer Netty still wins.
+    implementation(platform("io.netty:netty-bom:4.2.20.Final"))
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)

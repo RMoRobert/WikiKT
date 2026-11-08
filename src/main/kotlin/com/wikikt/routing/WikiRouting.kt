@@ -260,7 +260,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
     val params = call.receiveParameters()
     if (!call.validateFormCsrf(params)) return
     val existing = ctx.pages.resolveByPath(siteId, wikiPath.locale, wikiPath.pagePath)
-    val editUrl = wikiEditUrl(wikiPath.locale, wikiPath.pagePath)
+    val editUrl = headerSafePath(wikiEditUrl(wikiPath.locale, wikiPath.pagePath)) // only ever a redirect target
 
     // Creating a page requires write:pages at the target site+path; editing requires write:pages on
     // the existing page. Both are site- and path-scoped through the resolver.
@@ -306,7 +306,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                 updatedBy = userId,
             )
         }
-        call.respondRedirect(wikiViewUrl(existing.locale, existing.path))
+        call.respondRedirect(headerSafePath(wikiViewUrl(existing.locale, existing.path)))
         return
     }
 
@@ -420,7 +420,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                 ),
                 updatedBy = userId,
             )
-            call.respondRedirect(wikiViewUrl(targetLocale, targetPath) + savedWithWarnings(targetLocale, targetPath))
+            call.respondRedirect(headerSafePath(wikiViewUrl(targetLocale, targetPath)) + savedWithWarnings(targetLocale, targetPath))
         }
         !existing.published -> {
             // Draft page: existing first-publish flow (+ move if path/locale changed).
@@ -432,7 +432,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                 UpdatePageRequest(title = title, description = description, metaRobots = metaRobots, content = content, contentFormat = contentFormat, published = published, publishAt = publishAt, tags = tags, infobox = infoboxJson, customCss = customCss, customJs = customJs),
                 updatedBy = userId,
             )
-            call.respondRedirect(wikiViewUrl(targetLocale, targetPath) + savedWithWarnings(targetLocale, targetPath))
+            call.respondRedirect(headerSafePath(wikiViewUrl(targetLocale, targetPath)) + savedWithWarnings(targetLocale, targetPath))
         }
         else -> {
             // Live page: Update now, or stage (optionally scheduled). Tags/path apply only on Update now.
@@ -462,7 +462,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleWikiSave(segment
                         updatedBy = userId,
                     )
                     ctx.pages.discardStaged(existing.id)
-                    call.respondRedirect(wikiViewUrl(targetLocale, targetPath) + savedWithWarnings(targetLocale, targetPath))
+                    call.respondRedirect(headerSafePath(wikiViewUrl(targetLocale, targetPath)) + savedWithWarnings(targetLocale, targetPath))
                 }
             }
         }
@@ -590,7 +590,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleRestore(segments
         call.respond(HttpStatusCode.NotFound, MustacheContent("error.hbs", call.errorModel("Revision not found", 404)))
         return
     }
-    call.respondRedirect(wikiViewUrl(wikiPath.locale, wikiPath.pagePath))
+    call.respondRedirect(headerSafePath(wikiViewUrl(wikiPath.locale, wikiPath.pagePath)))
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleNewPageForm() {
@@ -661,7 +661,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNewPageCreate() 
             )
         }
     }
-    call.respondRedirect(wikiEditUrl(locale, path))
+    call.respondRedirect(headerSafePath(wikiEditUrl(locale, path)))
 }
 
 private suspend fun io.ktor.server.application.ApplicationCall.newPageModel(
@@ -1284,10 +1284,16 @@ private suspend fun io.ktor.server.application.ApplicationCall.renderInfoboxLive
     return renderAssetRefs(html, locale, ctx.config.defaultLocale)
 }
 
-/** 301-redirects to a canonical locale-qualified URL (preserving the query string). Returns true. */
+/**
+ * 301-redirects to a canonical locale-qualified URL (preserving the query string). Returns true. [base] is
+ * a raw wiki URL (wikiViewUrl & co.) and is encoded for the header here; the query string is passed through
+ * as the request sent it, already encoded. [headerSafeUrl] touches only a raw non-ASCII or control byte that a
+ * hand-made request might carry (a browser never sends one), so the Location is ASCII whatever came in.
+ */
 private suspend fun io.ktor.server.application.ApplicationCall.redirectCanonical(base: String): Boolean {
-    val q = request.queryString()
-    respondRedirect(if (q.isEmpty()) base else "$base?$q", permanent = true)
+    val q = headerSafeUrl(request.queryString())
+    val location = headerSafePath(base)
+    respondRedirect(if (q.isEmpty()) location else "$location?$q", permanent = true)
     return true
 }
 

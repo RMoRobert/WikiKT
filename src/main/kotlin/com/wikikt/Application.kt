@@ -25,7 +25,9 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
+import io.ktor.server.engine.defaultExceptionStatusCode
 import io.ktor.server.http.content.staticResources
+import io.ktor.server.logging.toLogString
 import io.ktor.server.mustache.MustacheContent
 import io.ktor.server.plugins.autohead.AutoHeadResponse
 import io.ktor.server.plugins.compression.Compression
@@ -42,6 +44,9 @@ import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.util.cio.ChannelIOException
+import java.nio.channels.ClosedChannelException
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -51,6 +56,9 @@ fun Application.module() {
     configureSerialization()
     configureMustache()
     configureSecurity()
+    // Before the NUL guard: its JSON check buffers the body, and the limit has to wrap the channel first.
+    configureRequestBodyLimit()
+    configureNulByteGuard()
 
     // Answer HEAD on every GET route, so link checkers and uptime monitors see a page's real status
     // instead of a 404. A HEAD runs the full GET handler (same permission checks, status and headers) and
@@ -77,6 +85,31 @@ fun Application.module() {
             // Log the real reason server-side, but never echo internal messages to the client.
             call.application.environment.log.debug("Bad request", cause)
             call.respond(HttpStatusCode.BadRequest, "Bad request")
+        }
+        // Everything else. Without this, Ktor's fallback answers an unhandled exception with the
+        // exception's message as the body: a database error, SQL included, for anyone who can cause one.
+        exception<Throwable> { call, cause ->
+            // Ktor's own request errors (malformed URL or body, unsupported media type, body too large)
+            // keep the status Ktor would give them, just not their message.
+            defaultExceptionStatusCode(cause)?.let { status ->
+                call.application.environment.log.debug("Request failed: $status", cause)
+                call.respond(status, status.description)
+                return@exception
+            }
+            // A dropped connection or a cancelled call: nobody to answer. Rethrown so Ktor's engine
+            // handles it as it always has (logged quietly, cancellation propagated).
+            if (cause is CancellationException || cause is ClosedChannelException || cause is ChannelIOException) throw cause
+            call.application.environment.log.error("Unhandled: ${call.request.toLogString()}", cause)
+            // Mid-body failure: the status line is already sent, so there is nothing left to replace.
+            if (call.response.isCommitted) return@exception
+            try {
+                call.respond(HttpStatusCode.InternalServerError, MustacheContent("error.hbs", call.errorModel("Internal server error", 500)))
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                // The error page reads the database for its chrome and branding, which may be what broke.
+                call.application.environment.log.warn("Error page failed to render", e)
+                if (!call.response.isCommitted) call.respond(HttpStatusCode.InternalServerError, "Internal server error")
+            }
         }
         status(HttpStatusCode.NotFound) { call, _ ->
             // Preserve the 404 status — MustacheContent alone would send the error page as 200. A missing

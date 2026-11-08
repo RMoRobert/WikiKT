@@ -48,8 +48,8 @@ private suspend fun io.ktor.server.application.ApplicationCall.requireApiCsrf():
 
 // Auth request bodies (login credentials) are a few hundred bytes at most; reject anything larger up
 // front so an anonymous caller can't force a big parse/buffer before the throttle even runs. This
-// guards the declared Content-Length; a chunked body without one still streams, but the production
-// reverse proxy caps request size and form endpoints are already bounded by Ktor's form-field limit.
+// guards the declared Content-Length; a chunked body without one is cut off by the app-wide cap
+// instead (RequestBodyLimit.kt), which is larger but still bounded.
 private const val MAX_AUTH_BODY_BYTES = 4L * 1024
 
 private suspend fun io.ktor.server.application.ApplicationCall.enforceAuthBodyCap(): Boolean {

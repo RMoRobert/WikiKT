@@ -1,5 +1,7 @@
 package com.wikikt.routing
 
+import io.ktor.http.encodeURLPath
+
 /**
  * The reserved wiki path that serves as the site's landing page. `/` and a bare
  * locale root (`/en`) redirect to `/{locale}/home`. There is deliberately no config override — the
@@ -100,6 +102,37 @@ fun resolveRelativeWikiUrl(rawUrl: String, locale: String, pagePath: String): St
 fun wikiEditUrl(locale: String, path: String): String = "/e/$locale/$path"
 
 fun wikiHistoryUrl(locale: String, path: String): String = "/h/$locale/$path"
+
+/**
+ * Percent-encodes a root-relative URL path built from a raw page or asset path (e.g. [wikiViewUrl]) so it
+ * can go into a response header such as `Location`. The builders above keep the path raw, Unicode letters
+ * and all, which is right for HTML hrefs and JSON, but Netty writes header chars as single bytes, so
+ * `/en/docs/日本` would leave the server as `/en/docs/??`. Each segment is encoded as UTF-8 with the `/`
+ * separators kept. A literal `%`, `?`, `#` or space is encoded too; [com.wikikt.model.validateWikiPath]
+ * forbids them on create, but an imported or API-made path can still hold one, and encoding them keeps the
+ * redirect on that exact path. Pass the path alone: any `?query` you append afterwards must already be
+ * encoded.
+ */
+fun headerSafePath(path: String): String = path.encodeURLPath()
+
+/**
+ * The [headerSafePath] counterpart for a value that is already a URL (a post-login return target, say)
+ * rather than a raw path: percent-encodes as UTF-8 only the characters outside visible ASCII (`!`..`~`), and
+ * leaves the rest alone, `%` escapes, `?`, `&` and `#` included (the IRI-to-URI mapping of RFC 3987 §3.1). So
+ * it's idempotent and never double-encodes. It can't introduce a `/` or `\` either, so a same-site check
+ * made on the input ([sanitizeSameSiteRedirect]) still holds for the output.
+ */
+fun headerSafeUrl(url: String): String {
+    if (url.all { it in '!'..'~' }) return url
+    return buildString {
+        for (b in url.toByteArray(Charsets.UTF_8)) {
+            val c = b.toInt() and 0xFF
+            if (c in 0x21..0x7E) append(c.toChar()) else append('%').append(HEX_DIGITS[c shr 4]).append(HEX_DIGITS[c and 0xF])
+        }
+    }
+}
+
+private const val HEX_DIGITS = "0123456789ABCDEF"
 
 /**
  * Builds `<option>` models for a locale `<select>` from the [enabled] set, marking [current] selected.

@@ -121,7 +121,7 @@ fun Route.configureAuthRouting() {
         }
         val sessionId = ctx.sessions.create(user.id, ctx.config.session.maxAgeSeconds * 1000)
         call.sessions.set(UserSession(sessionId, generateCsrfToken()))
-        call.respondRedirect(redirect)
+        call.respondRedirect(headerSafeUrl(redirect))
     }
 
     // --- Second factor (MFA) ---
@@ -169,7 +169,7 @@ fun Route.configureAuthRouting() {
         call.sessions.clear<MfaPendingSession>()
         val sessionId = ctx.sessions.create(pending.userId, ctx.config.session.maxAgeSeconds * 1000)
         call.sessions.set(UserSession(sessionId, generateCsrfToken()))
-        call.respondRedirect(sanitizeSameSiteRedirect(pending.redirect))
+        call.respondRedirect(headerSafeUrl(sanitizeSameSiteRedirect(pending.redirect)))
     }
 
     // POST-only (a GET would let any <img src="/logout"> or link prefetcher end the session), and
